@@ -1,0 +1,284 @@
+{% extends "base.html" %}
+{% block title %}{{ ab.title }} — WeBook{% endblock %}
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/audiobooks">Аудиокниги</a></li>
+    <li class="breadcrumb-item active">{{ ab.title }}</li>
+  </ol>
+</nav>
+
+<div class="row g-4">
+  <!-- Обложка + инфо -->
+  <div class="col-md-4 col-lg-3">
+    {% if ab.cover_path %}
+    <img src="/audiobooks/{{ ab.id }}/cover" class="book-cover w-100 mb-3" alt="{{ ab.title }}">
+    {% else %}
+    <div class="cover-placeholder w-100 mb-3"><i class="bi bi-headphones"></i></div>
+    {% endif %}
+    <div class="d-flex gap-2">
+      <form method="post" action="/audiobooks/{{ ab.id }}/finish" class="flex-grow-1">
+        <button class="btn btn-sm w-100 {% if ab.is_finished %}btn-success{% else %}btn-outline-success{% endif %}">
+          <i class="bi bi-check2-circle me-1"></i>{% if ab.is_finished %}Прослушано{% else %}Отметить прослушанным{% endif %}
+        </button>
+      </form>
+      <form method="post" action="/audiobooks/{{ ab.id }}/delete"
+            onsubmit="return confirm('Удалить аудиокнигу «{{ ab.title }}» со всеми файлами?')">
+        <button class="btn btn-sm btn-outline-danger" title="Удалить"><i class="bi bi-trash"></i></button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Плеер -->
+  <div class="col-md-8 col-lg-9">
+    <h2 class="mb-1">{{ ab.title }}</h2>
+    <p class="text-muted mb-3">
+      {% if ab.author %}{{ ab.author }}{% endif %}
+      {% if ab.narrator %}<span class="ms-2"><i class="bi bi-mic me-1"></i>{{ ab.narrator }}</span>{% endif %}
+    </p>
+
+    <div class="card mb-3">
+      <div class="card-body">
+        <div class="fw-semibold mb-2" id="nowPlaying">—</div>
+
+        <input type="range" class="form-range" id="seek" min="0" max="100" value="0" step="0.1">
+        <div class="d-flex justify-content-between small text-muted mb-3">
+          <span id="curTime">0:00</span>
+          <span id="durTime">0:00</span>
+        </div>
+
+        <div class="d-flex align-items-center justify-content-center gap-2 mb-3 flex-wrap">
+          <button class="btn btn-outline-secondary" id="prevBtn" title="Предыдущая глава"><i class="bi bi-skip-start-fill"></i></button>
+          <button class="btn btn-outline-secondary" id="back15" title="−15 сек"><i class="bi bi-arrow-counterclockwise"></i> 15</button>
+          <button class="btn btn-primary btn-lg" id="playBtn" title="Играть/пауза"><i class="bi bi-play-fill" id="playIcon"></i></button>
+          <button class="btn btn-outline-secondary" id="fwd15" title="+15 сек">15 <i class="bi bi-arrow-clockwise"></i></button>
+          <button class="btn btn-outline-secondary" id="nextBtn" title="Следующая глава"><i class="bi bi-skip-end-fill"></i></button>
+        </div>
+
+        <div class="row g-2 align-items-center">
+          <div class="col-auto">
+            <label class="small text-muted me-1"><i class="bi bi-speedometer2 me-1"></i>Скорость</label>
+          </div>
+          <div class="col-auto">
+            <select class="form-select form-select-sm" id="speed" style="width:auto">
+              <option value="0.75">0.75×</option>
+              <option value="1" selected>1×</option>
+              <option value="1.25">1.25×</option>
+              <option value="1.5">1.5×</option>
+              <option value="1.75">1.75×</option>
+              <option value="2">2×</option>
+              <option value="2.5">2.5×</option>
+              <option value="3">3×</option>
+            </select>
+          </div>
+          <div class="col-auto ms-md-auto">
+            <label class="small text-muted me-1"><i class="bi bi-moon me-1"></i>Таймер сна</label>
+          </div>
+          <div class="col-auto">
+            <select class="form-select form-select-sm" id="sleep" style="width:auto">
+              <option value="0">Выкл</option>
+              <option value="5">5 мин</option>
+              <option value="10">10 мин</option>
+              <option value="15">15 мин</option>
+              <option value="30">30 мин</option>
+              <option value="45">45 мин</option>
+              <option value="60">60 мин</option>
+              <option value="-1">До конца главы</option>
+            </select>
+          </div>
+          <div class="col-auto">
+            <span class="badge bg-secondary" id="sleepLeft" style="display:none"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Главы -->
+    <div class="card">
+      <div class="card-header fw-semibold"><i class="bi bi-list-ol me-1"></i>Главы ({{ tracks|length }})</div>
+      <div class="list-group list-group-flush" id="chapters">
+        {% for t in tracks %}
+        <button type="button" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+                data-index="{{ loop.index0 }}">
+          <span class="text-truncate"><i class="bi bi-music-note-beamed me-2 text-secondary"></i>{{ t.title }}</span>
+          <span class="text-muted small chapter-dur" data-dur="{{ t.duration }}"></span>
+        </button>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<audio id="audio" preload="metadata"></audio>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const TRACKS = {{ tracks|tojson }};
+const AB_ID = {{ ab.id }};
+const INIT_TRACK_ID = {{ current_track_id if current_track_id is not none else 'null' }};
+const INIT_POS = {{ position|float }};
+
+const audio = document.getElementById('audio');
+const seek = document.getElementById('seek');
+const playBtn = document.getElementById('playBtn');
+const playIcon = document.getElementById('playIcon');
+const nowPlaying = document.getElementById('nowPlaying');
+const curTimeEl = document.getElementById('curTime');
+const durTimeEl = document.getElementById('durTime');
+const chapterEls = Array.from(document.querySelectorAll('#chapters [data-index]'));
+
+let curIndex = 0;
+let pendingSeek = 0;
+let lastSave = 0;
+let sleepInterval = null;
+let sleepEndOfChapter = false;
+
+function fmt(s) {
+  if (!isFinite(s) || s < 0) s = 0;
+  s = Math.floor(s);
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  const mm = (h ? String(m).padStart(2, '0') : m);
+  return (h ? h + ':' : '') + mm + ':' + String(sec).padStart(2, '0');
+}
+
+// Подписи длительностей глав (если известны)
+document.querySelectorAll('.chapter-dur').forEach(function (el) {
+  const d = parseFloat(el.dataset.dur);
+  el.textContent = d > 0 ? fmt(d) : '';
+});
+
+function highlight() {
+  chapterEls.forEach((el, i) => el.classList.toggle('active', i === curIndex));
+}
+
+function loadTrack(i, pos, autoplay) {
+  if (i < 0 || i >= TRACKS.length) return;
+  curIndex = i;
+  pendingSeek = pos || 0;
+  audio.src = TRACKS[i].url;
+  audio.load();
+  nowPlaying.textContent = TRACKS[i].title;
+  highlight();
+  if (autoplay) audio.play().catch(() => {});
+}
+
+audio.addEventListener('loadedmetadata', function () {
+  seek.max = audio.duration || 0;
+  durTimeEl.textContent = fmt(audio.duration);
+  if (pendingSeek > 0 && pendingSeek < audio.duration) {
+    audio.currentTime = pendingSeek;
+  }
+  pendingSeek = 0;
+  applySpeed();
+});
+
+audio.addEventListener('timeupdate', function () {
+  seek.value = audio.currentTime;
+  curTimeEl.textContent = fmt(audio.currentTime);
+  const now = Date.now();
+  if (now - lastSave > 5000) { lastSave = now; saveProgress(false); }
+});
+
+seek.addEventListener('input', function () { audio.currentTime = parseFloat(seek.value); });
+
+playBtn.addEventListener('click', function () {
+  if (audio.paused) audio.play().catch(() => {}); else audio.pause();
+});
+audio.addEventListener('play', () => { playIcon.className = 'bi bi-pause-fill'; });
+audio.addEventListener('pause', () => { playIcon.className = 'bi bi-play-fill'; saveProgress(false); });
+
+document.getElementById('back15').addEventListener('click', () => { audio.currentTime = Math.max(0, audio.currentTime - 15); });
+document.getElementById('fwd15').addEventListener('click', () => { audio.currentTime = Math.min(audio.duration || 1e9, audio.currentTime + 15); });
+document.getElementById('prevBtn').addEventListener('click', () => loadTrack(curIndex - 1, 0, true));
+document.getElementById('nextBtn').addEventListener('click', () => loadTrack(curIndex + 1, 0, true));
+
+chapterEls.forEach(el => el.addEventListener('click', () => loadTrack(parseInt(el.dataset.index), 0, true)));
+
+audio.addEventListener('ended', function () {
+  if (sleepEndOfChapter) { sleepEndOfChapter = false; resetSleep(); saveProgress(false); return; }
+  if (curIndex < TRACKS.length - 1) {
+    loadTrack(curIndex + 1, 0, true);
+  } else {
+    saveProgress(true);  // последняя глава — отмечаем прослушанным
+  }
+});
+
+// Скорость
+const speedSel = document.getElementById('speed');
+function applySpeed() { audio.playbackRate = parseFloat(speedSel.value); }
+speedSel.addEventListener('change', function () {
+  applySpeed();
+  localStorage.setItem('ab_speed', speedSel.value);
+});
+(function () {
+  const s = localStorage.getItem('ab_speed');
+  if (s) { speedSel.value = s; }
+})();
+
+// Таймер сна
+const sleepSel = document.getElementById('sleep');
+const sleepLeft = document.getElementById('sleepLeft');
+function resetSleep() {
+  if (sleepInterval) { clearInterval(sleepInterval); sleepInterval = null; }
+  sleepEndOfChapter = false;
+  sleepSel.value = '0';
+  sleepLeft.style.display = 'none';
+}
+sleepSel.addEventListener('change', function () {
+  if (sleepInterval) { clearInterval(sleepInterval); sleepInterval = null; }
+  sleepEndOfChapter = false;
+  const v = parseInt(sleepSel.value);
+  if (v === 0) { sleepLeft.style.display = 'none'; return; }
+  if (v === -1) {
+    sleepEndOfChapter = true;
+    sleepLeft.style.display = '';
+    sleepLeft.textContent = 'до конца главы';
+    return;
+  }
+  let remaining = v * 60;
+  sleepLeft.style.display = '';
+  sleepLeft.textContent = fmt(remaining);
+  sleepInterval = setInterval(function () {
+    remaining -= 1;
+    sleepLeft.textContent = fmt(remaining);
+    if (remaining <= 0) { audio.pause(); resetSleep(); }
+  }, 1000);
+});
+
+// Сохранение прогресса
+function progressBody(finished) {
+  return JSON.stringify({
+    track_id: TRACKS[curIndex].id,
+    position: Math.floor(audio.currentTime) || 0,
+    finished: !!finished,
+  });
+}
+function saveProgress(finished) {
+  if (!TRACKS.length) return;
+  fetch('/audiobooks/' + AB_ID + '/progress', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: progressBody(finished), keepalive: true,
+  }).catch(() => {});
+}
+function beaconSave() {
+  if (!TRACKS.length) return;
+  try {
+    navigator.sendBeacon('/audiobooks/' + AB_ID + '/progress',
+      new Blob([progressBody(false)], { type: 'application/json' }));
+  } catch (e) {}
+}
+window.addEventListener('pagehide', beaconSave);
+document.addEventListener('visibilitychange', function () { if (document.hidden) beaconSave(); });
+
+// Старт: восстанавливаем позицию
+(function () {
+  let idx = 0;
+  if (INIT_TRACK_ID !== null) {
+    const k = TRACKS.findIndex(t => t.id === INIT_TRACK_ID);
+    if (k >= 0) idx = k;
+  }
+  loadTrack(idx, INIT_POS, false);
+})();
+</script>
+{% endblock %}

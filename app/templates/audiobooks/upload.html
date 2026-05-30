@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Загрузить аудиокнигу — WeBook{% endblock %}
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/audiobooks">Аудиокниги</a></li>
+    <li class="breadcrumb-item active">Загрузить</li>
+  </ol>
+</nav>
+
+<h2 class="mb-4"><i class="bi bi-cloud-upload me-2"></i>Загрузить аудиокнигу</h2>
+
+{% if error %}
+<div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-1"></i>{{ error }}</div>
+{% endif %}
+
+<div class="card">
+  <div class="card-body">
+    <form method="post" action="/audiobooks/upload" enctype="multipart/form-data">
+
+      <div class="mb-3">
+        <label class="form-label">Аудиофайлы (главы) <span class="text-danger">*</span></label>
+        <input type="file" name="files" class="form-control" multiple required
+               accept=".mp3,.m4a,.m4b,.ogg,.oga,.opus,.aac,.flac,.wav,.webm,audio/*">
+        <div class="form-text">
+          Можно выбрать несколько файлов — они станут главами в порядке имён
+          (глава 1, 2, 3…). Метаданные (название, автор, обложка) подтянутся из
+          тегов автоматически, если они есть.
+        </div>
+      </div>
+
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label">Название</label>
+          <input type="text" name="title" class="form-control" placeholder="Оставьте пустым — возьмём из тегов">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Автор</label>
+          <input type="text" name="author" class="form-control">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Чтец</label>
+          <input type="text" name="narrator" class="form-control">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Обложка (необязательно)</label>
+          <input type="file" name="cover" class="form-control" accept="image/*">
+        </div>
+      </div>
+
+      <div class="d-flex gap-2 mt-4">
+        <button type="submit" class="btn btn-primary" id="submitBtn">
+          <i class="bi bi-cloud-upload me-1"></i>Загрузить
+        </button>
+        <a href="/audiobooks" class="btn btn-outline-secondary">Отмена</a>
+      </div>
+      <div class="form-text mt-2" id="hint" style="display:none">
+        <i class="bi bi-hourglass-split me-1"></i>Загрузка больших файлов может занять время — не закрывайте страницу.
+      </div>
+    </form>
+  </div>
+</div>
+
+{% block scripts %}
+<script>
+  document.querySelector('form').addEventListener('submit', function () {
+    var b = document.getElementById('submitBtn');
+    b.disabled = true;
+    b.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Загрузка…';
+    document.getElementById('hint').style.display = '';
+  });
+</script>
+{% endblock %}
+{% endblock %}
