@@ -1,0 +1,64 @@
+{# Панель массовых действий. Ожидает: bulk_kind ('books'|'links'), shelves|folders.
+   Чекбоксы (.bulk-check со value=id) лежат в списке вне формы; JS собирает
+   отмеченные id и подставляет скрытые поля в форму #bulkForm перед отправкой. #}
+<form id="bulkForm" method="post" action="/{{ bulk_kind }}/bulk">
+<div id="bulkBar" class="position-fixed bottom-0 start-50 translate-middle-x mb-3 shadow rounded-3 border bg-body p-2 d-none" style="z-index:1040;max-width:96vw">
+  <div class="d-flex align-items-center gap-2 flex-wrap">
+    <span class="badge bg-primary"><span id="bulkCount">0</span> выбрано</span>
+    <button type="button" class="btn btn-sm btn-outline-success" onclick="bulkDo('read')"><i class="bi bi-check-circle me-1"></i>Прочитано</button>
+    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="bulkDo('unread')">Не прочитано</button>
+    {% if bulk_kind == 'books' %}
+    <button type="button" class="btn btn-sm btn-outline-danger" onclick="bulkDo('favorite')"><i class="bi bi-heart me-1"></i>В избранное</button>
+    <div class="input-group input-group-sm" style="width:auto">
+      <select name="shelf_id" class="form-select form-select-sm">
+        {% for s in shelves %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
+      </select>
+      <button type="button" class="btn btn-outline-secondary" onclick="bulkDo('move')">Переместить</button>
+    </div>
+    {% else %}
+    <div class="input-group input-group-sm" style="width:auto">
+      <select name="folder_id" class="form-select form-select-sm">
+        <option value="0">Без папки</option>
+        {% for f in folders %}<option value="{{ f.id }}">{{ f.name }}</option>{% endfor %}
+      </select>
+      <button type="button" class="btn btn-outline-secondary" onclick="bulkDo('move')">Переместить</button>
+    </div>
+    {% endif %}
+    <div class="input-group input-group-sm" style="width:auto">
+      <input type="text" name="tag" class="form-control form-control-sm" placeholder="тег" style="max-width:120px">
+      <button type="button" class="btn btn-outline-secondary" onclick="bulkDo('tag')">+ тег</button>
+    </div>
+    <button type="button" class="btn btn-sm btn-outline-danger" onclick="bulkDo('delete')"><i class="bi bi-trash me-1"></i>Удалить</button>
+    <button type="button" class="btn btn-sm btn-link text-muted" onclick="bulkClear()">Сброс</button>
+  </div>
+  <input type="hidden" name="action" id="bulkAction">
+</div>
+</form>
+<script>
+function _bulkChecks() { return Array.from(document.querySelectorAll('.bulk-check')); }
+function bulkUpdate() {
+  const n = _bulkChecks().filter(c => c.checked).length;
+  document.getElementById('bulkCount').textContent = n;
+  document.getElementById('bulkBar').classList.toggle('d-none', n === 0);
+}
+function bulkDo(act) {
+  const checked = _bulkChecks().filter(c => c.checked);
+  if (!checked.length) return;
+  if (act === 'delete' && !confirm('Удалить выбранные (' + checked.length + ')? Это действие необратимо.')) return;
+  const form = document.getElementById('bulkForm');
+  form.querySelectorAll('input[data-bulk-id]').forEach(e => e.remove());
+  checked.forEach(c => {
+    const i = document.createElement('input');
+    i.type = 'hidden'; i.name = 'ids'; i.value = c.value; i.setAttribute('data-bulk-id', '1');
+    form.appendChild(i);
+  });
+  document.getElementById('bulkAction').value = act;
+  form.submit();
+}
+function bulkClear() { _bulkChecks().forEach(c => c.checked = false); bulkUpdate(); }
+document.addEventListener('change', e => { if (e.target.classList.contains('bulk-check')) bulkUpdate(); });
+(function () {
+  const sa = document.getElementById('bulkSelectAll');
+  if (sa) sa.addEventListener('change', () => { _bulkChecks().forEach(c => c.checked = sa.checked); bulkUpdate(); });
+})();
+</script>

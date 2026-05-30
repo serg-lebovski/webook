@@ -1,0 +1,29 @@
+{# Ожидает в контексте: page, total_pages, base_qs (query-строка без page) #}
+{% if total_pages > 1 %}
+{% set sep = (base_qs ~ '&') if base_qs else '' %}
+<nav class="mt-4">
+  <ul class="pagination justify-content-center mb-0">
+    <li class="page-item {% if page <= 1 %}disabled{% endif %}">
+      <a class="page-link" href="?{{ sep }}page={{ page - 1 }}" aria-label="Назад">«</a>
+    </li>
+    {% set lo = [1, page - 2] | max %}
+    {% set hi = [total_pages, page + 2] | min %}
+    {% if lo > 1 %}
+      <li class="page-item"><a class="page-link" href="?{{ sep }}page=1">1</a></li>
+      {% if lo > 2 %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}
+    {% endif %}
+    {% for n in range(lo, hi + 1) %}
+      <li class="page-item {% if n == page %}active{% endif %}">
+        <a class="page-link" href="?{{ sep }}page={{ n }}">{{ n }}</a>
+      </li>
+    {% endfor %}
+    {% if hi < total_pages %}
+      {% if hi < total_pages - 1 %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}
+      <li class="page-item"><a class="page-link" href="?{{ sep }}page={{ total_pages }}">{{ total_pages }}</a></li>
+    {% endif %}
+    <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
+      <a class="page-link" href="?{{ sep }}page={{ page + 1 }}" aria-label="Вперёд">»</a>
+    </li>
+  </ul>
+</nav>
+{% endif %}

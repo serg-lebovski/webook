@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}{{ folder.name }} — WeBook{% endblock %}
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/shared">Поделились со мной</a></li>
+    <li class="breadcrumb-item active">{{ folder.name }}</li>
+  </ol>
+</nav>
+
+<div class="mb-4">
+  <h2><i class="bi bi-folder-open text-warning me-2"></i>{{ folder.name }}</h2>
+  <p class="text-muted small">
+    <i class="bi bi-person me-1"></i>Поделился: <strong>{{ share.owner.username }}</strong>
+    · Доступ до {{ share.expires_at.strftime('%d.%m.%Y') }}
+  </p>
+</div>
+
+{% if links %}
+<div class="d-flex flex-column gap-2">
+  {% for link in links %}
+  <div class="card {% if link.is_read %}opacity-75{% endif %}">
+    <div class="card-body py-2 px-3">
+      <div class="d-flex align-items-start gap-3">
+        <div class="flex-grow-1 min-width-0">
+          <div class="d-flex align-items-baseline gap-2 flex-wrap">
+            <a href="{{ link.url }}" target="_blank" rel="noopener noreferrer"
+               class="fw-semibold text-decoration-none text-break">
+              {% if link.video_embed_url %}
+              <i class="bi bi-play-circle-fill text-danger me-1"></i>
+              {% endif %}
+              {{ link.title }}
+              <i class="bi bi-box-arrow-up-right ms-1 small"></i>
+            </a>
+          </div>
+          <div class="text-muted small text-truncate">{{ link.url }}</div>
+          {% if link.description %}
+          <div class="text-secondary small mt-1">{{ link.description }}</div>
+          {% endif %}
+          <div class="text-muted mt-1" style="font-size:.75rem">
+            {{ link.created_at.strftime('%d.%m.%Y') }}
+          </div>
+        </div>
+        <div class="d-flex gap-1 flex-shrink-0">
+          {% if link.video_embed_url %}
+          <a href="{{ link.url }}" target="_blank" class="btn btn-sm btn-outline-danger" title="Смотреть">
+            <i class="bi bi-play-fill"></i>
+          </a>
+          {% elif link.content %}
+          <a href="/links/{{ link.id }}/read" class="btn btn-sm btn-outline-success" title="Читать">
+            <i class="bi bi-book"></i>
+          </a>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="text-center py-5 text-muted">
+  <i class="bi bi-folder2-open display-1"></i>
+  <h4 class="mt-3">Папка пуста</h4>
+</div>
+{% endif %}
+{% endblock %}

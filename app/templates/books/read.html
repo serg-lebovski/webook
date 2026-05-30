@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ book.title }} — WeBook</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <style>
+    html, body { height: 100%; margin: 0; overflow: hidden; background: #fff; }
+
+    /* ── toolbar ─────────────────────────────────────────────── */
+    .reader-bar {
+      height: 50px; background: #212529; color: #e0e0e0;
+      display: flex; align-items: center; padding: 0 1rem; gap: .75rem; flex-shrink: 0;
+    }
+    .reader-bar .r-title {
+      flex: 1; font-size: .9rem; white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis; font-family: system-ui, sans-serif;
+    }
+    .reader-bar a { color: #ccc; text-decoration: none; transition: color .15s; }
+    .reader-bar a:hover { color: #fff; }
+
+    /* ── shared layout ───────────────────────────────────────── */
+    .reader-body { height: calc(100vh - 50px); display: flex; flex-direction: column; }
+
+    /* ── EPUB ────────────────────────────────────────────────── */
+    .epub-wrap { position: relative; flex: 1; overflow: hidden; display: flex; }
+    #epub-viewer { flex: 1; }
+    .epub-btn {
+      position: absolute; top: 50%; transform: translateY(-50%);
+      z-index: 10; background: rgba(0,0,0,.4); color: #fff; border: none;
+      border-radius: 6px; width: 38px; height: 72px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; transition: background .15s;
+    }
+    .epub-btn:hover { background: rgba(0,0,0,.65); }
+    #btn-prev { left: 6px; }
+    #btn-next { right: 6px; }
+
+    /* ── PDF ─────────────────────────────────────────────────── */
+    #pdf-frame { flex: 1; border: none; width: 100%; }
+
+    /* ── FB2 ─────────────────────────────────────────────────── */
+    #fb2-scroll {
+      flex: 1; overflow-y: auto;
+      padding: 2.5rem 1rem 5rem; background: #fafaf8;
+    }
+    #fb2-content {
+      max-width: 680px; margin: 0 auto;
+      font-family: Georgia, "Times New Roman", serif;
+    }
+    #fb2-content p {
+      text-indent: 1.5em; margin-bottom: .3rem; line-height: 1.85;
+      font-size: 1.05rem; color: #1a1a1a;
+    }
+    .fb2-section { margin-bottom: 2.5rem; }
+    .fb2-title {
+      font-size: 1.4rem; font-weight: 700; text-align: center;
+      margin: 2.5rem 0 1.5rem; color: #111; font-family: system-ui, sans-serif;
+    }
+    .fb2-subtitle {
+      font-size: 1.1rem; font-weight: 600; text-align: center;
+      margin: 1.5rem 0 1rem; color: #444; font-family: system-ui, sans-serif;
+    }
+    .fb2-epigraph {
+      border-left: 3px solid #ccc; padding: .4rem 1rem;
+      margin: 1rem 0 1.5rem; color: #666; font-style: italic;
+    }
+    .fb2-cite { border-left: 3px solid #ddd; padding: .4rem 1rem; margin: 1rem 0; color: #555; }
+    .fb2-poem { margin: 1.5rem 0; padding-left: 2rem; }
+    .fb2-stanza { margin-bottom: 1rem; }
+    .fb2-v { line-height: 1.7; }
+    .fb2-text-author { font-style: italic; color: #666; margin-top: .5rem; }
+    .fb2-image {
+      max-width: 100%; height: auto; display: block;
+      margin: 1.5rem auto; border-radius: 4px;
+      box-shadow: 0 2px 12px rgba(0,0,0,.15);
+    }
+    mark.wb-hl { background: #fff3b0; color: inherit; padding: 0; border-radius: 2px; }
+  </style>
+</head>
+<body>
+
+<div class="reader-bar">
+  <a href="/books/{{ book.id }}" title="К карточке книги"><i class="bi bi-arrow-left fs-5"></i></a>
+  <span class="r-title">{{ book.title }}</span>
+  <span class="badge bg-secondary font-monospace">{{ book.file_format | upper }}</span>
+  <a href="/books/{{ book.id }}/download" title="Скачать файл"><i class="bi bi-download fs-5"></i></a>
+</div>
+
+<div class="reader-body">
+
+{% if book.file_format == "epub" %}
+  <div class="epub-wrap">
+    <button class="epub-btn" id="btn-prev" title="Назад (←)"><i class="bi bi-chevron-left"></i></button>
+    <div id="epub-viewer"></div>
+    <button class="epub-btn" id="btn-next" title="Вперёд (→)"><i class="bi bi-chevron-right"></i></button>
+  </div>
+
+{% elif book.file_format == "pdf" %}
+  <iframe id="pdf-frame" src="/books/{{ book.id }}/serve"></iframe>
+
+{% elif book.file_format == "fb2" %}
+  <div id="fb2-scroll">
+    <div id="fb2-content">
+      {{ content_html | safe }}
+    </div>
+  </div>
+
+{% endif %}
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+{% if book.file_format == "epub" %}
+<script src="https://cdn.jsdelivr.net/npm/epubjs@0.3/dist/epub.min.js"></script>
+<script>
+(function () {
+  var BOOK_ID = {{ book.id }};
+  var KEY = "epub-cfi-" + BOOK_ID;
+  var serverProgress = {{ server_progress | tojson }};
+
+  var viewer = document.getElementById("epub-viewer");
+  var book = ePub("/books/" + BOOK_ID + "/serve");
+  var rendition = book.renderTo(viewer, {
+    width: "100%",
+    height: viewer.parentElement.offsetHeight || window.innerHeight - 50,
+    spread: "none"
+  });
+
+  var saved = serverProgress || localStorage.getItem(KEY);
+  rendition.display(saved || undefined);
+
+  var saveTimer;
+  rendition.on("relocated", function (loc) {
+    localStorage.setItem(KEY, loc.start.cfi);
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(function () {
+      fetch("/books/" + BOOK_ID + "/progress", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({progress: loc.start.cfi, percentage: loc.start.percentage || 0})
+      });
+    }, 2000);
+  });
+
+  rendition.on("rendered", function () {
+    var iframes = viewer.querySelectorAll("iframe");
+    iframes.forEach(function (f) {
+      try { f.contentDocument.addEventListener("keyup", handleKey); } catch (e) {}
+    });
+  });
+
+  document.getElementById("btn-prev").onclick = function () { rendition.prev(); };
+  document.getElementById("btn-next").onclick = function () { rendition.next(); };
+
+  function handleKey(e) {
+    if (e.key === "ArrowLeft")  rendition.prev();
+    if (e.key === "ArrowRight") rendition.next();
+  }
+  document.addEventListener("keyup", handleKey);
+
+  // ── Цитаты (highlights) ──────────────────────────────
+  var hlBtn = document.createElement("button");
+  hlBtn.type = "button";
+  hlBtn.className = "btn btn-sm btn-warning shadow";
+  hlBtn.innerHTML = '<i class="bi bi-quote"></i> Цитата';
+  hlBtn.style.cssText = "position:fixed;top:56px;left:50%;transform:translateX(-50%);z-index:1060;display:none";
+  document.body.appendChild(hlBtn);
+  var pendCfi = null, pendText = "";
+  rendition.on("selected", function (cfiRange, contents) {
+    pendCfi = cfiRange;
+    try { pendText = contents.window.getSelection().toString().trim(); } catch (e) { pendText = ""; }
+    if (pendText.length >= 2) hlBtn.style.display = "";
+  });
+  hlBtn.addEventListener("click", function () {
+    if (!pendCfi || !pendText) return;
+    fetch("/highlights", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({resource_type: "book", resource_id: BOOK_ID, quote: pendText, location: pendCfi})
+    }).then(function (r) { return r.ok ? r.json() : null; }).then(function () {
+      try { rendition.annotations.highlight(pendCfi); } catch (e) {}
+      hlBtn.style.display = "none"; pendCfi = null; pendText = "";
+    }).catch(function () { hlBtn.style.display = "none"; });
+  });
+  rendition.on("relocated", function () { hlBtn.style.display = "none"; });
+  fetch("/highlights/list?resource_type=book&resource_id=" + BOOK_ID)
+    .then(function (r) { return r.ok ? r.json() : []; })
+    .then(function (list) {
+      list.forEach(function (h) {
+        if (h.location) { try { rendition.annotations.highlight(h.location); } catch (e) {} }
+      });
+    }).catch(function () {});
+})();
+</script>
+
+{% elif book.file_format == "fb2" %}
+<script>
+(function () {
+  var BOOK_ID = {{ book.id }};
+  var KEY = "fb2-scroll-" + BOOK_ID;
+  var serverProgress = {{ server_progress | tojson }};
+
+  var el = document.getElementById("fb2-scroll");
+  var saved = serverProgress || localStorage.getItem(KEY);
+  if (saved) el.scrollTop = parseInt(saved, 10);
+
+  var saveTimer;
+  el.addEventListener("scroll", function () {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(function () {
+      var scrollable = el.scrollHeight - el.clientHeight;
+      var pct = scrollable > 0 ? el.scrollTop / scrollable : 0;
+      localStorage.setItem(KEY, el.scrollTop);
+      fetch("/books/" + BOOK_ID + "/progress", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({progress: String(el.scrollTop), percentage: pct})
+      });
+    }, 2000);
+  });
+})();
+</script>
+<script src="/static/highlighter.js"></script>
+<script>
+(function () {
+  var el = document.getElementById('fb2-content');
+  if (el && window.WebookHighlighter) {
+    WebookHighlighter.init({ container: el, resourceType: 'book', resourceId: {{ book.id }} });
+  }
+})();
+</script>
+{% endif %}
+
+</body>
+</html>

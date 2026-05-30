@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}{% if folder %}Переименовать папку{% else %}Новая папка{% endif %} — WeBook{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-5">
+
+    <nav aria-label="breadcrumb" class="mb-3">
+      <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="/links">Ссылки</a></li>
+        <li class="breadcrumb-item active">{% if folder %}Переименовать папку{% else %}Новая папка{% endif %}</li>
+      </ol>
+    </nav>
+
+    <div class="card">
+      <div class="card-header fw-semibold">
+        <i class="bi bi-folder-plus me-1"></i>
+        {% if folder %}Переименовать папку{% else %}Новая папка{% endif %}
+      </div>
+      <div class="card-body">
+        {% if error %}
+        <div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-1"></i>{{ error }}</div>
+        {% endif %}
+
+        <form method="post"
+              action="{% if folder %}/links/folders/{{ folder.id }}/edit{% else %}/links/folders/new{% endif %}">
+          <div class="mb-4">
+            <label class="form-label">Название папки <span class="text-danger">*</span></label>
+            <input type="text" name="name" class="form-control" required autofocus
+                   value="{{ folder.name if folder else '' }}"
+                   placeholder="Например: Статьи по Python">
+          </div>
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-floppy me-1"></i>Сохранить
+            </button>
+            <a href="/links{% if folder %}?folder_id={{ folder.id }}{% endif %}"
+               class="btn btn-outline-secondary">Отмена</a>
+          </div>
+        </form>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

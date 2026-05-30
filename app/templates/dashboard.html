@@ -1,0 +1,270 @@
+{% extends "base.html" %}
+{% block title %}Главная — WeBook{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center mb-4">
+  <div>
+    <h2 class="mb-0">Добро пожаловать, {{ user.username }}</h2>
+    <p class="text-muted mb-0 small">Ваша библиотека</p>
+  </div>
+</div>
+
+{% if expiring_shares %}
+<div class="card border-warning mb-4">
+  <div class="card-header bg-warning-subtle fw-semibold">
+    <i class="bi bi-clock-history me-1"></i>Скоро истекают шары
+    <span class="text-muted fw-normal small">(в ближайшие {{ expiring_days }} дн.)</span>
+  </div>
+  <div class="list-group list-group-flush">
+    {% for s in expiring_shares %}
+    <div class="list-group-item d-flex align-items-center gap-2 flex-wrap">
+      {% if s.outgoing %}
+      <span class="badge bg-secondary"><i class="bi bi-share me-1"></i>я поделился</span>
+      {% else %}
+      <span class="badge bg-info text-dark"><i class="bi bi-inbox me-1"></i>со мной</span>
+      {% endif %}
+      <span class="fw-semibold">{{ s.title }}</span>
+      <span class="text-muted small">
+        {% if s.outgoing %}для {{ s.counterpart }}{% else %}от {{ s.counterpart }}{% endif %}
+      </span>
+      <span class="ms-auto text-danger small">
+        <i class="bi bi-hourglass-split me-1"></i>до {{ s.expires_at.strftime('%d.%m.%Y %H:%M') }}
+      </span>
+    </div>
+    {% endfor %}
+  </div>
+  <div class="card-footer py-2">
+    <a href="/shared" class="small text-decoration-none">Открыть «Общий доступ» →</a>
+  </div>
+</div>
+{% endif %}
+
+<!-- Счётчики -->
+<div class="row g-3 mb-4">
+
+  <!-- Книги -->
+  <div class="col-6 col-md-3">
+    <div class="card text-center h-100">
+      <div class="card-body py-4">
+        <div class="display-5 fw-bold text-primary">{{ books_total }}</div>
+        <div class="text-muted small mt-1">Книг всего</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card text-center h-100">
+      <div class="card-body py-4">
+        <div class="display-5 fw-bold text-success">{{ books_read }}</div>
+        <div class="text-muted small mt-1">Книг прочитано</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card text-center h-100">
+      <div class="card-body py-4">
+        <div class="display-5 fw-bold text-warning">{{ links_total }}</div>
+        <div class="text-muted small mt-1">Статей всего</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card text-center h-100">
+      <div class="card-body py-4">
+        <div class="display-5 fw-bold text-info">{{ links_read }}</div>
+        <div class="text-muted small mt-1">Статей прочитано</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Цель чтения и серия -->
+<div class="row g-3 mb-4">
+  <div class="col-md-7">
+    <div class="card h-100">
+      <div class="card-body">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <h6 class="text-muted mb-0"><i class="bi bi-bullseye me-1"></i>Цель на {{ stats.year }} год</h6>
+          <button class="btn btn-sm btn-outline-secondary py-0 px-2" type="button"
+                  data-bs-toggle="collapse" data-bs-target="#goalForm" title="Изменить цель">
+            <i class="bi bi-pencil"></i>
+          </button>
+        </div>
+        {% if stats.goal %}
+        <div class="d-flex justify-content-between small mb-1">
+          <span>Прочитано <strong>{{ stats.books_year }}</strong> из <strong>{{ stats.goal }}</strong> книг</span>
+          <span class="text-muted">{{ stats.goal_pct }}%</span>
+        </div>
+        <div class="progress mb-2" style="height:14px">
+          <div class="progress-bar bg-primary" role="progressbar" style="width:{{ stats.goal_pct }}%">
+            {% if stats.goal_pct >= 15 %}{{ stats.goal_pct }}%{% endif %}
+          </div>
+        </div>
+        <div class="small text-muted">
+          {% if stats.books_year >= stats.goal %}
+          <i class="bi bi-trophy-fill text-warning me-1"></i>Цель достигнута! Поздравляем 🎉
+          {% else %}
+          Осталось ещё <strong>{{ stats.goal_left }}</strong> {{ 'книгу' if stats.goal_left == 1 else 'книг' }} до цели.
+          {% endif %}
+        </div>
+        {% else %}
+        <p class="text-muted small mb-2">Цель на год не задана. Поставьте себе ориентир — сколько книг прочитать.</p>
+        {% endif %}
+        <div class="collapse {% if not stats.goal %}show{% endif %} mt-3" id="goalForm">
+          <form method="post" action="/dashboard/goal" class="row g-2 align-items-end">
+            <div class="col-auto">
+              <label class="form-label small text-muted mb-1">Книг за год</label>
+              <input type="number" name="goal" min="0" max="10000" value="{{ stats.goal }}"
+                     class="form-control form-control-sm" style="width:120px">
+            </div>
+            <div class="col-auto">
+              <button type="submit" class="btn btn-sm btn-primary">Сохранить</button>
+            </div>
+            <div class="col-auto align-self-center">
+              <span class="text-muted small">0 — убрать цель</span>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-5">
+    <div class="card h-100">
+      <div class="card-body d-flex flex-column justify-content-center">
+        <h6 class="text-muted mb-3"><i class="bi bi-fire text-danger me-1"></i>Серия чтения</h6>
+        <div class="d-flex align-items-baseline gap-2">
+          <span class="display-5 fw-bold {{ 'text-danger' if stats.streak else 'text-secondary' }}">{{ stats.streak }}</span>
+          <span class="text-muted">{{ 'день' if stats.streak == 1 else 'дн.' }} подряд</span>
+        </div>
+        <div class="small text-muted mt-2">
+          {% if stats.streak %}
+          Так держать — читайте каждый день, чтобы не прервать серию.
+          {% else %}
+          Отметьте сегодня книгу или статью прочитанной, чтобы начать серию.
+          {% endif %}
+        </div>
+        <hr class="my-2">
+        <div class="small text-muted">
+          В {{ stats.year }} году прочитано: <strong>{{ stats.books_year }}</strong> книг ·
+          <strong>{{ stats.links_year }}</strong> статей
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Прогресс прочтения -->
+<div class="row g-3 mb-4">
+  <div class="col-md-6">
+    <div class="card h-100">
+      <div class="card-body">
+        <h6 class="text-muted mb-3"><i class="bi bi-book me-1"></i>Книги</h6>
+        <div class="d-flex justify-content-between small mb-1">
+          <span>Прочитано {{ books_read }} из {{ books_total }}</span>
+          <span class="text-muted">{{ ((books_read / books_total * 100) | round(0) | int) if books_total else 0 }}%</span>
+        </div>
+        <div class="progress mb-3" style="height:10px">
+          <div class="progress-bar bg-success" style="width:{{ ((books_read / books_total * 100) | round(0) | int) if books_total else 0 }}%"></div>
+        </div>
+        <div class="d-flex gap-3 small text-muted">
+          <span><i class="bi bi-check-circle-fill text-success me-1"></i>Прочитано: <strong>{{ books_read }}</strong></span>
+          <span><i class="bi bi-circle text-secondary me-1"></i>Не прочитано: <strong>{{ books_unread }}</strong></span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card h-100">
+      <div class="card-body">
+        <h6 class="text-muted mb-3"><i class="bi bi-bookmarks me-1"></i>Статьи</h6>
+        <div class="d-flex justify-content-between small mb-1">
+          <span>Прочитано {{ links_read }} из {{ links_total }}</span>
+          <span class="text-muted">{{ ((links_read / links_total * 100) | round(0) | int) if links_total else 0 }}%</span>
+        </div>
+        <div class="progress mb-3" style="height:10px">
+          <div class="progress-bar bg-info" style="width:{{ ((links_read / links_total * 100) | round(0) | int) if links_total else 0 }}%"></div>
+        </div>
+        <div class="d-flex gap-3 small text-muted">
+          <span><i class="bi bi-check-circle-fill text-info me-1"></i>Прочитано: <strong>{{ links_read }}</strong></span>
+          <span><i class="bi bi-circle text-secondary me-1"></i>Не прочитано: <strong>{{ links_unread }}</strong></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- История чтения за 12 месяцев -->
+<div class="card">
+  <div class="card-header fw-semibold">
+    <i class="bi bi-bar-chart me-1"></i>История чтения — последние 12 месяцев
+  </div>
+  <div class="card-body">
+    {% set total_activity = history.books | sum + history.links | sum %}
+    {% if total_activity == 0 %}
+    <div class="text-center py-4 text-muted">
+      <i class="bi bi-bar-chart display-4"></i>
+      <p class="mt-3">Пока нет данных. Отмечайте книги и статьи как прочитанные — история появится здесь.</p>
+      <div class="d-flex gap-2 justify-content-center mt-2">
+        <a href="/shelves" class="btn btn-outline-primary btn-sm"><i class="bi bi-book me-1"></i>К книгам</a>
+        <a href="/links" class="btn btn-outline-secondary btn-sm"><i class="bi bi-bookmarks me-1"></i>К статьям</a>
+      </div>
+    </div>
+    {% else %}
+    <canvas id="historyChart" height="80"></canvas>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const labels = {{ history.labels | tojson }};
+const booksData = {{ history.books | tojson }};
+const linksData = {{ history.links | tojson }};
+
+if (document.getElementById('historyChart')) {
+  new Chart(document.getElementById('historyChart'), {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: 'Книги',
+          data: booksData,
+          backgroundColor: 'rgba(13, 110, 253, 0.7)',
+          borderRadius: 4,
+        },
+        {
+          label: 'Статьи',
+          data: linksData,
+          backgroundColor: 'rgba(13, 202, 240, 0.7)',
+          borderRadius: 4,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { position: 'top' },
+        tooltip: {
+          callbacks: {
+            footer: (items) => {
+              const total = items.reduce((s, i) => s + i.parsed.y, 0);
+              return total > 0 ? `Итого: ${total}` : '';
+            }
+          }
+        }
+      },
+      scales: {
+        x: { stacked: true, grid: { display: false } },
+        y: { stacked: true, beginAtZero: true, ticks: { stepSize: 1, precision: 0 } }
+      }
+    }
+  });
+}
+</script>
+{% endblock %}

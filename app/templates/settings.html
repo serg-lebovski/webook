@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% block title %}Настройки — WeBook{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center mb-4">
+  <h2 class="mb-0"><i class="bi bi-gear me-2"></i>Настройки</h2>
+</div>
+
+{% if success == 'profile' %}
+<div class="alert alert-success alert-dismissible fade show" role="alert">
+  <i class="bi bi-check-circle me-1"></i>Профиль успешно обновлён.
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+{% if error %}
+<div class="alert alert-danger alert-dismissible fade show" role="alert">
+  <i class="bi bi-exclamation-triangle me-1"></i>{{ error }}
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+<div class="row g-4">
+
+  <!-- Профиль -->
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header fw-semibold">
+        <i class="bi bi-person-gear me-1"></i>Профиль
+      </div>
+      <div class="card-body">
+        <form method="post" action="/settings/profile" novalidate>
+
+          <div class="mb-3">
+            <label class="form-label">Текущий пароль <span class="text-danger">*</span></label>
+            <input type="password" name="current_password" class="form-control" required
+                   placeholder="Введите текущий пароль для подтверждения">
+            <div class="form-text">Требуется для любых изменений.</div>
+          </div>
+
+          <hr class="my-3">
+
+          <div class="mb-3">
+            <label class="form-label">Логин</label>
+            <input type="text" name="new_username" class="form-control"
+                   value="{{ user.username }}" minlength="3" autocomplete="username">
+            <div class="form-text">Оставьте без изменений, если менять не нужно.</div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Новый пароль</label>
+            <input type="password" name="new_password" class="form-control"
+                   minlength="6" autocomplete="new-password" placeholder="Минимум 6 символов">
+            <div class="form-text">Оставьте пустым, если пароль менять не нужно.</div>
+          </div>
+
+          <div class="mb-4">
+            <label class="form-label">Подтверждение нового пароля</label>
+            <input type="password" name="new_password2" class="form-control"
+                   autocomplete="new-password" placeholder="Повторите новый пароль">
+          </div>
+
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-floppy me-1"></i>Сохранить изменения
+          </button>
+
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Статистика и информация -->
+  <div class="col-lg-6 d-flex flex-column gap-4">
+
+    <div class="card">
+      <div class="card-header fw-semibold">
+        <i class="bi bi-bar-chart me-1"></i>Статистика библиотеки
+      </div>
+      <div class="card-body p-0">
+        <ul class="list-group list-group-flush">
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-bookshelf me-2 text-secondary"></i>Полок</span>
+            <span class="badge bg-primary rounded-pill">{{ stats.shelves }}</span>
+          </li>
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-people me-2 text-secondary"></i>Авторов</span>
+            <span class="badge bg-primary rounded-pill">{{ stats.authors }}</span>
+          </li>
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-collection me-2 text-secondary"></i>Циклов</span>
+            <span class="badge bg-primary rounded-pill">{{ stats.series }}</span>
+          </li>
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-journals me-2 text-secondary"></i>Книг</span>
+            <span class="badge bg-primary rounded-pill">{{ stats.books }}</span>
+          </li>
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-hdd me-2 text-secondary"></i>Занято на диске</span>
+            <span class="text-muted">{{ stats.storage_mb }} МБ</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header fw-semibold">
+        <i class="bi bi-rss me-1"></i>OPDS-каталог
+      </div>
+      <div class="card-body">
+        <p class="text-muted small mb-2">
+          OPDS доступно по ссылке — используйте этот адрес в Moon+ Reader, KOReader,
+          Librera и других читалках с поддержкой OPDS.
+        </p>
+        <div class="input-group">
+          <input type="text" class="form-control font-monospace"
+                 id="opds-url" value="{{ request.base_url }}opds/" readonly>
+          <button class="btn btn-outline-secondary" type="button" onclick="copyOpds()" title="Скопировать">
+            <i class="bi bi-clipboard" id="copy-icon"></i>
+          </button>
+        </div>
+        <div class="form-text mt-1">Авторизация: логин и пароль от этого аккаунта (HTTP Basic Auth).</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header fw-semibold">
+        <i class="bi bi-tags me-1"></i>Теги
+      </div>
+      <div class="card-body">
+        <p class="text-muted small mb-3">
+          Просмотр всех тегов, переименование, объединение и удаление.
+        </p>
+        <a href="/tags" class="btn btn-outline-secondary">
+          <i class="bi bi-tags me-1"></i>Управление тегами
+        </a>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header fw-semibold">
+        <i class="bi bi-puzzle me-1"></i>Расширение для браузера
+      </div>
+      <div class="card-body">
+        <p class="text-muted small mb-3">
+          Плагин для Chrome, Yandex Browser и Firefox. Позволяет сохранять ссылки
+          на статьи прямо из браузера, не открывая WeBook.
+        </p>
+        <ol class="small text-muted mb-3 ps-3">
+          <li>Скачайте ZIP-архив ниже</li>
+          <li>Распакуйте в любую папку</li>
+          <li><strong>Chrome / Яндекс:</strong> откройте <code>chrome://extensions</code>, включите «Режим разработчика», нажмите «Загрузить распакованное»</li>
+          <li><strong>Firefox:</strong> откройте <code>about:debugging</code> → «Этот Firefox» → «Загрузить временное дополнение» → выберите <code>manifest.json</code></li>
+          <li>При первом открытии плагина введите адрес сервера, логин и пароль</li>
+        </ol>
+        <a href="/settings/extension/download" class="btn btn-outline-secondary">
+          <i class="bi bi-download me-1"></i>Скачать расширение
+        </a>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header fw-semibold">
+        <i class="bi bi-archive me-1"></i>Резервная копия
+      </div>
+      <div class="card-body">
+        <p class="text-muted small mb-3">
+          Скачать ZIP-архив со всеми книгами и статьями. Архив содержит:
+        </p>
+        <ul class="small text-muted mb-3">
+          <li><strong>books/</strong> — ваши книги (EPUB, FB2, PDF)</li>
+          <li><strong>shared_books/</strong> — книги, которыми с вами поделились</li>
+          <li><strong>articles/</strong> — сохранённые статьи в формате HTML</li>
+        </ul>
+        <a href="/settings/backup" class="btn btn-outline-secondary">
+          <i class="bi bi-download me-1"></i>Скачать резервную копию
+        </a>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function copyOpds() {
+  const val = document.getElementById('opds-url').value;
+  navigator.clipboard.writeText(val).then(() => {
+    const icon = document.getElementById('copy-icon');
+    icon.className = 'bi bi-clipboard-check';
+    setTimeout(() => { icon.className = 'bi bi-clipboard'; }, 2000);
+  });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,49 @@
+{% extends "share/base.html" %}
+{% block title %}{{ book.title }} — WeBook{% endblock %}
+{% block content %}
+<div class="row g-4">
+  <div class="col-sm-4 col-md-3 col-lg-2">
+    {% if book.cover_path %}
+    <img src="/share/{{ share.token }}/cover" class="book-cover w-100" alt="{{ book.title }}">
+    {% else %}
+    <div class="cover-placeholder w-100"><i class="bi bi-book"></i></div>
+    {% endif %}
+  </div>
+
+  <div class="col-sm-8 col-md-9 col-lg-10">
+    <h2 class="mb-1">{{ book.title }}</h2>
+    <p class="text-muted mb-2">{{ book.author.name }}</p>
+
+    <div class="d-flex flex-wrap gap-2 mb-3">
+      <span class="badge bg-primary text-uppercase">{{ book.file_format }}</span>
+      {% if book.language %}<span class="badge bg-secondary">{{ book.language }}</span>{% endif %}
+      {% if book.published_year %}<span class="badge bg-light text-dark border">{{ book.published_year }}</span>{% endif %}
+      {% if book.file_size %}
+      <span class="badge bg-light text-dark border">{{ (book.file_size / 1024 / 1024) | round(1) }} МБ</span>
+      {% endif %}
+    </div>
+
+    <div class="d-flex gap-2 mb-3 flex-wrap">
+      {% if book.file_format in ("epub", "pdf", "fb2") %}
+      <a href="/share/{{ share.token }}/read" class="btn btn-primary">
+        <i class="bi bi-book-open me-1"></i>Читать
+      </a>
+      {% endif %}
+      <a href="/share/{{ share.token }}/download" class="btn btn-success">
+        <i class="bi bi-download me-1"></i>Скачать {{ book.file_format | upper }}
+      </a>
+    </div>
+
+    <p class="small text-muted"><i class="bi bi-share me-1"></i>Поделился пользователь WeBook</p>
+
+    {% if book.description %}
+    <div class="card bg-light border-0">
+      <div class="card-body">
+        <h6 class="text-muted text-uppercase fw-semibold mb-2">Описание</h6>
+        <p class="mb-0" style="white-space: pre-line">{{ book.description }}</p>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

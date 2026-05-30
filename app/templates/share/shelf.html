@@ -1,0 +1,72 @@
+{% extends "share/base.html" %}
+{% block title %}{{ shelf.name }} — WeBook{% endblock %}
+{% block content %}
+<div class="mb-4">
+  <h2><i class="bi bi-bookshelf text-primary me-2"></i>{{ shelf.name }}</h2>
+  {% if shelf.description %}<p class="text-muted">{{ shelf.description }}</p>{% endif %}
+  <p class="small text-muted"><i class="bi bi-share me-1"></i>Поделился пользователь WeBook</p>
+</div>
+
+{% if authors %}
+  {% for author in authors %}
+  <div class="mb-5">
+    <h4 class="mb-3">
+      {% if author.photo_path %}
+      <img src="/books/{{ author.id }}/cover" class="rounded-circle me-2" width="32" height="32" style="object-fit:cover">
+      {% endif %}
+      {{ author.name }}
+    </h4>
+
+    {% for series in author.series %}
+      {% set shelf_books = series.books | selectattr("shelf_id", "equalto", shelf.id) | list %}
+      {% if shelf_books %}
+      <div class="mb-4">
+        <h6 class="text-muted text-uppercase fw-semibold mb-3">
+          <i class="bi bi-collection me-1"></i>{{ series.name }}
+        </h6>
+        <div class="row g-3">
+          {% for book in shelf_books | sort(attribute='series_order') %}
+          <div class="col-6 col-sm-4 col-md-3 col-lg-2">
+            <div class="card h-100">
+              {% if book.cover_path %}
+              <img src="/books/{{ book.id }}/cover" class="book-cover" alt="{{ book.title }}">
+              {% else %}
+              <div class="cover-placeholder"><i class="bi bi-book"></i></div>
+              {% endif %}
+              <div class="card-body p-2">
+                <p class="card-text small fw-semibold mb-0 text-dark">{{ book.title }}</p>
+                {% if book.series_order %}<p class="card-text small text-muted">№{{ book.series_order | int }}</p>{% endif %}
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+    {% endfor %}
+
+    {% set standalone = author.books | selectattr("shelf_id", "equalto", shelf.id) | selectattr("series_id", "none") | list %}
+    {% if standalone %}
+    <div class="row g-3">
+      {% for book in standalone %}
+      <div class="col-6 col-sm-4 col-md-3 col-lg-2">
+        <div class="card h-100">
+          {% if book.cover_path %}
+          <img src="/books/{{ book.id }}/cover" class="book-cover" alt="{{ book.title }}">
+          {% else %}
+          <div class="cover-placeholder"><i class="bi bi-book"></i></div>
+          {% endif %}
+          <div class="card-body p-2">
+            <p class="card-text small fw-semibold text-dark">{{ book.title }}</p>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+{% else %}
+<p class="text-muted">Полка пуста.</p>
+{% endif %}
+{% endblock %}

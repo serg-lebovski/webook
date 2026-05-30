@@ -1,0 +1,252 @@
+{% extends "base.html" %}
+{% block title %}{{ book.title }} — WeBook{% endblock %}
+{% block content %}
+{% if is_owner %}
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/shelves/{{ book.shelf_id }}">{{ book.shelf.name }}</a></li>
+    <li class="breadcrumb-item"><a href="/authors/{{ book.author_id }}">{{ book.author.name }}</a></li>
+    {% if book.series %}
+    <li class="breadcrumb-item"><a href="/series/{{ book.series_id }}">{{ book.series.name }}</a></li>
+    {% endif %}
+    <li class="breadcrumb-item active">{{ book.title }}</li>
+  </ol>
+</nav>
+{% else %}
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/shared">Поделились со мной</a></li>
+    <li class="breadcrumb-item active">{{ book.title }}</li>
+  </ol>
+</nav>
+{% endif %}
+
+<div class="row g-4">
+  <!-- Обложка -->
+  <div class="col-sm-4 col-md-3 col-lg-2">
+    {% if book.cover_path %}
+    <img src="/books/{{ book.id }}/cover" class="book-cover w-100" alt="{{ book.title }}">
+    {% else %}
+    <div class="cover-placeholder w-100"><i class="bi bi-book"></i></div>
+    {% endif %}
+  </div>
+
+  <!-- Инфо -->
+  <div class="col-sm-8 col-md-9 col-lg-10">
+    <h2 class="mb-1">{{ book.title }}</h2>
+    <p class="text-muted mb-2">
+      {% if is_owner %}
+      <a href="/authors/{{ book.author_id }}" class="text-decoration-none">{{ book.author.name }}</a>
+      {% if book.series %}
+      · <a href="/series/{{ book.series_id }}" class="text-decoration-none text-muted">{{ book.series.name }}</a>
+        {% if book.series_order %} #{{ book.series_order | int }}{% endif %}
+      {% endif %}
+      {% else %}
+      {{ book.author.name }}
+      {% if book.series %} · {{ book.series.name }}{% if book.series_order %} #{{ book.series_order | int }}{% endif %}{% endif %}
+      {% endif %}
+    </p>
+
+    <div class="d-flex flex-wrap gap-2 mb-3">
+      <span class="badge bg-primary text-uppercase">{{ book.file_format }}</span>
+      {% if book.language %}<span class="badge bg-secondary">{{ book.language }}</span>{% endif %}
+      {% if book.published_year %}<span class="badge bg-light text-dark border">{{ book.published_year }}</span>{% endif %}
+      {% if book.file_size %}
+      <span class="badge bg-light text-dark border">{{ (book.file_size / 1024 / 1024) | round(1) }} МБ</span>
+      {% endif %}
+    </div>
+
+    {% if read_progress and read_progress.percentage is not none %}
+    <div class="mb-3" style="max-width: 300px;">
+      <div class="d-flex justify-content-between align-items-center mb-1">
+        <span class="small text-muted"><i class="bi bi-book-half me-1"></i>Прогресс чтения</span>
+        <span class="small text-muted">{{ (read_progress.percentage * 100) | round | int }}%</span>
+      </div>
+      <div class="progress" style="height: 5px;">
+        <div class="progress-bar" role="progressbar"
+             style="width: {{ (read_progress.percentage * 100) | round | int }}%"></div>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if book.tags %}
+    <div class="d-flex flex-wrap gap-2 mb-3">
+      {% for t in book.tags %}
+      {% if is_owner %}
+      <a href="/books?tag={{ t.name | urlencode }}" class="badge bg-light text-secondary border text-decoration-none">
+        <i class="bi bi-tag me-1"></i>{{ t.name }}
+      </a>
+      {% else %}
+      <span class="badge bg-light text-secondary border"><i class="bi bi-tag me-1"></i>{{ t.name }}</span>
+      {% endif %}
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Оценка -->
+    {% if is_owner %}
+    <div class="mb-3 d-flex align-items-center gap-2">
+      <span class="text-muted small">Оценка:</span>
+      <div class="d-flex align-items-center">
+        {% for n in range(1, 6) %}
+        <form method="post" action="/books/{{ book.id }}/rate" class="d-inline">
+          <input type="hidden" name="rating" value="{{ n }}">
+          <button type="submit" class="btn btn-link p-0 border-0 fs-5 text-warning lh-1" title="Оценка {{ n }}">
+            <i class="bi bi-star{% if book.rating and book.rating >= n %}-fill{% endif %}"></i>
+          </button>
+        </form>
+        {% endfor %}
+      </div>
+      {% if book.rating %}
+      <form method="post" action="/books/{{ book.id }}/rate" class="d-inline">
+        <input type="hidden" name="rating" value="0">
+        <button type="submit" class="btn btn-sm btn-link text-muted p-0 lh-1" title="Сбросить оценку">×</button>
+      </form>
+      {% endif %}
+    </div>
+    {% elif book.rating %}
+    <div class="mb-3 text-warning">
+      {% for n in range(1, 6) %}<i class="bi bi-star{% if book.rating >= n %}-fill{% endif %}"></i>{% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="d-flex gap-2 mb-3 flex-wrap align-items-center">
+      {% if book.file_format in ("epub", "pdf", "fb2") %}
+      <a href="/books/{{ book.id }}/read" class="btn btn-primary">
+        <i class="bi bi-book-open me-1"></i>Читать
+      </a>
+      {% endif %}
+      <a href="/books/{{ book.id }}/download" class="btn btn-success">
+        <i class="bi bi-download me-1"></i>Скачать {{ book.file_format | upper }}
+      </a>
+      {% if is_owner %}
+      <form action="/books/{{ book.id }}/favorite" method="post" class="d-inline">
+        <button class="btn {% if book.is_favorite %}btn-danger{% else %}btn-outline-danger{% endif %}"
+                title="{% if book.is_favorite %}Убрать из избранного{% else %}В избранное{% endif %}">
+          <i class="bi bi-heart{% if book.is_favorite %}-fill{% endif %}"></i>
+        </button>
+      </form>
+      <form action="/books/{{ book.id }}/toggle-read" method="post" class="d-inline">
+        <button class="btn {% if book.is_read %}btn-secondary{% else %}btn-outline-secondary{% endif %}"
+                title="{% if book.is_read %}Отметить непрочитанным{% else %}Отметить прочитанным{% endif %}">
+          <i class="bi {% if book.is_read %}bi-check2-circle{% else %}bi-book{% endif %} me-1"></i>{% if book.is_read %}Прочитано{% else %}Не прочитано{% endif %}
+        </button>
+      </form>
+
+      <!-- Поделиться (публичная ссылка + с пользователем) -->
+      <div class="dropdown d-inline">
+        <button class="btn btn-outline-primary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+          <i class="bi bi-share me-1"></i>Поделиться
+        </button>
+        <ul class="dropdown-menu">
+          {% if share %}
+          <li>
+            <form action="/books/{{ book.id }}/unshare" method="post"
+                  onsubmit="return confirm('Удалить публичную ссылку?')">
+              <button type="submit" class="dropdown-item text-danger"><i class="bi bi-x-circle me-2"></i>Отозвать публичную ссылку</button>
+            </form>
+          </li>
+          {% else %}
+          <li>
+            <form action="/books/{{ book.id }}/share" method="post">
+              <button type="submit" class="dropdown-item"><i class="bi bi-link-45deg me-2"></i>Создать публичную ссылку</button>
+            </form>
+          </li>
+          {% endif %}
+          <li><hr class="dropdown-divider"></li>
+          <li><a class="dropdown-item" href="/books/{{ book.id }}/share-user">
+            <i class="bi bi-person-plus me-2"></i>Поделиться с пользователем</a></li>
+        </ul>
+      </div>
+
+      <!-- Ещё -->
+      <div class="dropdown d-inline">
+        <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+          <i class="bi bi-three-dots"></i>
+        </button>
+        <ul class="dropdown-menu">
+          <li><a class="dropdown-item" href="/books/{{ book.id }}/edit">
+            <i class="bi bi-pencil me-2"></i>Изменить</a></li>
+          <li><hr class="dropdown-divider"></li>
+          <li>
+            <form action="/books/{{ book.id }}/delete" method="post"
+                  onsubmit="return confirm('Удалить книгу «{{ book.title }}»?')">
+              <button type="submit" class="dropdown-item text-danger"><i class="bi bi-trash me-2"></i>Удалить</button>
+            </form>
+          </li>
+        </ul>
+      </div>
+      {% endif %}
+    </div>
+
+    {% if share %}
+    <div class="alert alert-success py-2 mb-3 d-flex align-items-center gap-2">
+      <i class="bi bi-share-fill"></i>
+      <span class="small">Публичная ссылка активна:</span>
+      <input type="text" class="form-control form-control-sm font-monospace" id="share-url"
+             value="{{ request.base_url }}share/{{ share.token }}" readonly style="max-width:350px">
+      <button class="btn btn-sm btn-outline-success" onclick="copyShare()">
+        <i class="bi bi-clipboard" id="share-icon"></i>
+      </button>
+    </div>
+    {% endif %}
+
+    {% if book.description %}
+    <div class="card bg-light border-0">
+      <div class="card-body">
+        <h6 class="text-muted text-uppercase fw-semibold mb-2">Описание</h6>
+        <p class="mb-0" style="white-space: pre-line">{{ book.description }}</p>
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="mt-3 small text-muted">
+      Добавлена: {{ book.added_at.strftime('%d.%m.%Y') if book.added_at else '—' }}
+      {% if is_owner %}
+      · Полка: <a href="/shelves/{{ book.shelf_id }}" class="text-muted">{{ book.shelf.name }}</a>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{% if is_owner and book.series and book.series.books | length > 1 %}
+<hr class="my-5">
+<h5 class="mb-3">Другие книги цикла «{{ book.series.name }}»</h5>
+<div class="row g-3">
+  {% for b in book.series.books %}
+  {% if b.id != book.id %}
+  <div class="col-6 col-sm-4 col-md-3 col-lg-2">
+    <a href="/books/{{ b.id }}" class="text-decoration-none">
+      <div class="card h-100 {% if b.id == book.id %}border-primary{% endif %}">
+        {% if b.cover_path %}
+        <img src="/books/{{ b.id }}/cover" class="book-cover" alt="{{ b.title }}">
+        {% else %}
+        <div class="cover-placeholder"><i class="bi bi-book"></i></div>
+        {% endif %}
+        <div class="card-body p-2">
+          {% if b.series_order %}<p class="card-text small text-muted mb-0">№{{ b.series_order | int }}</p>{% endif %}
+          <p class="card-text small fw-semibold text-dark">{{ b.title }}</p>
+        </div>
+      </div>
+    </a>
+  </div>
+  {% endif %}
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if share %}
+<script>
+function copyShare() {
+  const val = document.getElementById('share-url').value;
+  navigator.clipboard.writeText(val).then(() => {
+    const icon = document.getElementById('share-icon');
+    icon.className = 'bi bi-clipboard-check';
+    setTimeout(() => icon.className = 'bi bi-clipboard', 2000);
+  });
+}
+</script>
+{% endif %}
+{% endblock %}

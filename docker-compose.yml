@@ -1,0 +1,53 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: webook-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: webook
+      POSTGRES_USER: webook
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-webook}
+    volumes:
+      - ./db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U webook"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    container_name: webook
+    restart: unless-stopped
+    # Прямой HTTP-порт. Caddy проксирует HTTPS поверх него.
+    # Для максимальной безопасности можно закомментировать публикацию портов,
+    # тогда приложение будет доступно только через Caddy (HTTPS).
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    volumes:
+      - ./books:/app/books
+      - ./files:/app/files
+      - ./links:/app/links
+      - ./logs:/app/logs
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: webook-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy_data:/data
+      - ./caddy_config:/config
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-localhost}
+      ACME_EMAIL: ${ACME_EMAIL:-admin@example.com}
+    depends_on:
+      - app

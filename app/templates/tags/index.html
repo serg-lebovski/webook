@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Управление тегами — WeBook{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center mb-4">
+  <h2 class="mb-0"><i class="bi bi-tags me-2"></i>Управление тегами</h2>
+</div>
+
+{% if not usage %}
+<div class="text-center text-muted py-5">
+  <i class="bi bi-tag fs-1 d-block mb-2"></i>
+  Тегов пока нет. Добавьте теги при загрузке книги или сохранении статьи.
+</div>
+{% else %}
+
+<!-- Слияние тегов -->
+<div class="card mb-4">
+  <div class="card-header fw-semibold"><i class="bi bi-union me-1"></i>Объединить теги</div>
+  <div class="card-body">
+    <form method="post" action="/tags/merge" class="row g-2 align-items-end"
+          onsubmit="return confirm('Объединить теги? Связи будут перенесены, исходный тег удалится.')">
+      <div class="col-sm-5">
+        <label class="form-label small text-muted mb-1">Исходный тег (удалится)</label>
+        <select name="source_id" class="form-select" required>
+          {% for u in usage %}<option value="{{ u.tag.id }}">{{ u.tag.name }} ({{ u.total }})</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-sm-5">
+        <label class="form-label small text-muted mb-1">Целевой тег</label>
+        <select name="target_id" class="form-select" required>
+          {% for u in usage %}<option value="{{ u.tag.id }}">{{ u.tag.name }} ({{ u.total }})</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-sm-2">
+        <button type="submit" class="btn btn-outline-primary w-100">
+          <i class="bi bi-union me-1"></i>Объединить
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Список тегов -->
+<div class="card">
+  <div class="card-header fw-semibold"><i class="bi bi-tags me-1"></i>Все теги ({{ usage | length }})</div>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Тег</th>
+          <th class="text-center">Книги</th>
+          <th class="text-center">Статьи</th>
+          <th>Переименовать</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in usage %}
+        <tr>
+          <td>
+            <i class="bi bi-tag me-1 text-secondary"></i><span class="fw-semibold">{{ u.tag.name }}</span>
+          </td>
+          <td class="text-center">
+            {% if u.books %}<a href="/books?tag={{ u.tag.name | urlencode }}" class="badge bg-primary text-decoration-none">{{ u.books }}</a>{% else %}<span class="text-muted">0</span>{% endif %}
+          </td>
+          <td class="text-center">
+            {% if u.links %}<a href="/links?tag={{ u.tag.name | urlencode }}" class="badge bg-info text-dark text-decoration-none">{{ u.links }}</a>{% else %}<span class="text-muted">0</span>{% endif %}
+          </td>
+          <td style="min-width:240px">
+            <form method="post" action="/tags/{{ u.tag.id }}/rename" class="input-group input-group-sm">
+              <input type="text" name="name" class="form-control" value="{{ u.tag.name }}" required>
+              <button type="submit" class="btn btn-outline-secondary" title="Сохранить">
+                <i class="bi bi-check-lg"></i>
+              </button>
+            </form>
+          </td>
+          <td class="text-end">
+            <form method="post" action="/tags/{{ u.tag.id }}/delete"
+                  onsubmit="return confirm('Удалить тег «{{ u.tag.name }}»? Он снимется со всех книг и статей.')">
+              <button type="submit" class="btn btn-sm btn-outline-danger" title="Удалить тег">
+                <i class="bi bi-trash"></i>
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

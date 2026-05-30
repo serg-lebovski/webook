@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}{% if series %}Редактировать цикл{% else %}Новый цикл{% endif %} — WeBook{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-6">
+    <nav aria-label="breadcrumb" class="mb-3">
+      <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="/authors">Авторы</a></li>
+        <li class="breadcrumb-item active">{% if series %}Редактировать цикл{% else %}Новый цикл{% endif %}</li>
+      </ol>
+    </nav>
+    <div class="card shadow-sm">
+      <div class="card-body p-4">
+        <h4 class="mb-4">{% if series %}Редактировать цикл{% else %}Новый цикл{% endif %}</h4>
+        {% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+        <form method="post">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Автор *</label>
+            <select name="author_id" class="form-select" required>
+              <option value="">— выберите автора —</option>
+              {% for a in authors %}
+              <option value="{{ a.id }}" {% if selected_author and selected_author.id == a.id %}selected{% endif %}>
+                {{ a.name }}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Название цикла *</label>
+            <input type="text" name="name" class="form-control" value="{{ series.name if series else '' }}" autofocus required>
+          </div>
+          <div class="mb-4">
+            <label class="form-label fw-semibold">Описание</label>
+            <textarea name="description" class="form-control" rows="3">{{ series.description if series else '' }}</textarea>
+          </div>
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary">Сохранить</button>
+            <a href="/authors/{{ selected_author.id if selected_author else '' }}" class="btn btn-outline-secondary">Отмена</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

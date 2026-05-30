@@ -1,0 +1,546 @@
+from datetime import datetime
+from pathlib import Path
+from typing import Optional, List
+from urllib.parse import urlencode
+
+from fastapi import APIRouter, Depends, Form, Request, UploadFile, File, HTTPException
+from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, JSONResponse
+from fastapi.templating import Jinja2Templates
+from sqlalchemy.orm import Session
+
+from app.dependencies import get_db, get_current_user
+from app.models.author import Author
+from app.models.book import Book
+from app.models.read_progress import ReadProgress
+from app.models.series import Series
+from app.models.share import Share
+from app.models.shelf import Shelf
+from app.models.user import User
+from app.services.book_service import (
+    parse_book_file, save_book_file, save_cover_file,
+    delete_file, convert_fb2_to_html,
+)
+from app.services.tag_service import set_tags_from_string, tags_to_string, get_or_create_tags, parse_tag_names
+from app.config import BOOKS_DIR, COVERS_DIR, ALLOWED_BOOK_FORMATS, MAX_BOOK_SIZE
+
+router = APIRouter(prefix="/books")
+templates = Jinja2Templates(directory="app/templates")
+
+_READABLE_FORMATS = ("epub", "pdf", "fb2")
+_MIME = {"epub": "application/epub+zip", "fb2": "application/x-fictionbook+xml", "pdf": "application/pdf"}
+BOOKS_PER_PAGE = 24
+
+
+def _user_books(db: Session, user: User):
+    return db.query(Book).filter(Book.user_id == user.id)
+
+
+def _own_book(book_id: int, user: User, db: Session) -> Book:
+    book = _user_books(db, user).filter(Book.id == book_id).first()
+    if not book:
+        raise HTTPException(status_code=404, detail="Книга не найдена")
+    return book
+
+
+def _accessible_book(book_id: int, user: User, db: Session) -> Book:
+    """Returns book if user owns it or has an active internal share. Raises 404 otherwise."""
+    book = db.query(Book).filter_by(id=book_id).first()
+    if not book:
+        raise HTTPException(status_code=404, detail="Книга не найдена")
+    if book.user_id == user.id:
+        return book
+    share = db.query(Share).filter(
+        Share.resource_type == "book",
+        Share.resource_id == book_id,
+        Share.is_public == False,
+        Share.shared_with_user_id == user.id,
+        Share.expires_at > datetime.utcnow(),
+    ).first()
+    if not share:
+        raise HTTPException(status_code=404, detail="Книга не найдена")
+    return book
+
+
+@router.get("", response_class=HTMLResponse)
+def books_list(
+    request: Request,
+    shelf_id: int = 0,
+    author_id: int = 0,
+    q: str = "",
+    tag: str = "",
+    favorite: int = 0,
+    sort: str = "",
+    page: int = 1,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    from app.models.tag import Tag
+    query = _user_books(db, user)
+    if shelf_id:
+        query = query.filter(Book.shelf_id == shelf_id)
+    if author_id:
+        query = query.filter(Book.author_id == author_id)
+    if q:
+        query = query.filter(Book.title.ilike(f"%{q}%"))
+    if tag:
+        query = query.join(Book.tags).filter(Tag.name == tag)
+    if favorite:
+        query = query.filter(Book.is_favorite == True)
+
+    if sort == "rating":
+        order = (Book.rating.is_(None), Book.rating.desc(), Book.title)
+    else:
+        order = (Book.title,)
+
+    total = query.count()
+    total_pages = max(1, (total + BOOKS_PER_PAGE - 1) // BOOKS_PER_PAGE)
+    page = min(max(1, page), total_pages)
+    books = (
+        query.order_by(*order)
+        .offset((page - 1) * BOOKS_PER_PAGE)
+        .limit(BOOKS_PER_PAGE)
+        .all()
+    )
+    base_qs = urlencode({k: v for k, v in
+                         {"shelf_id": shelf_id or "", "author_id": author_id or "",
+                          "q": q, "tag": tag, "favorite": favorite or "", "sort": sort}.items() if v})
+    shelves = db.query(Shelf).filter(Shelf.user_id == user.id).all()
+
+    # books shared with this user (shown as a separate section, no shelf/author filter)
+    shared_books = []
+    if not shelf_id and not author_id:
+        book_shares = db.query(Share).filter(
+            Share.shared_with_user_id == user.id,
+            Share.resource_type == "book",
+            Share.is_public == False,
+            Share.expires_at > datetime.utcnow(),
+        ).all()
+        if book_shares:
+            ids = [s.resource_id for s in book_shares]
+            sq = db.query(Book).filter(Book.id.in_(ids))
+            if q:
+                sq = sq.filter(Book.title.ilike(f"%{q}%"))
+            shared_books = sq.order_by(Book.title).all()
+
+    return templates.TemplateResponse(
+        "books/list.html",
+        {"request": request, "user": user, "books": books, "shelves": shelves,
+         "q": q, "shelf_id": shelf_id, "tag": tag, "favorite": favorite, "sort": sort,
+         "shared_books": shared_books,
+         "page": page, "total_pages": total_pages, "total": total, "base_qs": base_qs},
+    )
+
+
+@router.get("/upload", response_class=HTMLResponse)
+def upload_form(
+    request: Request,
+    shelf_id: int = 0,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    shelves = db.query(Shelf).filter(Shelf.user_id == user.id).order_by(Shelf.name).all()
+    authors = db.query(Author).order_by(Author.name).all()
+    selected_shelf = db.query(Shelf).filter(Shelf.id == shelf_id, Shelf.user_id == user.id).first() if shelf_id else None
+    return templates.TemplateResponse(
+        "books/upload.html",
+        {"request": request, "user": user, "shelves": shelves, "authors": authors,
+         "selected_shelf": selected_shelf, "meta": {}, "error": None},
+    )
+
+
+@router.post("/upload")
+async def upload_book(
+    request: Request,
+    title: str = Form(...),
+    author_id: int = Form(...),
+    shelf_id: int = Form(...),
+    series_id: Optional[str] = Form(None),
+    series_order: Optional[str] = Form(None),
+    description: str = Form(""),
+    language: str = Form(""),
+    published_year: Optional[str] = Form(None),
+    tags: str = Form(""),
+    book_file: UploadFile = File(...),
+    cover_file: UploadFile = File(None),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    suffix = Path(book_file.filename).suffix.lower() if book_file.filename else ""
+    if suffix not in ALLOWED_BOOK_FORMATS:
+        return _upload_error(request, user, db, f"Формат {suffix} не поддерживается")
+
+    data = await book_file.read()
+    if len(data) > MAX_BOOK_SIZE:
+        return _upload_error(request, user, db, "Файл слишком большой (макс 100 МБ)")
+
+    shelf = db.query(Shelf).filter(Shelf.id == shelf_id, Shelf.user_id == user.id).first()
+    if not shelf:
+        return _upload_error(request, user, db, "Полка не найдена")
+
+    file_name = save_book_file(data, suffix)
+
+    cover_path = None
+    if cover_file and cover_file.filename:
+        cover_data = await cover_file.read()
+        cover_path = save_cover_file(cover_data, Path(cover_file.filename).suffix.lower())
+
+    book = Book(
+        user_id=user.id,
+        title=title.strip(),
+        author_id=author_id,
+        shelf_id=shelf_id,
+        series_id=int(series_id) if series_id and series_id.strip() else None,
+        series_order=float(series_order) if series_order and series_order.strip() else None,
+        description=description.strip(),
+        cover_path=cover_path,
+        file_path=file_name,
+        file_format=suffix.lstrip("."),
+        file_size=len(data),
+        language=language.strip(),
+        published_year=int(published_year) if published_year and published_year.strip() else None,
+    )
+    db.add(book)
+    db.commit()
+    set_tags_from_string(book, tags, user.id, db)
+    db.commit()
+    return RedirectResponse(f"/books/{book.id}", status_code=302)
+
+
+@router.post("/parse-meta")
+async def parse_meta(
+    file: UploadFile = File(...),
+    user: User = Depends(get_current_user),
+):
+    data = await file.read()
+    suffix = Path(file.filename).suffix.lower()
+    result = parse_book_file(data, suffix)
+    result.pop("cover_data", None)
+    return result
+
+
+@router.get("/{book_id}", response_class=HTMLResponse)
+def book_detail(book_id: int, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    book = _accessible_book(book_id, user, db)
+    is_owner = book.user_id == user.id
+    share = _get_share(book_id, "book", db) if is_owner else None
+    read_progress = db.query(ReadProgress).filter_by(user_id=user.id, book_id=book_id).first()
+    return templates.TemplateResponse("books/detail.html", {
+        "request": request, "user": user, "book": book, "share": share,
+        "is_owner": is_owner, "read_progress": read_progress,
+    })
+
+
+@router.get("/{book_id}/edit", response_class=HTMLResponse)
+def edit_book_form(book_id: int, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    book = _own_book(book_id, user, db)
+    shelves = db.query(Shelf).filter(Shelf.user_id == user.id).all()
+    authors = db.query(Author).order_by(Author.name).all()
+    series_list = db.query(Series).filter(Series.author_id == book.author_id).all()
+    return templates.TemplateResponse(
+        "books/edit.html",
+        {"request": request, "user": user, "book": book, "shelves": shelves, "authors": authors,
+         "series_list": series_list, "tags_str": tags_to_string(book)},
+    )
+
+
+@router.post("/{book_id}/edit")
+async def edit_book(
+    book_id: int,
+    title: str = Form(...),
+    author_id: int = Form(...),
+    shelf_id: int = Form(...),
+    series_id: Optional[str] = Form(None),
+    series_order: Optional[str] = Form(None),
+    description: str = Form(""),
+    language: str = Form(""),
+    published_year: Optional[str] = Form(None),
+    tags: str = Form(""),
+    cover_file: UploadFile = File(None),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    book = _own_book(book_id, user, db)
+
+    book.title = title.strip()
+    book.author_id = author_id
+    book.shelf_id = shelf_id
+    book.series_id = int(series_id) if series_id and series_id.strip() else None
+    book.series_order = float(series_order) if series_order and series_order.strip() else None
+    book.description = description.strip()
+    book.language = language.strip()
+    book.published_year = int(published_year) if published_year and published_year.strip() else None
+
+    if cover_file and cover_file.filename:
+        cover_data = await cover_file.read()
+        delete_file(book.cover_path, COVERS_DIR)
+        book.cover_path = save_cover_file(cover_data, Path(cover_file.filename).suffix.lower())
+
+    set_tags_from_string(book, tags, user.id, db)
+    db.commit()
+    return RedirectResponse(f"/books/{book_id}", status_code=302)
+
+
+@router.get("/{book_id}/cover")
+def book_cover(book_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    book = _accessible_book(book_id, user, db)
+    if not book.cover_path:
+        raise HTTPException(status_code=404)
+    path = COVERS_DIR / book.cover_path
+    if not path.exists():
+        raise HTTPException(status_code=404)
+    return FileResponse(path, media_type="image/jpeg")
+
+
+@router.get("/{book_id}/download")
+def download_book(book_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    book = _accessible_book(book_id, user, db)
+    path = BOOKS_DIR / book.file_path
+    if not path.exists():
+        raise HTTPException(status_code=404)
+    return FileResponse(path, media_type=_MIME.get(book.file_format, "application/octet-stream"),
+                        filename=f"{book.title}.{book.file_format}")
+
+
+@router.get("/{book_id}/serve")
+def serve_book_file(book_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Serve book file inline for in-browser reader (no download disposition)."""
+    book = _accessible_book(book_id, user, db)
+    path = BOOKS_DIR / book.file_path
+    if not path.exists():
+        raise HTTPException(status_code=404)
+    return FileResponse(path, media_type=_MIME.get(book.file_format, "application/octet-stream"))
+
+
+@router.get("/{book_id}/read", response_class=HTMLResponse)
+def read_book(book_id: int, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    book = _accessible_book(book_id, user, db)
+    if book.file_format not in _READABLE_FORMATS:
+        raise HTTPException(status_code=400, detail=f"Чтение формата {book.file_format.upper()} в браузере не поддерживается")
+    content_html = None
+    if book.file_format == "fb2":
+        path = BOOKS_DIR / book.file_path
+        if path.exists():
+            content_html = convert_fb2_to_html(path.read_bytes())
+    progress_rec = db.query(ReadProgress).filter_by(user_id=user.id, book_id=book_id).first()
+    return templates.TemplateResponse("books/read.html", {
+        "request": request, "user": user, "book": book, "content_html": content_html,
+        "server_progress": progress_rec.progress if progress_rec else None,
+        "server_percentage": progress_rec.percentage if progress_rec else None,
+    })
+
+
+@router.post("/{book_id}/progress")
+async def save_progress(book_id: int, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    _accessible_book(book_id, user, db)
+    body = await request.json()
+    progress = body.get("progress")
+    percentage = body.get("percentage")
+    rec = db.query(ReadProgress).filter_by(user_id=user.id, book_id=book_id).first()
+    if rec:
+        rec.progress = progress
+        rec.percentage = float(percentage) if percentage is not None else None
+        rec.updated_at = datetime.utcnow()
+    else:
+        rec = ReadProgress(
+            user_id=user.id, book_id=book_id,
+            progress=progress,
+            percentage=float(percentage) if percentage is not None else None,
+        )
+        db.add(rec)
+    db.commit()
+    return JSONResponse({"ok": True})
+
+
+@router.post("/{book_id}/toggle-read")
+def toggle_read_book(book_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    book = _own_book(book_id, user, db)
+    book.is_read = not book.is_read
+    book.read_at = datetime.utcnow() if book.is_read else None
+    db.commit()
+    return RedirectResponse(f"/books/{book_id}", status_code=302)
+
+
+@router.post("/{book_id}/rate")
+def rate_book(book_id: int, rating: int = Form(...), user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    book = _own_book(book_id, user, db)
+    book.rating = rating if 1 <= rating <= 5 else None  # 0 (или вне диапазона) — сброс
+    db.commit()
+    return RedirectResponse(f"/books/{book_id}", status_code=302)
+
+
+@router.post("/{book_id}/favorite")
+def toggle_favorite_book(book_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    book = _own_book(book_id, user, db)
+    book.is_favorite = not book.is_favorite
+    db.commit()
+    return RedirectResponse(f"/books/{book_id}", status_code=302)
+
+
+@router.post("/bulk")
+def books_bulk(
+    action: str = Form(...),
+    ids: List[int] = Form(default=[]),
+    shelf_id: int = Form(0),
+    tag: str = Form(""),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    books = db.query(Book).filter(Book.user_id == user.id, Book.id.in_(ids)).all() if ids else []
+    now = datetime.utcnow()
+    for book in books:
+        if action == "read":
+            book.is_read = True
+            book.read_at = now
+        elif action == "unread":
+            book.is_read = False
+            book.read_at = None
+        elif action == "favorite":
+            book.is_favorite = True
+        elif action == "unfavorite":
+            book.is_favorite = False
+        elif action == "move" and shelf_id:
+            owns_shelf = db.query(Shelf).filter(Shelf.id == shelf_id, Shelf.user_id == user.id).first()
+            if owns_shelf:
+                book.shelf_id = shelf_id
+        elif action == "tag" and tag.strip():
+            names = parse_tag_names(tag)
+            new_tags = get_or_create_tags(names, user.id, db)
+            have = {t.id for t in book.tags}
+            for t in new_tags:
+                if t.id not in have:
+                    book.tags.append(t)
+        elif action == "delete":
+            delete_file(book.file_path, BOOKS_DIR)
+            delete_file(book.cover_path, COVERS_DIR)
+            db.delete(book)
+    db.commit()
+    return RedirectResponse("/books", status_code=302)
+
+
+@router.post("/{book_id}/delete")
+def delete_book(book_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    book = _own_book(book_id, user, db)
+    delete_file(book.file_path, BOOKS_DIR)
+    delete_file(book.cover_path, COVERS_DIR)
+    db.delete(book)
+    db.commit()
+    return RedirectResponse("/books", status_code=302)
+
+
+@router.post("/{book_id}/share")
+def share_book(book_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    book = _own_book(book_id, user, db)
+    _get_or_create_share(book.id, "book", user.id, db)
+    return RedirectResponse(f"/books/{book_id}?shared=1", status_code=302)
+
+
+@router.post("/{book_id}/unshare")
+def unshare_book(book_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    _own_book(book_id, user, db)
+    _delete_share(book_id, "book", user.id, db)
+    return RedirectResponse(f"/books/{book_id}", status_code=302)
+
+
+@router.get("/{book_id}/share-user", response_class=HTMLResponse)
+def share_book_user_form(
+    book_id: int,
+    request: Request,
+    error: str = "",
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    book = _own_book(book_id, user, db)
+    internal_shares = db.query(Share).filter(
+        Share.resource_type == "book",
+        Share.resource_id == book_id,
+        Share.is_public == False,
+        Share.expires_at > datetime.utcnow(),
+    ).all()
+    return templates.TemplateResponse("books/share_user.html", {
+        "request": request, "user": user, "book": book,
+        "internal_shares": internal_shares, "error": error,
+    })
+
+
+@router.post("/{book_id}/share-with-user")
+def share_book_with_user(
+    book_id: int,
+    username: str = Form(...),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    book = _own_book(book_id, user, db)
+    target = db.query(User).filter_by(username=username.strip()).first()
+    if not target:
+        return RedirectResponse(f"/books/{book_id}/share-user?error=not_found", status_code=302)
+    if target.id == user.id:
+        return RedirectResponse(f"/books/{book_id}/share-user?error=self", status_code=302)
+    existing = db.query(Share).filter(
+        Share.resource_type == "book",
+        Share.resource_id == book_id,
+        Share.is_public == False,
+        Share.shared_with_user_id == target.id,
+        Share.expires_at > datetime.utcnow(),
+    ).first()
+    if not existing:
+        share = Share(
+            owner_id=user.id, resource_type="book", resource_id=book_id,
+            is_public=False, shared_with_user_id=target.id,
+        )
+        db.add(share)
+        db.commit()
+    return RedirectResponse(f"/books/{book_id}", status_code=302)
+
+
+@router.post("/{book_id}/revoke-user-share")
+def revoke_book_user_share(
+    book_id: int,
+    share_id: int = Form(...),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _own_book(book_id, user, db)
+    share = db.query(Share).filter_by(id=share_id, owner_id=user.id).first()
+    if share:
+        db.delete(share)
+        db.commit()
+    return RedirectResponse(f"/books/{book_id}/share-user", status_code=302)
+
+
+# ── helpers ─────────────────────────────────────────────────────────────────
+
+def _upload_error(request, user, db, error):
+    shelves = db.query(Shelf).filter(Shelf.user_id == user.id).all()
+    authors = db.query(Author).order_by(Author.name).all()
+    return templates.TemplateResponse(
+        "books/upload.html",
+        {"request": request, "user": user, "shelves": shelves, "authors": authors, "meta": {}, "error": error},
+        status_code=400,
+    )
+
+
+def _get_share(resource_id: int, resource_type: str, db: Session):
+    return db.query(Share).filter(
+        Share.resource_type == resource_type,
+        Share.resource_id == resource_id,
+        Share.is_public == True,
+        Share.expires_at > datetime.utcnow(),
+    ).first()
+
+
+def _get_or_create_share(resource_id: int, resource_type: str, owner_id: int, db: Session):
+    share = _get_share(resource_id, resource_type, db)
+    if not share:
+        share = Share(owner_id=owner_id, resource_type=resource_type, resource_id=resource_id, is_public=True)
+        db.add(share)
+        db.commit()
+    return share
+
+
+def _delete_share(resource_id: int, resource_type: str, owner_id: int, db: Session):
+    share = db.query(Share).filter_by(
+        resource_type=resource_type, resource_id=resource_id, owner_id=owner_id, is_public=True
+    ).first()
+    if share:
+        db.delete(share)
+        db.commit()

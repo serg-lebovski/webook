@@ -1,0 +1,295 @@
+{% extends "base.html" %}
+{% block title %}Общий доступ — WeBook{% endblock %}
+{% block content %}
+<h2 class="mb-3"><i class="bi bi-people me-2"></i>Общий доступ</h2>
+
+<ul class="nav nav-pills mb-4" id="sharedTabs" role="tablist">
+  <li class="nav-item" role="presentation">
+    <button class="nav-link active" id="inc-tab" data-bs-toggle="pill" data-bs-target="#inc-pane"
+            type="button" role="tab">
+      <i class="bi bi-inbox me-1"></i>Поделились со мной
+    </button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="out-tab" data-bs-toggle="pill" data-bs-target="#out-pane"
+            type="button" role="tab">
+      <i class="bi bi-share me-1"></i>Поделился я
+    </button>
+  </li>
+</ul>
+
+<div class="tab-content">
+
+  {# ───────────────────── Поделились со мной ───────────────────── #}
+  <div class="tab-pane fade show active" id="inc-pane" role="tabpanel">
+
+    {% if inc.empty %}
+    <div class="text-center text-muted py-5">
+      <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+      Пока никто ничем не поделился.
+    </div>
+    {% endif %}
+
+    {% if inc.shelf_shares %}
+    <h5 class="text-muted text-uppercase fw-semibold mb-3 small"><i class="bi bi-bookshelf me-1"></i>Полки</h5>
+    <div class="row g-3 mb-5">
+      {% for s in inc.shelf_shares %}
+      {% set shelf = inc.shelves.get(s.resource_id) %}
+      {% if shelf %}
+      <div class="col-sm-6 col-md-4 col-lg-3">
+        <a href="/shared/shelf/{{ s.id }}" class="text-decoration-none">
+          <div class="card h-100">
+            <div class="card-body">
+              <h6 class="card-title mb-1"><i class="bi bi-bookshelf text-primary me-1"></i>{{ shelf.name }}</h6>
+              {% if shelf.description %}<p class="card-text small text-muted">{{ shelf.description }}</p>{% endif %}
+            </div>
+            <div class="card-footer py-1 px-3 text-muted" style="font-size:.7rem">
+              от {{ s.owner.username }} · до {{ s.expires_at.strftime('%d.%m.%Y') }}
+            </div>
+          </div>
+        </a>
+      </div>
+      {% endif %}
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if inc.folder_shares %}
+    <h5 class="text-muted text-uppercase fw-semibold mb-3 small"><i class="bi bi-folder me-1"></i>Папки статей</h5>
+    <div class="row g-3 mb-5">
+      {% for s in inc.folder_shares %}
+      {% set folder = inc.folders.get(s.resource_id) %}
+      {% if folder %}
+      <div class="col-sm-6 col-md-4 col-lg-3">
+        <a href="/shared/folder/{{ s.id }}" class="text-decoration-none">
+          <div class="card h-100">
+            <div class="card-body">
+              <h6 class="card-title mb-1"><i class="bi bi-folder text-warning me-1"></i>{{ folder.name }}</h6>
+              <p class="card-text small text-muted">{{ folder.links | length }} статей</p>
+            </div>
+            <div class="card-footer py-1 px-3 text-muted" style="font-size:.7rem">
+              от {{ s.owner.username }} · до {{ s.expires_at.strftime('%d.%m.%Y') }}
+            </div>
+          </div>
+        </a>
+      </div>
+      {% endif %}
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if inc.book_shares %}
+    <h5 class="text-muted text-uppercase fw-semibold mb-3 small"><i class="bi bi-book me-1"></i>Книги</h5>
+    <div class="row g-3 mb-5">
+      {% for s in inc.book_shares %}
+      {% set book = inc.books.get(s.resource_id) %}
+      {% if book %}
+      <div class="col-6 col-sm-4 col-md-3 col-lg-2">
+        <div class="card h-100">
+          <a href="/books/{{ book.id }}" class="text-decoration-none">
+            {% if book.cover_path %}
+            <img src="/books/{{ book.id }}/cover" class="book-cover" alt="{{ book.title }}">
+            {% else %}
+            <div class="cover-placeholder"><i class="bi bi-book"></i></div>
+            {% endif %}
+            <div class="card-body p-2">
+              <p class="card-text small fw-semibold text-body mb-0">{{ book.title }}</p>
+              <p class="card-text small text-muted">{{ book.author.name }}</p>
+            </div>
+          </a>
+          <div class="card-footer py-1 px-2 text-muted" style="font-size:.7rem">
+            от {{ s.owner.username }} · до {{ s.expires_at.strftime('%d.%m.%Y') }}
+          </div>
+        </div>
+      </div>
+      {% endif %}
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if inc.link_shares %}
+    <h5 class="text-muted text-uppercase fw-semibold mb-3 small"><i class="bi bi-bookmarks me-1"></i>Статьи и ссылки</h5>
+    <div class="d-flex flex-column gap-2">
+      {% for s in inc.link_shares %}
+      {% set link = inc.links.get(s.resource_id) %}
+      {% if link %}
+      <div class="card">
+        <div class="card-body py-2 px-3">
+          <div class="d-flex align-items-start gap-3">
+            <div class="flex-grow-1 min-width-0">
+              <a href="{{ link.url }}" target="_blank" rel="noopener noreferrer"
+                 class="fw-semibold text-decoration-none text-break">
+                {% if link.video_embed_url %}
+                <i class="bi bi-play-circle-fill text-danger me-1"></i>
+                {% endif %}
+                {{ link.title }}
+                <i class="bi bi-box-arrow-up-right ms-1 small"></i>
+              </a>
+              <div class="text-muted small text-truncate">{{ link.url }}</div>
+              {% if link.description %}
+              <div class="text-secondary small mt-1">{{ link.description }}</div>
+              {% endif %}
+              <div class="text-muted mt-1" style="font-size:.75rem">
+                от {{ s.owner.username }} · до {{ s.expires_at.strftime('%d.%m.%Y') }}
+              </div>
+            </div>
+            <div class="d-flex gap-1 flex-shrink-0">
+              {% if link.video_embed_url %}
+              <a href="/links/{{ link.id }}/read" class="btn btn-sm btn-outline-danger" title="Смотреть">
+                <i class="bi bi-play-fill"></i>
+              </a>
+              {% elif link.content %}
+              <a href="/links/{{ link.id }}/read" class="btn btn-sm btn-outline-success" title="Читать">
+                <i class="bi bi-book"></i>
+              </a>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+      {% endfor %}
+    </div>
+    {% endif %}
+
+  </div>
+
+  {# ───────────────────── Поделился я ───────────────────── #}
+  <div class="tab-pane fade" id="out-pane" role="tabpanel">
+
+    {% if out.empty %}
+    <div class="text-center text-muted py-5">
+      <i class="bi bi-share fs-1 d-block mb-2"></i>
+      Вы ещё ни с кем не поделились.
+    </div>
+    {% endif %}
+
+    {% if out.shelf_shares %}
+    <h5 class="text-muted text-uppercase fw-semibold mb-3 small"><i class="bi bi-bookshelf me-1"></i>Полки</h5>
+    <div class="list-group mb-5">
+      {% for s in out.shelf_shares %}
+      {% set shelf = out.shelves.get(s.resource_id) %}
+      {% if shelf %}
+      <div class="list-group-item d-flex align-items-center gap-3 py-2">
+        <i class="bi bi-bookshelf text-primary fs-5"></i>
+        <div class="flex-grow-1 min-width-0">
+          <a href="/shelves/{{ shelf.id }}" class="fw-semibold text-decoration-none text-body">{{ shelf.name }}</a>
+          <div class="text-muted small">
+            <i class="bi bi-person me-1"></i>{{ s.shared_with.username }}
+            <span class="ms-2">до {{ s.expires_at.strftime('%d.%m.%Y') }}</span>
+          </div>
+        </div>
+        <form method="post" action="/shelves/{{ shelf.id }}/revoke-user-share">
+          <input type="hidden" name="share_id" value="{{ s.id }}">
+          <button type="submit" class="btn btn-sm btn-outline-danger" title="Отозвать доступ">
+            <i class="bi bi-x-lg"></i>
+          </button>
+        </form>
+      </div>
+      {% endif %}
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if out.folder_shares %}
+    <h5 class="text-muted text-uppercase fw-semibold mb-3 small"><i class="bi bi-folder me-1"></i>Папки статей</h5>
+    <div class="list-group mb-5">
+      {% for s in out.folder_shares %}
+      {% set folder = out.folders.get(s.resource_id) %}
+      {% if folder %}
+      <div class="list-group-item d-flex align-items-center gap-3 py-2">
+        <i class="bi bi-folder text-warning fs-5"></i>
+        <div class="flex-grow-1 min-width-0">
+          <a href="/links/folders/{{ folder.id }}" class="fw-semibold text-decoration-none text-body">{{ folder.name }}</a>
+          <div class="text-muted small">
+            <i class="bi bi-person me-1"></i>{{ s.shared_with.username }}
+            <span class="ms-2">до {{ s.expires_at.strftime('%d.%m.%Y') }}</span>
+          </div>
+        </div>
+        <form method="post" action="/links/folders/{{ folder.id }}/revoke-user-share">
+          <input type="hidden" name="share_id" value="{{ s.id }}">
+          <button type="submit" class="btn btn-sm btn-outline-danger" title="Отозвать доступ">
+            <i class="bi bi-x-lg"></i>
+          </button>
+        </form>
+      </div>
+      {% endif %}
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if out.book_shares %}
+    <h5 class="text-muted text-uppercase fw-semibold mb-3 small"><i class="bi bi-book me-1"></i>Книги</h5>
+    <div class="list-group mb-5">
+      {% for s in out.book_shares %}
+      {% set book = out.books.get(s.resource_id) %}
+      {% if book %}
+      <div class="list-group-item d-flex align-items-center gap-3 py-2">
+        {% if book.cover_path %}
+        <img src="/books/{{ book.id }}/cover" alt="" style="width:36px;height:54px;object-fit:cover;border-radius:3px;flex-shrink:0">
+        {% else %}
+        <div style="width:36px;height:54px;border-radius:3px;background:linear-gradient(135deg,#667eea,#764ba2);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <i class="bi bi-book text-white small"></i>
+        </div>
+        {% endif %}
+        <div class="flex-grow-1 min-width-0">
+          <a href="/books/{{ book.id }}" class="fw-semibold text-decoration-none text-body">{{ book.title }}</a>
+          <div class="text-muted small text-truncate">{{ book.author.name }}</div>
+          <div class="text-muted small">
+            <i class="bi bi-person me-1"></i>{{ s.shared_with.username }}
+            <span class="ms-2">до {{ s.expires_at.strftime('%d.%m.%Y') }}</span>
+          </div>
+        </div>
+        <form method="post" action="/books/{{ book.id }}/revoke-user-share">
+          <input type="hidden" name="share_id" value="{{ s.id }}">
+          <button type="submit" class="btn btn-sm btn-outline-danger" title="Отозвать доступ">
+            <i class="bi bi-x-lg"></i>
+          </button>
+        </form>
+      </div>
+      {% endif %}
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if out.link_shares %}
+    <h5 class="text-muted text-uppercase fw-semibold mb-3 small"><i class="bi bi-bookmarks me-1"></i>Статьи и ссылки</h5>
+    <div class="list-group mb-5">
+      {% for s in out.link_shares %}
+      {% set link = out.links.get(s.resource_id) %}
+      {% if link %}
+      <div class="list-group-item d-flex align-items-center gap-3 py-2">
+        <i class="bi bi-{% if link.video_embed_url %}play-circle text-danger{% else %}bookmark text-success{% endif %} fs-5"></i>
+        <div class="flex-grow-1 min-width-0">
+          <a href="{{ link.url }}" target="_blank" rel="noopener" class="fw-semibold text-decoration-none text-body text-truncate d-block">{{ link.title }}</a>
+          <div class="text-muted small text-truncate">{{ link.url }}</div>
+          <div class="text-muted small">
+            <i class="bi bi-person me-1"></i>{{ s.shared_with.username }}
+            <span class="ms-2">до {{ s.expires_at.strftime('%d.%m.%Y') }}</span>
+          </div>
+        </div>
+        <form method="post" action="/links/{{ link.id }}/revoke-user-share">
+          <input type="hidden" name="share_id" value="{{ s.id }}">
+          <button type="submit" class="btn btn-sm btn-outline-danger" title="Отозвать доступ">
+            <i class="bi bi-x-lg"></i>
+          </button>
+        </form>
+      </div>
+      {% endif %}
+      {% endfor %}
+    </div>
+    {% endif %}
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Открыть вкладку «Поделился я» по якорю #out (в т.ч. со старой ссылки /shared/out)
+if (location.hash === '#out') {
+  const tab = document.getElementById('out-tab');
+  if (tab) new bootstrap.Tab(tab).show();
+}
+</script>
+{% endblock %}

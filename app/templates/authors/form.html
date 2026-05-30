@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}{% if author %}Редактировать автора{% else %}Новый автор{% endif %} — WeBook{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-7">
+    <nav aria-label="breadcrumb" class="mb-3">
+      <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="/authors">Авторы</a></li>
+        <li class="breadcrumb-item active">{% if author %}{{ author.name }}{% else %}Новый{% endif %}</li>
+      </ol>
+    </nav>
+    <div class="card shadow-sm">
+      <div class="card-body p-4">
+        <h4 class="mb-4">{% if author %}Редактировать автора{% else %}Новый автор{% endif %}</h4>
+        {% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+        <form method="post" enctype="multipart/form-data">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Имя автора *</label>
+            <input type="text" name="name" class="form-control" value="{{ author.name if author else '' }}" autofocus required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Биография</label>
+            <textarea name="bio" class="form-control" rows="4">{{ author.bio if author else '' }}</textarea>
+          </div>
+          <div class="mb-4">
+            <label class="form-label fw-semibold">Фото автора</label>
+            {% if author and author.photo_path %}
+            <div class="mb-2">
+              <img src="/storage/covers/{{ author.photo_path }}" class="rounded" width="80" height="80" style="object-fit:cover">
+              <small class="text-muted ms-2">Загрузите новое, чтобы заменить</small>
+            </div>
+            {% endif %}
+            <input type="file" name="photo" class="form-control" accept="image/*">
+          </div>
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary">Сохранить</button>
+            <a href="/authors{% if author %}/{{ author.id }}{% endif %}" class="btn btn-outline-secondary">Отмена</a>
+            {% if author %}
+            <form action="/authors/{{ author.id }}/delete" method="post" class="ms-auto"
+                  onsubmit="return confirm('Удалить автора «{{ author.name }}» и все его данные?')">
+              <button class="btn btn-outline-danger"><i class="bi bi-trash me-1"></i>Удалить</button>
+            </form>
+            {% endif %}
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

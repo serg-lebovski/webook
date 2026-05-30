@@ -1,0 +1,263 @@
+{% extends "base.html" %}
+{% block title %}Статьи — WeBook{% endblock %}
+
+{% block content %}
+<div class="row">
+
+  <!-- Sidebar: папки -->
+  <div class="col-lg-3 mb-4">
+    <div class="sidebar">
+      <div class="d-flex align-items-center justify-content-between mb-2">
+        <h6 class="text-uppercase text-muted small fw-semibold mb-0">Папки</h6>
+        <div class="d-flex gap-1">
+          <a href="/feeds" class="btn btn-sm btn-outline-secondary" title="RSS-подписки">
+            <i class="bi bi-rss"></i>
+          </a>
+          <a href="/links/folders/new" class="btn btn-sm btn-outline-secondary" title="Новая папка">
+            <i class="bi bi-folder-plus"></i>
+          </a>
+        </div>
+      </div>
+      <div class="list-group list-group-flush">
+        <a href="/links"
+           class="list-group-item list-group-item-action d-flex justify-content-between align-items-center
+                  {% if not folder_id %}active{% endif %}">
+          <span><i class="bi bi-bookmarks me-2"></i>Все статьи</span>
+        </a>
+        {% for f in folders %}
+        <a href="/links?folder_id={{ f.id }}"
+           class="list-group-item list-group-item-action d-flex justify-content-between align-items-center
+                  {% if folder_id == f.id %}active{% endif %}">
+          <span><i class="bi bi-folder me-2"></i>{{ f.name }}</span>
+          <span class="badge bg-secondary rounded-pill">{{ f.links | length }}</span>
+        </a>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Main content -->
+  <div class="col-lg-9">
+    <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+      <h2 class="mb-0">
+        {% if current_folder %}
+          <i class="bi bi-folder-open me-2"></i>{{ current_folder.name }}
+        {% else %}
+          <i class="bi bi-bookmarks me-2"></i>Все статьи
+        {% endif %}
+      </h2>
+      <div class="d-flex gap-2 flex-wrap">
+        <a href="/links/new{% if folder_id %}?folder_id={{ folder_id }}{% endif %}" class="btn btn-primary btn-sm">
+          <i class="bi bi-plus-lg me-1"></i>Добавить
+        </a>
+        {% if current_folder %}
+        <div class="dropdown">
+          <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="dropdown"
+                  aria-expanded="false" title="Действия с папкой">
+            <i class="bi bi-three-dots"></i>
+          </button>
+          <ul class="dropdown-menu dropdown-menu-end">
+            <li><a class="dropdown-item" href="/links/folders/{{ current_folder.id }}/share-user">
+              <i class="bi bi-person-plus me-2"></i>Поделиться</a></li>
+            <li><a class="dropdown-item" href="/links/folders/{{ current_folder.id }}/edit">
+              <i class="bi bi-pencil me-2"></i>Переименовать</a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li>
+              <form method="post" action="/links/folders/{{ current_folder.id }}/delete"
+                    onsubmit="return confirm('Удалить папку? Ссылки внутри тоже удалятся.')">
+                <button type="submit" class="dropdown-item text-danger"><i class="bi bi-trash me-2"></i>Удалить папку</button>
+              </form>
+            </li>
+          </ul>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Фильтр прочитано/нет -->
+    <div class="btn-group btn-group-sm mb-3" role="group">
+      <a href="?folder_id={{ folder_id }}&show=all"
+         class="btn btn-outline-secondary {% if show == 'all' %}active{% endif %}">Все</a>
+      <a href="?folder_id={{ folder_id }}&show=unread"
+         class="btn btn-outline-secondary {% if show == 'unread' %}active{% endif %}">
+        <i class="bi bi-circle me-1"></i>Непрочитанные
+      </a>
+      <a href="?folder_id={{ folder_id }}&show=read"
+         class="btn btn-outline-secondary {% if show == 'read' %}active{% endif %}">
+        <i class="bi bi-check-circle me-1"></i>Прочитанные
+      </a>
+    </div>
+
+    {% if tag %}
+    <div class="mb-3">
+      <span class="badge bg-primary fs-6">#{{ tag }}</span>
+      <a href="/links" class="text-decoration-none small ms-1">сбросить фильтр</a>
+    </div>
+    {% endif %}
+
+    {% if links %}
+    <div class="form-check mb-2">
+      <input class="form-check-input" type="checkbox" id="bulkSelectAll">
+      <label class="form-check-label small text-muted" for="bulkSelectAll">Выбрать все</label>
+    </div>
+    <div class="d-flex flex-column gap-2">
+      {% for link in links %}
+      {% set link_share = link_shares.get(link.id) %}
+      <div class="card {% if link.is_read %}opacity-75{% endif %}">
+        <div class="card-body py-2 px-3">
+          <div class="d-flex align-items-start gap-2">
+            <input type="checkbox" class="form-check-input bulk-check mt-1 flex-shrink-0" value="{{ link.id }}">
+            <!-- Toggle read -->
+            <form method="post" action="/links/{{ link.id }}/toggle-read" class="mt-1 flex-shrink-0">
+              <button type="submit" class="btn btn-sm p-0 border-0 bg-transparent
+                      {% if link.is_read %}text-success{% else %}text-muted{% endif %}"
+                      title="{% if link.is_read %}Отметить непрочитанным{% else %}Отметить прочитанным{% endif %}">
+                <i class="bi {% if link.is_read %}bi-check-circle-fill{% else %}bi-circle{% endif %} fs-5"></i>
+              </button>
+            </form>
+
+            <div class="flex-grow-1 min-width-0">
+              <div class="d-flex align-items-baseline gap-2 flex-wrap">
+                <a href="{{ link.url }}" target="_blank" rel="noopener noreferrer"
+                   class="fw-semibold text-decoration-none text-break
+                          {% if link.is_read %}text-muted{% endif %}">
+                  {% if link.video_embed_url %}
+                  <i class="bi bi-play-circle-fill text-danger me-1"></i>
+                  {% endif %}
+                  {{ link.title }}
+                  <i class="bi bi-box-arrow-up-right ms-1 small"></i>
+                </a>
+              </div>
+              <div class="text-muted small text-truncate">{{ link.url }}</div>
+              {% if link.description %}
+              <div class="text-secondary small mt-1">{{ link.description }}</div>
+              {% endif %}
+              <div class="d-flex gap-3 mt-1 align-items-center flex-wrap">
+                {% if link.folder %}
+                <span class="badge bg-light text-secondary border">
+                  <i class="bi bi-folder me-1"></i>{{ link.folder.name }}
+                </span>
+                {% endif %}
+                {% if link.video_embed_url %}
+                <span class="badge bg-danger"><i class="bi bi-camera-video me-1"></i>Видео</span>
+                {% endif %}
+                {% if link_share %}
+                <span class="badge bg-success" title="Публичная ссылка активна">
+                  <i class="bi bi-share-fill me-1"></i>Публично
+                </span>
+                {% endif %}
+                {% for t in link.tags %}
+                <a href="/links?tag={{ t.name | urlencode }}" class="badge bg-light text-secondary border text-decoration-none">
+                  #{{ t.name }}
+                </a>
+                {% endfor %}
+                {% if link.reading_minutes %}
+                <span class="text-muted" style="font-size:.75rem"><i class="bi bi-clock me-1"></i>~{{ link.reading_minutes }} мин</span>
+                {% endif %}
+                {% if link.read_progress and link.read_progress > 0.01 and link.read_progress < 0.99 %}
+                <span class="progress" style="width:56px;height:4px" title="Прогресс чтения {{ (link.read_progress*100)|round|int }}%">
+                  <span class="progress-bar" style="width:{{ (link.read_progress*100)|round|int }}%"></span>
+                </span>
+                {% endif %}
+                <span class="text-muted" style="font-size:.75rem">
+                  {{ link.created_at.strftime('%d.%m.%Y') }}
+                </span>
+              </div>
+              {% if link_share %}
+              <div class="d-flex align-items-center gap-2 mt-1">
+                <input type="text" class="form-control form-control-sm font-monospace"
+                       value="{{ request.base_url }}share/{{ link_share.token }}"
+                       readonly style="max-width:300px">
+                <button class="btn btn-sm btn-outline-success"
+                        onclick="copyUrl(this, '{{ request.base_url }}share/{{ link_share.token }}')"
+                        title="Скопировать">
+                  <i class="bi bi-clipboard"></i>
+                </button>
+              </div>
+              {% endif %}
+            </div>
+
+            <div class="d-flex gap-1 flex-shrink-0 align-items-start">
+              {% if link.video_embed_url %}
+              <a href="/links/{{ link.id }}/read" class="btn btn-sm btn-outline-danger" title="Смотреть в приложении">
+                <i class="bi bi-play-fill"></i>
+              </a>
+              {% elif link.content %}
+              <a href="/links/{{ link.id }}/read" class="btn btn-sm btn-outline-success" title="Читать в приложении">
+                <i class="bi bi-book"></i>
+              </a>
+              {% else %}
+              <form method="post" action="/links/{{ link.id }}/refetch">
+                <button type="submit" class="btn btn-sm btn-outline-secondary" title="Загрузить содержимое">
+                  <i class="bi bi-arrow-clockwise"></i>
+                </button>
+              </form>
+              {% endif %}
+
+              <div class="dropdown">
+                <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="dropdown"
+                        aria-expanded="false" title="Ещё">
+                  <i class="bi bi-three-dots"></i>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                  <li><a class="dropdown-item" href="/links/{{ link.id }}/edit">
+                    <i class="bi bi-pencil me-2"></i>Редактировать</a></li>
+                  <li><hr class="dropdown-divider"></li>
+                  {% if link_share %}
+                  <li>
+                    <form method="post" action="/links/{{ link.id }}/unshare">
+                      <button type="submit" class="dropdown-item"><i class="bi bi-share-fill me-2"></i>Отозвать публичную ссылку</button>
+                    </form>
+                  </li>
+                  {% else %}
+                  <li>
+                    <form method="post" action="/links/{{ link.id }}/share">
+                      <button type="submit" class="dropdown-item"><i class="bi bi-link-45deg me-2"></i>Публичная ссылка</button>
+                    </form>
+                  </li>
+                  {% endif %}
+                  <li><a class="dropdown-item" href="/links/{{ link.id }}/share-user">
+                    <i class="bi bi-person-plus me-2"></i>Поделиться с пользователем</a></li>
+                  <li><hr class="dropdown-divider"></li>
+                  <li>
+                    <form method="post" action="/links/{{ link.id }}/delete"
+                          onsubmit="return confirm('Удалить ссылку?')">
+                      <button type="submit" class="dropdown-item text-danger"><i class="bi bi-trash me-2"></i>Удалить</button>
+                    </form>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% set bulk_kind = 'links' %}
+    {% include "_bulk_bar.html" %}
+    {% include "_pagination.html" %}
+    {% else %}
+    <div class="text-center text-muted py-5">
+      <i class="bi bi-bookmarks fs-1 d-block mb-2"></i>
+      Здесь пока нет статей.<br>
+      <a href="/links/new{% if folder_id %}?folder_id={{ folder_id }}{% endif %}" class="btn btn-primary mt-3">
+        <i class="bi bi-plus-lg me-1"></i>Добавить первую
+      </a>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function copyUrl(btn, url) {
+  navigator.clipboard.writeText(url).then(() => {
+    const icon = btn.querySelector('i');
+    icon.className = 'bi bi-clipboard-check';
+    setTimeout(() => icon.className = 'bi bi-clipboard', 2000);
+  });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,38 @@
+{% extends "share/base.html" %}
+{% block title %}{{ folder.name }} — WeBook{% endblock %}
+{% block content %}
+<div class="mb-4">
+  <h2><i class="bi bi-folder-open text-warning me-2"></i>{{ folder.name }}</h2>
+  <p class="small text-muted"><i class="bi bi-share me-1"></i>Поделился пользователь WeBook</p>
+</div>
+
+{% if links %}
+<div class="d-flex flex-column gap-2">
+  {% for link in links %}
+  <div class="card {% if link.is_read %}opacity-75{% endif %}">
+    <div class="card-body py-2 px-3">
+      <div class="d-flex align-items-start gap-2">
+        <i class="bi {% if link.is_read %}bi-check-circle-fill text-success{% else %}bi-circle text-muted{% endif %} fs-5 mt-1 flex-shrink-0"></i>
+        <div class="flex-grow-1 min-width-0">
+          <a href="{{ link.url }}" target="_blank" rel="noopener noreferrer"
+             class="fw-semibold text-decoration-none text-break {% if link.is_read %}text-muted{% endif %}">
+            {{ link.title }}
+            <i class="bi bi-box-arrow-up-right ms-1 small"></i>
+          </a>
+          <div class="text-muted small text-truncate">{{ link.url }}</div>
+          {% if link.description %}
+          <div class="text-secondary small mt-1">{{ link.description }}</div>
+          {% endif %}
+          <div class="text-muted mt-1" style="font-size:.75rem">
+            {{ link.created_at.strftime('%d.%m.%Y') }}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<p class="text-muted">В папке нет ссылок.</p>
+{% endif %}
+{% endblock %}

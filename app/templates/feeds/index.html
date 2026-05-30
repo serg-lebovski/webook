@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Новости — WeBook{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-2">
+  <h2 class="mb-0"><i class="bi bi-rss me-2"></i>Новости</h2>
+  <a href="/links" class="btn btn-sm btn-outline-secondary"><i class="bi bi-bookmarks me-1"></i>К статьям</a>
+</div>
+<p class="text-muted small mb-4">RSS/Atom-подписки. Новые записи автоматически попадают в «Статьи».</p>
+
+<div class="card mb-4">
+  <div class="card-header fw-semibold"><i class="bi bi-plus-circle me-1"></i>Добавить подписку</div>
+  <div class="card-body">
+    <form method="post" action="/feeds" class="row g-2 align-items-end">
+      <div class="col-md-7">
+        <label class="form-label small text-muted mb-1">URL ленты (RSS/Atom)</label>
+        <input type="url" name="url" class="form-control" required placeholder="https://example.com/feed.xml">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small text-muted mb-1">Папка</label>
+        <select name="folder_id" class="form-select">
+          <option value="0">— Без папки —</option>
+          {% for f in folders %}<option value="{{ f.id }}">{{ f.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <button type="submit" class="btn btn-primary w-100"><i class="bi bi-plus-lg me-1"></i>Добавить</button>
+      </div>
+    </form>
+    <div class="form-text mt-2">
+      Новые записи автоматически сохраняются как статьи. Обновление — по расписанию на сервере,
+      либо вручную кнопкой ниже.
+    </div>
+  </div>
+</div>
+
+{% if feeds %}
+<div class="card">
+  <div class="card-header fw-semibold"><i class="bi bi-list-ul me-1"></i>Мои подписки ({{ feeds | length }})</div>
+  <div class="list-group list-group-flush">
+    {% for feed in feeds %}
+    <div class="list-group-item d-flex align-items-center gap-3 flex-wrap">
+      <i class="bi bi-rss-fill text-warning fs-5"></i>
+      <div class="flex-grow-1 min-width-0">
+        <div class="fw-semibold text-truncate">{{ feed.title or feed.url }}</div>
+        <div class="text-muted small text-truncate">{{ feed.url }}</div>
+        <div class="text-muted small">
+          {% if feed.folder %}<i class="bi bi-folder me-1"></i>{{ feed.folder.name }} · {% endif %}
+          {% if feed.last_checked %}проверено {{ feed.last_checked.strftime('%d.%m.%Y %H:%M') }}{% else %}ещё не проверялось{% endif %}
+        </div>
+      </div>
+      <form method="post" action="/feeds/{{ feed.id }}/refresh">
+        <button type="submit" class="btn btn-sm btn-outline-primary" title="Обновить сейчас">
+          <i class="bi bi-arrow-clockwise"></i>
+        </button>
+      </form>
+      <form method="post" action="/feeds/{{ feed.id }}/delete" onsubmit="return confirm('Удалить подписку?')">
+        <button type="submit" class="btn btn-sm btn-outline-danger" title="Удалить">
+          <i class="bi bi-trash"></i>
+        </button>
+      </form>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% else %}
+<div class="text-center text-muted py-5">
+  <i class="bi bi-rss fs-1 d-block mb-2"></i>
+  Подписок пока нет. Добавьте URL RSS/Atom-ленты выше.
+</div>
+{% endif %}
+{% endblock %}

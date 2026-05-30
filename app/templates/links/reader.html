@@ -1,0 +1,264 @@
+{% extends "base.html" %}
+{% block title %}{{ link.title }} — WeBook{% endblock %}
+
+{% block head %}
+<style>
+  .reader-content {
+    font-size: 1.15rem;
+    line-height: 1.85;
+    max-width: 720px;
+    margin: 0 auto;
+    color: var(--bs-body-color);
+  }
+  #read-progress-bar {
+    position: fixed; top: 0; left: 0; height: 3px; width: 0;
+    background: var(--bs-primary); z-index: 1050; transition: width .1s linear;
+  }
+  mark.wb-hl { background: #fff3b0; color: inherit; padding: 0; border-radius: 2px; }
+  .reader-content h1, .reader-content h2, .reader-content h3 {
+    margin-top: 1.5em;
+    font-weight: 600;
+  }
+  .reader-content p { margin-bottom: 1em; }
+  .reader-content a { color: #6c63ff; }
+  .reader-content blockquote {
+    border-left: 4px solid #dee2e6;
+    padding-left: 1rem;
+    color: #6c757d;
+    font-style: italic;
+    margin: 1.5em 0;
+  }
+  .tts-bar {
+    position: sticky;
+    top: 60px;
+    z-index: 100;
+    background: var(--bs-body-bg);
+    border-bottom: 1px solid var(--bs-border-color);
+    padding: .5rem 0;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+{% if link.video_embed_url %}
+<!-- Video player -->
+<div class="mb-3">
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="/links{% if link.folder_id %}?folder_id={{ link.folder_id }}{% endif %}">Статьи</a></li>
+      <li class="breadcrumb-item active">{{ link.title }}</li>
+    </ol>
+  </nav>
+  <h2 class="mb-1">{{ link.title }}</h2>
+  {% if link.description %}
+  <p class="text-muted">{{ link.description }}</p>
+  {% endif %}
+</div>
+<div class="ratio ratio-16x9 mb-3" style="max-width:900px">
+  <iframe src="{{ link.video_embed_url }}" allowfullscreen
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          title="{{ link.title }}"></iframe>
+</div>
+<div class="d-flex gap-2">
+  <a href="{{ link.url }}" target="_blank" rel="noopener" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-box-arrow-up-right me-1"></i>Открыть оригинал
+  </a>
+  <a href="/links{% if link.folder_id %}?folder_id={{ link.folder_id }}{% endif %}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Назад
+  </a>
+</div>
+
+{% else %}
+<!-- Article reader -->
+<div id="read-progress-bar"></div>
+<div class="tts-bar mb-4">
+  <div class="d-flex align-items-center gap-2 flex-wrap">
+    <button id="tts-play" class="btn btn-sm btn-primary" onclick="ttsPlay()">
+      <i class="bi bi-play-fill me-1"></i>Озвучить
+    </button>
+    <button id="tts-pause" class="btn btn-sm btn-outline-secondary d-none" onclick="ttsPause()">
+      <i class="bi bi-pause-fill me-1"></i>Пауза
+    </button>
+    <button id="tts-stop" class="btn btn-sm btn-outline-secondary d-none" onclick="ttsStop()">
+      <i class="bi bi-stop-fill me-1"></i>Стоп
+    </button>
+
+    <div class="d-flex align-items-center gap-1 ms-2">
+      <label class="small text-muted mb-0">Скорость:</label>
+      <select id="tts-rate" class="form-select form-select-sm" style="width:80px">
+        <option value="0.7">0.7×</option>
+        <option value="0.85">0.85×</option>
+        <option value="1" selected>1×</option>
+        <option value="1.2">1.2×</option>
+        <option value="1.5">1.5×</option>
+      </select>
+    </div>
+
+    <div class="d-flex align-items-center gap-1">
+      <label class="small text-muted mb-0">Голос:</label>
+      <select id="tts-voice" class="form-select form-select-sm" style="width:160px"></select>
+    </div>
+
+    <span class="ms-auto d-flex gap-2">
+      <a href="{{ link.url }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-box-arrow-up-right me-1"></i>Открыть оригинал
+      </a>
+      <a href="/links{% if link.folder_id %}?folder_id={{ link.folder_id }}{% endif %}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-arrow-left me-1"></i>Назад
+      </a>
+    </span>
+  </div>
+</div>
+
+<div class="reader-content">
+  <h1 class="mb-1">{{ link.title }}</h1>
+  <p class="text-muted small mb-4">
+    <a href="{{ link.url }}" target="_blank" rel="noopener" class="text-muted">{{ link.url }}</a>
+    {% if link.reading_minutes %} · <i class="bi bi-clock me-1"></i>~{{ link.reading_minutes }} мин{% endif %}
+    {% if link.content_fetched_at %}
+    · Сохранено {{ link.content_fetched_at.strftime('%d.%m.%Y') }}
+    {% endif %}
+  </p>
+
+  {% if link.content %}
+  <div id="article-text">
+    {{ link.content | replace('\n\n', '</p><p>') | replace('\n', '<br>') | safe }}
+  </div>
+  {% else %}
+  <div class="alert alert-warning">
+    <i class="bi bi-exclamation-triangle me-2"></i>
+    Содержимое статьи не сохранено.
+    <form method="post" action="/links/{{ link.id }}/refetch" class="d-inline ms-2">
+      <button type="submit" class="btn btn-sm btn-warning">
+        <i class="bi bi-arrow-clockwise me-1"></i>Загрузить сейчас
+      </button>
+    </form>
+  </div>
+  {% if link.description %}
+  <p class="lead">{{ link.description }}</p>
+  {% endif %}
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if not link.video_embed_url %}
+<script>
+// ── Прогресс прокрутки статьи ─────────────────────────────────────────
+(function () {
+  const LINK_ID = {{ link.id }};
+  const saved = {{ link.read_progress or 0 }};
+  const bar = document.getElementById('read-progress-bar');
+  function frac() {
+    const max = document.documentElement.scrollHeight - window.innerHeight;
+    return max > 0 ? Math.min(1, Math.max(0, window.scrollY / max)) : 0;
+  }
+  function paint() { if (bar) bar.style.width = (frac() * 100).toFixed(1) + '%'; }
+  let t = null;
+  function save() {
+    clearTimeout(t);
+    t = setTimeout(() => {
+      fetch(`/links/${LINK_ID}/progress`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ progress: frac() })
+      }).catch(() => {});
+    }, 800);
+  }
+  window.addEventListener('scroll', () => { paint(); save(); }, { passive: true });
+  window.addEventListener('load', () => {
+    paint();
+    if (saved > 0.02 && saved < 0.99) {
+      const max = document.documentElement.scrollHeight - window.innerHeight;
+      window.scrollTo(0, max * saved);
+    }
+  });
+  window.addEventListener('beforeunload', () => {
+    if (navigator.sendBeacon) {
+      navigator.sendBeacon(`/links/${LINK_ID}/progress`,
+        new Blob([JSON.stringify({ progress: frac() })], { type: 'application/json' }));
+    }
+  });
+})();
+
+const synth = window.speechSynthesis;
+let utter = null;
+let voices = [];
+
+function loadVoices() {
+  voices = synth.getVoices();
+  const sel = document.getElementById('tts-voice');
+  sel.innerHTML = '';
+  const ru = voices.filter(v => v.lang.startsWith('ru'));
+  const all = ru.length ? ru : voices;
+  all.forEach(v => {
+    const opt = document.createElement('option');
+    opt.value = v.name;
+    opt.textContent = v.name + (v.lang !== 'ru-RU' ? ` (${v.lang})` : '');
+    sel.appendChild(opt);
+  });
+  if (!all.length) {
+    sel.innerHTML = '<option>Нет голосов</option>';
+  }
+}
+
+synth.onvoiceschanged = loadVoices;
+loadVoices();
+
+function getText() {
+  const el = document.getElementById('article-text');
+  return el ? el.innerText : '';
+}
+
+function ttsPlay() {
+  if (synth.paused) { synth.resume(); _setState('playing'); return; }
+  ttsStop();
+  const text = getText();
+  if (!text.trim()) { alert('Нет текста для озвучки'); return; }
+  utter = new SpeechSynthesisUtterance(text);
+  utter.lang = 'ru-RU';
+  utter.rate = parseFloat(document.getElementById('tts-rate').value);
+  const vName = document.getElementById('tts-voice').value;
+  const v = voices.find(v => v.name === vName);
+  if (v) utter.voice = v;
+  utter.onend = () => _setState('stopped');
+  utter.onerror = () => _setState('stopped');
+  synth.speak(utter);
+  _setState('playing');
+}
+
+function ttsPause() {
+  synth.pause();
+  _setState('paused');
+}
+
+function ttsStop() {
+  synth.cancel();
+  _setState('stopped');
+}
+
+function _setState(state) {
+  document.getElementById('tts-play').classList.toggle('d-none', state === 'playing');
+  document.getElementById('tts-pause').classList.toggle('d-none', state !== 'playing');
+  document.getElementById('tts-stop').classList.toggle('d-none', state === 'stopped');
+  if (state === 'paused') {
+    document.getElementById('tts-play').classList.remove('d-none');
+    document.getElementById('tts-play').innerHTML = '<i class="bi bi-play-fill me-1"></i>Продолжить';
+  } else if (state === 'playing') {
+    document.getElementById('tts-play').innerHTML = '<i class="bi bi-play-fill me-1"></i>Озвучить';
+  } else {
+    document.getElementById('tts-play').innerHTML = '<i class="bi bi-play-fill me-1"></i>Озвучить';
+  }
+}
+</script>
+<script src="/static/highlighter.js"></script>
+<script>
+(function () {
+  var el = document.getElementById('article-text');
+  if (el && window.WebookHighlighter) {
+    WebookHighlighter.init({ container: el, resourceType: 'link', resourceId: {{ link.id }} });
+  }
+})();
+</script>
+{% endif %}
+{% endblock %}

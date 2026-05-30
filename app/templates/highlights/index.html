@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Мои цитаты — WeBook{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+  <h2 class="mb-0"><i class="bi bi-quote me-2"></i>Мои цитаты {% if total %}<span class="badge bg-secondary">{{ total }}</span>{% endif %}</h2>
+  {% if groups %}
+  <a href="/highlights/export" class="btn btn-sm btn-outline-secondary" title="Скачать все цитаты в Markdown (Obsidian)">
+    <i class="bi bi-markdown me-1"></i>Выгрузить в Markdown
+  </a>
+  {% endif %}
+</div>
+
+{% if not groups %}
+<div class="text-center text-muted py-5">
+  <i class="bi bi-quote fs-1 d-block mb-2"></i>
+  Цитат пока нет. Выделите текст в ридере статьи или книги (EPUB/FB2) и нажмите «Цитата».
+</div>
+{% endif %}
+
+{% for g in groups %}
+<div class="card mb-4">
+  <div class="card-header d-flex align-items-center gap-2">
+    <i class="bi bi-{% if g.type == 'book' %}book{% else %}bookmark{% endif %} text-secondary"></i>
+    <a href="{{ g.url }}" class="fw-semibold text-decoration-none text-body">{{ g.title }}</a>
+    <span class="badge bg-light text-secondary border ms-auto">{{ g.items | length }}</span>
+  </div>
+  <div class="list-group list-group-flush">
+    {% for h in g.items %}
+    <div class="list-group-item">
+      <blockquote class="mb-2" style="border-left:3px solid #ffd43b;padding-left:.75rem">
+        {{ h.quote }}
+      </blockquote>
+      {% if h.note %}
+      <div class="small text-secondary mb-2"><i class="bi bi-pencil me-1"></i>{{ h.note }}</div>
+      {% endif %}
+      <div class="d-flex align-items-center gap-2 flex-wrap">
+        <form method="post" action="/highlights/{{ h.id }}/note" class="input-group input-group-sm" style="max-width:420px">
+          <input type="text" name="note" class="form-control" value="{{ h.note or '' }}" placeholder="Заметка…">
+          <button type="submit" class="btn btn-outline-secondary" title="Сохранить заметку"><i class="bi bi-check-lg"></i></button>
+        </form>
+        <span class="text-muted small">{{ h.created_at.strftime('%d.%m.%Y') }}</span>
+        <form method="post" action="/highlights/{{ h.id }}/delete" class="ms-auto"
+              onsubmit="return confirm('Удалить цитату?')">
+          <button type="submit" class="btn btn-sm btn-outline-danger" title="Удалить"><i class="bi bi-trash"></i></button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endfor %}
+{% endblock %}

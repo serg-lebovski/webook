@@ -1,0 +1,307 @@
+{% extends "base.html" %}
+{% block title %}Администрирование — WeBook{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center mb-4">
+  <h2 class="mb-0"><i class="bi bi-shield-lock me-2"></i>Администрирование</h2>
+</div>
+
+{% if success == 'settings' %}
+<div class="alert alert-success alert-dismissible fade show">
+  <i class="bi bi-check-circle me-1"></i>Настройки сохранены.
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% elif success == 'user_created' %}
+<div class="alert alert-success alert-dismissible fade show">
+  <i class="bi bi-check-circle me-1"></i>Пользователь создан.
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% elif success == 'user_updated' %}
+<div class="alert alert-success alert-dismissible fade show">
+  <i class="bi bi-check-circle me-1"></i>Данные пользователя обновлены.
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% elif success == 'user_deleted' %}
+<div class="alert alert-success alert-dismissible fade show">
+  <i class="bi bi-check-circle me-1"></i>Пользователь удалён.
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% elif success == 'unbanned' %}
+<div class="alert alert-success alert-dismissible fade show">
+  <i class="bi bi-check-circle me-1"></i>IP-адрес разблокирован.
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+{% if error %}
+<div class="alert alert-danger alert-dismissible fade show">
+  <i class="bi bi-exclamation-triangle me-1"></i>{{ error }}
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+<div class="row g-4">
+
+  <!-- Настройки сайта -->
+  <div class="col-lg-5">
+    <div class="card">
+      <div class="card-header fw-semibold">
+        <i class="bi bi-sliders me-1"></i>Настройки сайта
+      </div>
+      <div class="card-body">
+        <form method="post" action="/admin/settings">
+          <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" role="switch"
+                   name="allow_registration" id="allow_registration"
+                   {% if allow_registration %}checked{% endif %}>
+            <label class="form-check-label" for="allow_registration">
+              Открытая регистрация
+            </label>
+            <div class="form-text">
+              Если включено, любой желающий сможет зарегистрироваться на сайте.
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary btn-sm">
+            <i class="bi bi-floppy me-1"></i>Сохранить
+          </button>
+        </form>
+        <hr>
+        <a href="/admin/logs" class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-journal-text me-1"></i>Логи сервера
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Пользователи -->
+  <div class="col-lg-7">
+    <div class="card">
+      <div class="card-header d-flex align-items-center justify-content-between fw-semibold">
+        <span><i class="bi bi-people me-1"></i>Пользователи</span>
+        <a href="/admin/users/new" class="btn btn-sm btn-primary">
+          <i class="bi bi-person-plus me-1"></i>Создать
+        </a>
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Логин</th>
+              <th>Роль</th>
+              <th>Дата регистрации</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for u in users %}
+            <tr>
+              <td class="align-middle">
+                <i class="bi bi-person-circle me-1 text-secondary"></i>{{ u.username }}
+                {% if u.id == user.id %}
+                <span class="badge bg-secondary ms-1">Вы</span>
+                {% endif %}
+              </td>
+              <td class="align-middle">
+                {% if u.is_admin %}
+                <span class="badge bg-danger">Администратор</span>
+                {% else %}
+                <span class="badge bg-secondary">Пользователь</span>
+                {% endif %}
+              </td>
+              <td class="align-middle text-muted small">
+                {{ u.created_at.strftime('%d.%m.%Y') }}
+              </td>
+              <td class="align-middle text-end">
+                <a href="/admin/users/{{ u.id }}/edit" class="btn btn-sm btn-outline-secondary me-1">
+                  <i class="bi bi-pencil"></i>
+                </a>
+                {% if u.id != user.id %}
+                <form method="post" action="/admin/users/{{ u.id }}/delete" class="d-inline"
+                      onsubmit="return confirm('Удалить пользователя {{ u.username }}?')">
+                  <button type="submit" class="btn btn-sm btn-outline-danger">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </form>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Заблокированные IP -->
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header fw-semibold">
+        <i class="bi bi-shield-exclamation me-1"></i>Заблокированные IP
+        <span class="text-muted fw-normal small ms-1">(после 5 неудачных попыток входа)</span>
+      </div>
+      <div class="card-body p-0">
+        {% if bans %}
+        <table class="table table-hover mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>IP-адрес</th>
+              <th>Заблокирован до</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for b in bans %}
+            <tr>
+              <td class="align-middle font-monospace">
+                <i class="bi bi-ban me-1 text-danger"></i>{{ b.ip }}
+              </td>
+              <td class="align-middle text-muted small">
+                {{ b.until.strftime('%d.%m.%Y %H:%M') }} UTC
+              </td>
+              <td class="align-middle text-end">
+                <form method="post" action="/admin/bans/unban" class="d-inline">
+                  <input type="hidden" name="ip" value="{{ b.ip }}">
+                  <button type="submit" class="btn btn-sm btn-outline-success">
+                    <i class="bi bi-unlock me-1"></i>Разблокировать
+                  </button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="text-muted small p-3 mb-0">
+          <i class="bi bi-check-circle me-1 text-success"></i>Нет заблокированных адресов.
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Система -->
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header fw-semibold">
+        <i class="bi bi-hdd-rack me-1"></i>Система
+      </div>
+      <div class="card-body">
+        <div class="row g-4">
+
+          <!-- База данных -->
+          <div class="col-md-5">
+            <h6 class="text-muted mb-3"><i class="bi bi-database me-1"></i>База данных</h6>
+            <table class="table table-sm table-borderless mb-0">
+              <tbody>
+                <tr>
+                  <td class="text-muted ps-0" style="width:120px">Тип</td>
+                  <td>
+                    {% if system.db_type == 'PostgreSQL' %}
+                    <span class="badge bg-primary">PostgreSQL</span>
+                    {% else %}
+                    <span class="badge bg-secondary">SQLite</span>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% if system.db_host %}
+                <tr>
+                  <td class="text-muted ps-0">Хост</td>
+                  <td><code>{{ system.db_host }}</code></td>
+                </tr>
+                {% endif %}
+                {% if system.db_name %}
+                <tr>
+                  <td class="text-muted ps-0">База</td>
+                  <td><code>{{ system.db_name }}</code></td>
+                </tr>
+                {% endif %}
+                {% if system.db_user %}
+                <tr>
+                  <td class="text-muted ps-0">Пользователь</td>
+                  <td><code>{{ system.db_user }}</code></td>
+                </tr>
+                {% endif %}
+                <tr>
+                  <td class="text-muted ps-0">Строка</td>
+                  <td>
+                    <span class="font-monospace small text-break">{{ system.db_display }}</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Хранилище -->
+          <div class="col-md-7">
+            <h6 class="text-muted mb-3"><i class="bi bi-hdd me-1"></i>Хранилище</h6>
+
+            {% set disk_used_pct = ((system.disk_used / system.disk_total) * 100) | round(1) if system.disk_total else 0 %}
+            <div class="mb-2 d-flex justify-content-between small text-muted">
+              <span>Диск: {{ (system.disk_used / 1073741824) | round(2) }} ГБ занято из {{ (system.disk_total / 1073741824) | round(2) }} ГБ</span>
+              <span class="text-success fw-semibold">{{ (system.disk_free / 1073741824) | round(2) }} ГБ свободно</span>
+            </div>
+            <div class="progress mb-4" style="height:8px">
+              <div class="progress-bar {% if disk_used_pct > 85 %}bg-danger{% elif disk_used_pct > 65 %}bg-warning{% else %}bg-success{% endif %}"
+                   role="progressbar" style="width:{{ disk_used_pct }}%"></div>
+            </div>
+
+            <table class="table table-sm table-borderless mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th class="ps-0">Папка</th>
+                  <th>Путь</th>
+                  <th class="text-end">Размер</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="ps-0"><i class="bi bi-book me-1 text-secondary"></i>Книги</td>
+                  <td><code class="small">{{ system.books_dir }}</code></td>
+                  <td class="text-end text-muted small">
+                    {% if system.books_bytes >= 1073741824 %}
+                      {{ (system.books_bytes / 1073741824) | round(2) }} ГБ
+                    {% elif system.books_bytes >= 1048576 %}
+                      {{ (system.books_bytes / 1048576) | round(1) }} МБ
+                    {% else %}
+                      {{ (system.books_bytes / 1024) | round(0) | int }} КБ
+                    {% endif %}
+                  </td>
+                </tr>
+                <tr>
+                  <td class="ps-0"><i class="bi bi-image me-1 text-secondary"></i>Обложки</td>
+                  <td><code class="small">{{ system.covers_dir }}</code></td>
+                  <td class="text-end text-muted small">
+                    {% if system.covers_bytes >= 1073741824 %}
+                      {{ (system.covers_bytes / 1073741824) | round(2) }} ГБ
+                    {% elif system.covers_bytes >= 1048576 %}
+                      {{ (system.covers_bytes / 1048576) | round(1) }} МБ
+                    {% else %}
+                      {{ (system.covers_bytes / 1024) | round(0) | int }} КБ
+                    {% endif %}
+                  </td>
+                </tr>
+                <tr>
+                  <td class="ps-0"><i class="bi bi-link-45deg me-1 text-secondary"></i>Статьи</td>
+                  <td><code class="small">{{ system.links_dir }}</code></td>
+                  <td class="text-end text-muted small">
+                    {% if system.links_bytes >= 1073741824 %}
+                      {{ (system.links_bytes / 1073741824) | round(2) }} ГБ
+                    {% elif system.links_bytes >= 1048576 %}
+                      {{ (system.links_bytes / 1048576) | round(1) }} МБ
+                    {% else %}
+                      {{ (system.links_bytes / 1024) | round(0) | int }} КБ
+                    {% endif %}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
