@@ -1,3 +1,4 @@
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, List
@@ -29,6 +30,28 @@ templates = Jinja2Templates(directory="app/templates")
 _READABLE_FORMATS = ("epub", "pdf", "fb2")
 _MIME = {"epub": "application/epub+zip", "fb2": "application/x-fictionbook+xml", "pdf": "application/pdf"}
 BOOKS_PER_PAGE = 24
+
+
+def _download_filename(book: Book) -> str:
+    """Уникальное, человекочитаемое имя файла для скачивания.
+
+    Включает автора и номер тома в цикле, иначе тома одного цикла с одинаковым
+    заголовком получают одинаковое имя файла — и OPDS-читалки (KOReader и др.)
+    отдают вместо 2-го/3-го тома уже скачанный первый.
+    """
+    parts = []
+    if book.author and book.author.name:
+        parts.append(book.author.name)
+    if book.series and book.series.name:
+        order = ""
+        if book.series_order is not None:
+            order = (str(int(book.series_order))
+                     if float(book.series_order).is_integer() else str(book.series_order))
+        parts.append(f"{book.series.name}{(' ' + order) if order else ''}")
+    parts.append(book.title or f"book{book.id}")
+    name = " - ".join(p for p in parts if p)
+    name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", name).strip(" .") or f"book{book.id}"
+    return f"{name}.{book.file_format}"
 
 
 def _user_books(db: Session, user: User):
@@ -298,7 +321,7 @@ def download_book(book_id: int, db: Session = Depends(get_db), user: User = Depe
     if not path.exists():
         raise HTTPException(status_code=404)
     return FileResponse(path, media_type=_MIME.get(book.file_format, "application/octet-stream"),
-                        filename=f"{book.title}.{book.file_format}")
+                        filename=_download_filename(book))
 
 
 @router.get("/{book_id}/serve")
