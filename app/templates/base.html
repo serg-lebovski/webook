@@ -42,7 +42,7 @@
       <span class="navbar-toggler-icon"></span>
     </button>
     <div class="collapse navbar-collapse" id="nav">
-      <ul class="navbar-nav me-auto">
+      <ul class="navbar-nav mx-auto text-center">
         <li class="nav-item"><a class="nav-link" href="/dashboard"><i class="bi bi-house me-1"></i>Главная</a></li>
         <li class="nav-item dropdown">
           <a class="nav-link dropdown-toggle" href="/shelves" id="booksNav" role="button"
@@ -51,13 +51,12 @@
             <li><a class="dropdown-item" href="/shelves"><i class="bi bi-bookshelf me-2"></i>Полки</a></li>
             <li><a class="dropdown-item" href="/books"><i class="bi bi-journals me-2"></i>Все книги</a></li>
             <li><a class="dropdown-item" href="/books?favorite=1"><i class="bi bi-heart-fill me-2 text-danger"></i>Избранное</a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item" href="/books/upload"><i class="bi bi-cloud-upload me-2"></i>Загрузить книгу</a></li>
           </ul>
         </li>
         <li class="nav-item"><a class="nav-link" href="/links"><i class="bi bi-bookmarks me-1"></i>Статьи</a></li>
-        <li class="nav-item"><a class="nav-link" href="/feeds"><i class="bi bi-rss me-1"></i>Новости</a></li>
         <li class="nav-item"><a class="nav-link" href="/audiobooks"><i class="bi bi-headphones me-1"></i>Аудиокниги</a></li>
-        <li class="nav-item"><a class="nav-link" href="/books/upload"><i class="bi bi-cloud-upload me-1"></i>Загрузить</a></li>
-        <li class="nav-item"><a class="nav-link" href="/shared"><i class="bi bi-people me-1"></i>Общий доступ</a></li>
       </ul>
       {% if user %}
       <form class="d-flex me-lg-3 my-2 my-lg-0" role="search" action="/search" method="get">
@@ -66,28 +65,29 @@
           <button class="btn btn-outline-light" type="submit"><i class="bi bi-search"></i></button>
         </div>
       </form>
-      {% endif %}
-      <ul class="navbar-nav align-items-lg-center">
-        <li class="nav-item d-none" id="pwaInstallLi">
-          <button type="button" class="nav-link border-0 bg-transparent" id="pwaInstall" title="Установить приложение">
-            <i class="bi bi-download"></i>
-          </button>
-        </li>
-        <li class="nav-item">
-          <button type="button" class="nav-link border-0 bg-transparent" id="themeToggle" title="Переключить тему">
-            <i class="bi bi-moon-stars" id="themeIcon"></i>
-          </button>
-        </li>
-        {% if user %}
+      <ul class="navbar-nav">
         <li class="nav-item dropdown">
           <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
             <i class="bi bi-person-circle me-1"></i>{{ user.username }}
           </a>
           <ul class="dropdown-menu dropdown-menu-end">
-            <li><a class="dropdown-item" href="/settings"><i class="bi bi-gear me-1"></i>Настройки</a></li>
-            <li><a class="dropdown-item" href="/highlights"><i class="bi bi-quote me-1"></i>Мои цитаты</a></li>
+            <li><a class="dropdown-item" href="/feeds"><i class="bi bi-rss me-2"></i>Новости</a></li>
+            <li><a class="dropdown-item" href="/shared"><i class="bi bi-people me-2"></i>Общий доступ</a></li>
+            <li><a class="dropdown-item" href="/highlights"><i class="bi bi-quote me-2"></i>Мои цитаты</a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item" href="/settings"><i class="bi bi-gear me-2"></i>Настройки</a></li>
+            <li>
+              <button type="button" class="dropdown-item" id="themeToggle">
+                <i class="bi bi-moon-stars me-2" id="themeIcon"></i><span id="themeLabel">Тёмная тема</span>
+              </button>
+            </li>
+            <li class="d-none" id="pwaInstallLi">
+              <button type="button" class="dropdown-item" id="pwaInstall">
+                <i class="bi bi-download me-2"></i>Установить приложение
+              </button>
+            </li>
             {% if user.is_admin %}
-            <li><a class="dropdown-item" href="/admin"><i class="bi bi-shield-lock me-1"></i>Администрирование</a></li>
+            <li><a class="dropdown-item" href="/admin"><i class="bi bi-shield-lock me-2"></i>Администрирование</a></li>
             {% endif %}
             <li><hr class="dropdown-divider"></li>
             <li>
@@ -97,8 +97,8 @@
             </li>
           </ul>
         </li>
-        {% endif %}
       </ul>
+      {% endif %}
     </div>
   </div>
 </nav>
@@ -109,13 +109,16 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-  // Переключатель тёмной/светлой темы
+  // Переключатель тёмной/светлой темы (пункт в меню пользователя)
   (function () {
     var btn = document.getElementById('themeToggle');
     var icon = document.getElementById('themeIcon');
+    var label = document.getElementById('themeLabel');
+    if (!btn) return;
     function sync() {
       var dark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
-      icon.className = dark ? 'bi bi-sun' : 'bi bi-moon-stars';
+      icon.className = (dark ? 'bi bi-sun' : 'bi bi-moon-stars') + ' me-2';
+      if (label) label.textContent = dark ? 'Светлая тема' : 'Тёмная тема';
       btn.title = dark ? 'Светлая тема' : 'Тёмная тема';
     }
     sync();
