@@ -163,16 +163,21 @@
       </div>
       <div class="card-body">
         <p class="text-muted small mb-3">
-          Скачать ZIP-архив со всеми книгами и статьями. Архив содержит:
+          Скачать ZIP-архив со всеми вашими файлами. Имена файлов формируются из
+          базы (автор — название). Архив содержит:
         </p>
         <ul class="small text-muted mb-3">
           <li><strong>books/</strong> — ваши книги (EPUB, FB2, PDF)</li>
+          <li><strong>audiobooks/</strong> — аудиокниги (по папке на книгу, главы по порядку)</li>
+          <li><strong>covers/</strong> — обложки книг</li>
           <li><strong>shared_books/</strong> — книги, которыми с вами поделились</li>
           <li><strong>articles/</strong> — сохранённые статьи в формате HTML</li>
         </ul>
-        <a href="/settings/backup" class="btn btn-outline-secondary">
-          <i class="bi bi-download me-1"></i>Скачать резервную копию
-        </a>
+        <button type="button" id="backupBtn" class="btn btn-outline-secondary">
+          <i class="bi bi-download me-1"></i><span id="backupLabel">Скачать резервную копию</span>
+        </button>
+        <div class="form-text mt-2">Большой архив может готовиться несколько секунд — дождитесь начала загрузки.</div>
+        <iframe id="backupFrame" title="backup" style="display:none"></iframe>
       </div>
     </div>
 
@@ -190,5 +195,30 @@ function copyOpds() {
     setTimeout(() => { icon.className = 'bi bi-clipboard'; }, 2000);
   });
 }
+
+// Резервная копия: спиннер «Готовим архив…», скачивание через iframe,
+// сброс по cookie-сигналу, который сервер ставит, когда архив готов.
+(function () {
+  const btn = document.getElementById('backupBtn');
+  const label = document.getElementById('backupLabel');
+  const frame = document.getElementById('backupFrame');
+  if (!btn) return;
+  btn.addEventListener('click', function () {
+    const token = 't' + Date.now();
+    btn.disabled = true;
+    label.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Готовим архив…';
+    frame.src = '/settings/backup?token=' + token;
+    let tries = 0;
+    const iv = setInterval(function () {
+      tries++;
+      if (document.cookie.indexOf('backup_ready=' + token) !== -1 || tries > 600) {
+        clearInterval(iv);
+        document.cookie = 'backup_ready=; path=/settings; max-age=0';
+        btn.disabled = false;
+        label.textContent = 'Скачать резервную копию';
+      }
+    }, 500);
+  });
+})();
 </script>
 {% endblock %}
