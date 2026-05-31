@@ -1,9 +1,12 @@
+import os
 import shutil
+import tempfile
 from datetime import datetime
 from fastapi import APIRouter, Depends, Form, Request, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
+from starlette.background import BackgroundTask
 
 from app.dependencies import get_db, get_current_user
 from app.models.user import User
@@ -82,6 +85,56 @@ def _get_system_info() -> dict:
 def _require_admin(user: User):
     if not user.is_admin:
         raise HTTPException(status_code=403, detail="Только для администраторов")
+
+
+def _cleanup(path: str):
+    if path and os.path.exists(path):
+        os.unlink(path)
+
+
+@router.get("/backup/db")
+def backup_db(token: str = "", user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Скачать дамп базы данных (только администратор)."""
+    _require_admin(user)
+    from app.services import archive_service
+    fd, tmp = tempfile.mkstemp(prefix="webook_db_", suffix=".sql")
+    os.close(fd)
+    try:
+        kind = archive_service.db_dump(tmp)
+    except Exception as e:
+        _cleanup(tmp)
+        raise HTTPException(status_code=500, detail=f"Не удалось снять дамп БД: {e}")
+    date_str = datetime.utcnow().strftime("%Y-%m-%d")
+    ext = "sql" if kind == "postgresql" else "sqlite"
+    auth_log.info("admin %s downloaded DB dump (%s)", user.username, kind)
+    resp = FileResponse(tmp, media_type="application/octet-stream",
+                        filename=f"webook_db_{date_str}.{ext}",
+                        background=BackgroundTask(lambda: _cleanup(tmp)))
+    if token:
+        resp.set_cookie("backup_ready", token, max_age=300, path="/admin", samesite="lax")
+    return resp
+
+
+@router.get("/backup/full")
+def backup_full(token: str = "", user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Полный серверный архив: дамп БД + все файлы (только администратор)."""
+    _require_admin(user)
+    from app.services import archive_service
+    fd, tmp = tempfile.mkstemp(prefix="webook_full_", suffix=".zip")
+    os.close(fd)
+    try:
+        archive_service.full_export(db, tmp)
+    except Exception as e:
+        _cleanup(tmp)
+        raise HTTPException(status_code=500, detail=f"Не удалось собрать архив: {e}")
+    date_str = datetime.utcnow().strftime("%Y-%m-%d")
+    auth_log.info("admin %s downloaded FULL server backup", user.username)
+    resp = FileResponse(tmp, media_type="application/zip",
+                        filename=f"webook_full_backup_{date_str}.zip",
+                        background=BackgroundTask(lambda: _cleanup(tmp)))
+    if token:
+        resp.set_cookie("backup_ready", token, max_age=300, path="/admin", samesite="lax")
+    return resp
 
 
 @router.get("", response_class=HTMLResponse)

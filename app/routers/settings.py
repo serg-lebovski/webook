@@ -6,7 +6,7 @@ import tempfile
 import zipfile
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, Form, Request, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse, Response, FileResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
@@ -179,107 +179,61 @@ def _article_html(link: Link) -> str:
     )
 
 
-_DEFLATE_EXT = {".fb2", ".html", ".htm", ".txt", ".epub"}  # эти сжимаем; аудио/pdf/jpg уже сжаты
-
-
-def _comp(ext: str) -> int:
-    return zipfile.ZIP_DEFLATED if ext.lower() in _DEFLATE_EXT else zipfile.ZIP_STORED
-
-
-def _book_filename(book: Book) -> str:
-    author = book.author.name if book.author else "Unknown"
-    fmt = book.file_format if book.file_format.startswith(".") else "." + book.file_format
-    return _safe_filename(f"{author} - {book.title}") + fmt
-
-
 @router.get("/backup")
 def backup(
     token: str = "",
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Стримит ZIP со всеми файлами пользователя. Архив собирается во временный
-    файл на диске (не в память) и отдаётся через FileResponse — браузер видит
-    размер и показывает прогресс загрузки. Имена файлов — из БД (автор/название)."""
+    """Архив библиотеки пользователя (книги, аудиокниги, обложки, статьи, цитаты)
+    + manifest.json для восстановления. Собирается во временный файл и стримится
+    через FileResponse — браузер показывает прогресс загрузки."""
+    from app.services import archive_service
     fd, tmp_path = tempfile.mkstemp(prefix="webook_backup_", suffix=".zip")
     os.close(fd)
-    now = datetime.utcnow()
-
-    with zipfile.ZipFile(tmp_path, "w") as zf:
-        used_books, used_covers = set(), set()
-        for book in db.query(Book).filter(Book.user_id == user.id).all():
-            fp = BOOKS_DIR / book.file_path
-            if not fp.exists():
-                continue
-            fname = _unique_name(_book_filename(book), used_books)
-            zf.write(fp, f"books/{fname}", compress_type=_comp(fp.suffix))
-            if book.cover_path:
-                cp = COVERS_DIR / book.cover_path
-                if cp.exists():
-                    author = book.author.name if book.author else "Unknown"
-                    cname = _unique_name(_safe_filename(f"{author} - {book.title}") + ".jpg", used_covers)
-                    zf.write(cp, f"covers/{cname}", compress_type=zipfile.ZIP_STORED)
-
-        used_shared = set()
-        shared_shares = (
-            db.query(Share)
-            .filter(
-                Share.shared_with_user_id == user.id,
-                Share.resource_type == "book",
-                Share.is_public == False,
-                Share.expires_at > now,
-            )
-            .all()
-        )
-        for share in shared_shares:
-            book = db.query(Book).filter(Book.id == share.resource_id).first()
-            if not book:
-                continue
-            fp = BOOKS_DIR / book.file_path
-            if not fp.exists():
-                continue
-            fname = _unique_name(_book_filename(book), used_shared)
-            zf.write(fp, f"shared_books/{fname}", compress_type=_comp(fp.suffix))
-
-        # Аудиокниги: своя папка на книгу, главы пронумерованы, плюс обложка
-        used_ab = set()
-        for ab in db.query(Audiobook).filter(Audiobook.user_id == user.id).all():
-            folder = AUDIOBOOKS_DIR / ab.folder
-            if not folder.exists():
-                continue
-            base = f"{ab.author} - {ab.title}" if ab.author else ab.title
-            ab_dir = _unique_name(_safe_filename(base), used_ab)
-            for idx, t in enumerate(sorted(ab.tracks, key=lambda x: x.order), start=1):
-                src = folder / t.filename
-                if not src.exists():
-                    continue
-                ext = src.suffix or ("." + (t.file_format or "mp3"))
-                chapter = _safe_filename(t.title or f"Глава {idx}")
-                zf.write(src, f"audiobooks/{ab_dir}/{idx:02d} - {chapter}{ext}",
-                         compress_type=zipfile.ZIP_STORED)
-            if ab.cover_path:
-                cp = COVERS_DIR / ab.cover_path
-                if cp.exists():
-                    zf.write(cp, f"audiobooks/{ab_dir}/cover.jpg", compress_type=zipfile.ZIP_STORED)
-
-        used_articles = set()
-        for link in db.query(Link).filter(Link.user_id == user.id).order_by(Link.id).all():
-            if not link.content:
-                continue
-            fname = _unique_name(_safe_filename(link.title or f"article_{link.id}") + ".html", used_articles)
-            zf.writestr(f"articles/{fname}", _article_html(link), compress_type=zipfile.ZIP_DEFLATED)
-
-    date_str = now.strftime("%Y-%m-%d")
+    archive_service.export_user(user, db, tmp_path)
+    date_str = datetime.utcnow().strftime("%Y-%m-%d")
     resp = FileResponse(
         tmp_path,
         media_type="application/zip",
-        filename=f"webook_backup_{date_str}.zip",
+        filename=f"webook_{user.username}_{date_str}.zip",
         background=BackgroundTask(lambda: os.path.exists(tmp_path) and os.unlink(tmp_path)),
     )
-    # сигнал клиенту, что архив готов и начал скачиваться — для индикатора на кнопке
     if token:
         resp.set_cookie("backup_ready", token, max_age=120, path="/settings", samesite="lax")
     return resp
+
+
+@router.post("/restore")
+async def restore(
+    request: Request,
+    archive: UploadFile = File(...),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Восстановление библиотеки из своего архива (manifest.json)."""
+    from app.services import archive_service
+    fd, tmp_path = tempfile.mkstemp(prefix="webook_restore_", suffix=".zip")
+    os.close(fd)
+    error, result = None, None
+    try:
+        with open(tmp_path, "wb") as out:
+            while True:
+                chunk = await archive.read(1024 * 1024)
+                if not chunk:
+                    break
+                out.write(chunk)
+        result = archive_service.import_user(user, db, tmp_path)
+    except Exception as e:
+        db.rollback()
+        error = f"Не удалось восстановить архив: {e}"
+    finally:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+    return templates.TemplateResponse("settings.html", {
+        "request": request, "user": user, "stats": _get_stats(db),
+        "success": "", "error": error, "restore_result": result,
+    })
 
 
 @router.get("/extension/download")

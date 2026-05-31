@@ -69,6 +69,21 @@
         <a href="/admin/logs" class="btn btn-outline-secondary btn-sm">
           <i class="bi bi-journal-text me-1"></i>Логи сервера
         </a>
+        <hr>
+        <div class="fw-semibold small mb-1"><i class="bi bi-hdd-stack me-1"></i>Резервное копирование сервера</div>
+        <p class="text-muted small mb-2">
+          Полный архив (БД + все файлы) для переноса/восстановления на другом сервере,
+          либо отдельный дамп базы данных. Может готовиться несколько секунд.
+        </p>
+        <div class="d-flex gap-2 flex-wrap">
+          <button type="button" id="adminFullBtn" class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-download me-1"></i><span id="adminFullLabel">Полный архив сервера</span>
+          </button>
+          <button type="button" id="adminDbBtn" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-database me-1"></i><span id="adminDbLabel">Дамп базы данных</span>
+          </button>
+        </div>
+        <iframe id="adminBackupFrame" title="backup" style="display:none"></iframe>
       </div>
     </div>
   </div>
@@ -304,4 +319,35 @@
   </div>
 
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Кнопки серверного бэкапа: спиннер «Готовим архив…», скачивание через iframe,
+  // сброс по cookie-сигналу, который сервер ставит, когда архив готов.
+  function adminBackup(btnId, labelId, baseLabel, url) {
+    const btn = document.getElementById(btnId);
+    const label = document.getElementById(labelId);
+    const frame = document.getElementById('adminBackupFrame');
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+      const token = 't' + Date.now();
+      document.querySelectorAll('#adminFullBtn,#adminDbBtn').forEach(b => b.disabled = true);
+      label.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Готовим архив…';
+      frame.src = url + '?token=' + token;
+      let tries = 0;
+      const iv = setInterval(function () {
+        tries++;
+        if (document.cookie.indexOf('backup_ready=' + token) !== -1 || tries > 600) {
+          clearInterval(iv);
+          document.cookie = 'backup_ready=; path=/admin; max-age=0';
+          document.querySelectorAll('#adminFullBtn,#adminDbBtn').forEach(b => b.disabled = false);
+          label.textContent = baseLabel;
+        }
+      }, 500);
+    });
+  }
+  adminBackup('adminFullBtn', 'adminFullLabel', 'Полный архив сервера', '/admin/backup/full');
+  adminBackup('adminDbBtn', 'adminDbLabel', 'Дамп базы данных', '/admin/backup/db');
+</script>
 {% endblock %}

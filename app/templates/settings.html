@@ -18,6 +18,16 @@
   <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
 </div>
 {% endif %}
+{% if restore_result %}
+<div class="alert alert-success alert-dismissible fade show" role="alert">
+  <i class="bi bi-check-circle me-1"></i>Восстановление завершено:
+  книги — <strong>{{ restore_result.books }}</strong>,
+  статьи — <strong>{{ restore_result.links }}</strong>,
+  аудиокниги — <strong>{{ restore_result.audiobooks }}</strong>,
+  пропущено дублей — <strong>{{ restore_result.skipped }}</strong>.
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
 
 <div class="row g-4">
 
@@ -181,6 +191,25 @@
       </div>
     </div>
 
+    <div class="card">
+      <div class="card-header fw-semibold"><i class="bi bi-upload me-1"></i>Восстановление из архива</div>
+      <div class="card-body">
+        <p class="text-muted small mb-3">
+          Загрузите архив, скачанный из WeBook (содержит <code>manifest.json</code>).
+          Восстановятся книги, аудиокниги, статьи, цитаты, а также полки, авторы и циклы.
+          Точные дубли пропускаются — можно безопасно загружать в существующую библиотеку.
+        </p>
+        <form method="post" action="/settings/restore" enctype="multipart/form-data" id="restoreForm">
+          <div class="input-group">
+            <input type="file" name="archive" class="form-control" accept=".zip" required>
+            <button type="submit" class="btn btn-outline-primary" id="restoreBtn">
+              <i class="bi bi-upload me-1"></i><span id="restoreLabel">Восстановить</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
   </div>
 </div>
 {% endblock %}
@@ -218,6 +247,18 @@ function copyOpds() {
         label.textContent = 'Скачать резервную копию';
       }
     }, 500);
+  });
+})();
+
+// Восстановление: спиннер на время загрузки/обработки архива
+(function () {
+  const form = document.getElementById('restoreForm');
+  if (!form) return;
+  form.addEventListener('submit', function () {
+    const btn = document.getElementById('restoreBtn');
+    btn.disabled = true;
+    document.getElementById('restoreLabel').innerHTML =
+      '<span class="spinner-border spinner-border-sm me-1"></span>Восстановление…';
   });
 })();
 </script>
