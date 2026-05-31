@@ -7,11 +7,13 @@ from urllib.parse import urlencode
 from fastapi import APIRouter, Depends, Form, Request, UploadFile, File, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.dependencies import get_db, get_current_user
 from app.models.author import Author
 from app.models.book import Book
+from app.models.audiobook import Audiobook
 from app.models.read_progress import ReadProgress
 from app.models.series import Series
 from app.models.share import Share
@@ -65,6 +67,42 @@ def _own_book(book_id: int, user: User, db: Session) -> Book:
     return book
 
 
+DEFAULT_AUTHOR_NAME = "Неизвестный автор"
+DEFAULT_SHELF_NAME = "Без полки"
+
+
+def _get_or_create_author(name: str, db: Session) -> Author:
+    name = (name or "").strip() or DEFAULT_AUTHOR_NAME
+    a = db.query(Author).filter(Author.name.ilike(name)).first()
+    if not a:
+        a = Author(name=name)
+        db.add(a)
+        db.flush()
+    return a
+
+
+def _get_or_create_shelf(name: str, user: User, db: Session) -> Shelf:
+    name = (name or "").strip() or DEFAULT_SHELF_NAME
+    s = db.query(Shelf).filter(Shelf.user_id == user.id, Shelf.name.ilike(name)).first()
+    if not s:
+        s = Shelf(name=name, user_id=user.id)
+        db.add(s)
+        db.flush()
+    return s
+
+
+def _get_or_create_series(name: str, author_id: int, db: Session):
+    name = (name or "").strip()
+    if not name:
+        return None
+    s = db.query(Series).filter(Series.author_id == author_id, Series.name.ilike(name)).first()
+    if not s:
+        s = Series(name=name, author_id=author_id)
+        db.add(s)
+        db.flush()
+    return s
+
+
 def _accessible_book(book_id: int, user: User, db: Session) -> Book:
     """Returns book if user owns it or has an active internal share. Raises 404 otherwise."""
     book = db.query(Book).filter_by(id=book_id).first()
@@ -93,45 +131,83 @@ def books_list(
     tag: str = "",
     favorite: int = 0,
     sort: str = "",
+    type: str = "all",
     page: int = 1,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     from app.models.tag import Tag
-    query = _user_books(db, user)
-    if shelf_id:
-        query = query.filter(Book.shelf_id == shelf_id)
-    if author_id:
-        query = query.filter(Book.author_id == author_id)
-    if q:
-        query = query.filter(Book.title.ilike(f"%{q}%"))
-    if tag:
-        query = query.join(Book.tags).filter(Tag.name == tag)
-    if favorite:
-        query = query.filter(Book.is_favorite == True)
+
+    type_ = type if type in ("all", "book", "audio") else "all"
+    book_only_filter = bool(shelf_id or author_id or tag or favorite or sort)
+    if type_ == "audio":
+        include_books, include_audio = False, True
+    elif type_ == "book":
+        include_books, include_audio = True, False
+    else:
+        include_books, include_audio = True, not book_only_filter
+
+    book_items = []
+    if include_books:
+        query = _user_books(db, user)
+        if shelf_id:
+            query = query.filter(Book.shelf_id == shelf_id)
+        if author_id:
+            query = query.filter(Book.author_id == author_id)
+        if q:
+            query = query.filter(Book.title.ilike(f"%{q}%"))
+        if tag:
+            query = query.join(Book.tags).filter(Tag.name == tag)
+        if favorite:
+            query = query.filter(Book.is_favorite == True)
+        if sort == "rating":
+            query = query.order_by(Book.rating.is_(None), Book.rating.desc(), Book.title)
+        else:
+            query = query.order_by(Book.title)
+        for b in query.all():
+            book_items.append({
+                "kind": "book", "id": b.id, "title": b.title,
+                "author": b.author.name if b.author else "",
+                "cover": f"/books/{b.id}/cover" if b.cover_path else None,
+                "url": f"/books/{b.id}", "fmt": b.file_format,
+                "is_read": b.is_read, "is_favorite": b.is_favorite, "rating": b.rating,
+                "sort_key": (b.title or "").lower(),
+            })
+
+    audio_items = []
+    if include_audio:
+        aq = db.query(Audiobook).filter(Audiobook.user_id == user.id)
+        if q:
+            aq = aq.filter(or_(Audiobook.title.ilike(f"%{q}%"), Audiobook.author.ilike(f"%{q}%")))
+        for ab in aq.all():
+            audio_items.append({
+                "kind": "audio", "id": ab.id, "title": ab.title,
+                "author": ab.author or "",
+                "cover": f"/audiobooks/{ab.id}/cover" if ab.cover_path else None,
+                "url": f"/audiobooks/{ab.id}", "chapters": len(ab.tracks),
+                "is_finished": ab.is_finished, "sort_key": (ab.title or "").lower(),
+            })
 
     if sort == "rating":
-        order = (Book.rating.is_(None), Book.rating.desc(), Book.title)
+        items = book_items  # уже отсортированы по оценке, аудио исключены
     else:
-        order = (Book.title,)
+        items = book_items + audio_items
+        items.sort(key=lambda x: x["sort_key"])
 
-    total = query.count()
+    total = len(items)
     total_pages = max(1, (total + BOOKS_PER_PAGE - 1) // BOOKS_PER_PAGE)
     page = min(max(1, page), total_pages)
-    books = (
-        query.order_by(*order)
-        .offset((page - 1) * BOOKS_PER_PAGE)
-        .limit(BOOKS_PER_PAGE)
-        .all()
-    )
+    items = items[(page - 1) * BOOKS_PER_PAGE: page * BOOKS_PER_PAGE]
+
     base_qs = urlencode({k: v for k, v in
                          {"shelf_id": shelf_id or "", "author_id": author_id or "",
-                          "q": q, "tag": tag, "favorite": favorite or "", "sort": sort}.items() if v})
+                          "q": q, "tag": tag, "favorite": favorite or "", "sort": sort,
+                          "type": type_ if type_ != "all" else ""}.items() if v})
     shelves = db.query(Shelf).filter(Shelf.user_id == user.id).all()
 
-    # books shared with this user (shown as a separate section, no shelf/author filter)
+    # books shared with this user (shown as a separate section)
     shared_books = []
-    if not shelf_id and not author_id:
+    if not shelf_id and not author_id and type_ != "audio":
         book_shares = db.query(Share).filter(
             Share.shared_with_user_id == user.id,
             Share.resource_type == "book",
@@ -147,9 +223,9 @@ def books_list(
 
     return templates.TemplateResponse(
         "books/list.html",
-        {"request": request, "user": user, "books": books, "shelves": shelves,
+        {"request": request, "user": user, "items": items, "shelves": shelves,
          "q": q, "shelf_id": shelf_id, "tag": tag, "favorite": favorite, "sort": sort,
-         "shared_books": shared_books,
+         "type": type_, "shared_books": shared_books,
          "page": page, "total_pages": total_pages, "total": total, "base_qs": base_qs},
     )
 
@@ -157,18 +233,75 @@ def books_list(
 @router.get("/upload", response_class=HTMLResponse)
 def upload_form(
     request: Request,
-    shelf_id: int = 0,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     shelves = db.query(Shelf).filter(Shelf.user_id == user.id).order_by(Shelf.name).all()
     authors = db.query(Author).order_by(Author.name).all()
-    selected_shelf = db.query(Shelf).filter(Shelf.id == shelf_id, Shelf.user_id == user.id).first() if shelf_id else None
+    series_all = db.query(Series).order_by(Series.name).all()
     return templates.TemplateResponse(
         "books/upload.html",
         {"request": request, "user": user, "shelves": shelves, "authors": authors,
-         "selected_shelf": selected_shelf, "meta": {}, "error": None},
+         "series_all": series_all, "error": None},
     )
+
+
+@router.post("/bulk-upload")
+async def bulk_upload(
+    request: Request,
+    files: List[UploadFile] = File(...),
+    titles: List[str] = Form([]),
+    author_names: List[str] = Form([]),
+    series_names: List[str] = Form([]),
+    series_orders: List[str] = Form([]),
+    shelf_names: List[str] = Form([]),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Массовая загрузка книг. Автор/полка/цикл создаются по имени при необходимости.
+    Обязательно только название (если пустое — берём из имени файла)."""
+    def at(lst, i):
+        return lst[i] if i < len(lst) else ""
+
+    created, last_id = 0, None
+    for i, f in enumerate(files):
+        suffix = Path(f.filename).suffix.lower() if f.filename else ""
+        if suffix not in ALLOWED_BOOK_FORMATS:
+            continue
+        data = await f.read()
+        if not data or len(data) > MAX_BOOK_SIZE:
+            continue
+
+        title = (at(titles, i) or "").strip() or Path(f.filename).stem
+        author = _get_or_create_author(at(author_names, i), db)
+        shelf = _get_or_create_shelf(at(shelf_names, i), user, db)
+        series = _get_or_create_series(at(series_names, i), author.id, db)
+        order_raw = (at(series_orders, i) or "").strip()
+        try:
+            order = float(order_raw) if order_raw else None
+        except ValueError:
+            order = None
+
+        meta = parse_book_file(data, suffix)
+        cover_path = save_cover_file(meta["cover_data"], ".jpg") if meta.get("cover_data") else None
+        file_name = save_book_file(data, suffix)
+
+        book = Book(
+            user_id=user.id, title=title, author_id=author.id, shelf_id=shelf.id,
+            series_id=series.id if series else None, series_order=order,
+            cover_path=cover_path, file_path=file_name, file_format=suffix.lstrip("."),
+            file_size=len(data), language=(meta.get("language") or ""),
+        )
+        db.add(book)
+        db.flush()
+        last_id, created = book.id, created + 1
+
+    db.commit()
+    if created == 0:
+        return _upload_error(request, user, db, "Не удалось загрузить ни одной книги. Поддерживаются epub, fb2, pdf.")
+    if created == 1 and last_id:
+        return RedirectResponse(f"/books/{last_id}", status_code=302)
+    return RedirectResponse("/books", status_code=302)
 
 
 @router.post("/upload")
@@ -533,11 +666,13 @@ def revoke_book_user_share(
 # ── helpers ─────────────────────────────────────────────────────────────────
 
 def _upload_error(request, user, db, error):
-    shelves = db.query(Shelf).filter(Shelf.user_id == user.id).all()
+    shelves = db.query(Shelf).filter(Shelf.user_id == user.id).order_by(Shelf.name).all()
     authors = db.query(Author).order_by(Author.name).all()
+    series_all = db.query(Series).order_by(Series.name).all()
     return templates.TemplateResponse(
         "books/upload.html",
-        {"request": request, "user": user, "shelves": shelves, "authors": authors, "meta": {}, "error": error},
+        {"request": request, "user": user, "shelves": shelves, "authors": authors,
+         "series_all": series_all, "error": error},
         status_code=400,
     )
 

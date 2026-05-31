@@ -1,165 +1,193 @@
 {% extends "base.html" %}
-{% block title %}Загрузить книгу — WeBook{% endblock %}
+{% block title %}Загрузить — WeBook{% endblock %}
 {% block content %}
-<div class="row justify-content-center">
-  <div class="col-md-8">
-    <nav aria-label="breadcrumb" class="mb-3">
-      <ol class="breadcrumb">
-        <li class="breadcrumb-item"><a href="/books">Книги</a></li>
-        <li class="breadcrumb-item active">Загрузить</li>
-      </ol>
-    </nav>
-    <div class="card shadow-sm">
-      <div class="card-body p-4">
-        <h4 class="mb-4"><i class="bi bi-cloud-upload me-2"></i>Загрузить книгу</h4>
-        {% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/books">Библиотека</a></li>
+    <li class="breadcrumb-item active">Загрузить</li>
+  </ol>
+</nav>
 
-        <form method="post" action="/books/upload" enctype="multipart/form-data" id="uploadForm">
+<h2 class="mb-4"><i class="bi bi-cloud-upload me-2"></i>Загрузить</h2>
+{% if error %}<div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-1"></i>{{ error }}</div>{% endif %}
 
-          <!-- Файл книги -->
-          <div class="mb-4 p-3 border rounded bg-light">
-            <label class="form-label fw-semibold">Файл книги * <small class="text-muted fw-normal">(epub, fb2, pdf — до 100 МБ)</small></label>
-            <input type="file" name="book_file" class="form-control" accept=".epub,.fb2,.pdf" required id="bookFile">
-            <div id="parsedBadge" class="mt-2 d-none">
-              <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Метаданные извлечены из файла</span>
-            </div>
-          </div>
-
-          <!-- Метаданные -->
-          <div class="row g-3 mb-3">
-            <div class="col-md-8">
-              <label class="form-label fw-semibold">Название *</label>
-              <input type="text" name="title" id="fTitle" class="form-control" value="{{ meta.get('title','') }}" required>
-            </div>
-            <div class="col-md-4">
-              <label class="form-label fw-semibold">Год издания</label>
-              <input type="number" name="published_year" id="fYear" class="form-control" value="{{ meta.get('year','') }}" min="1800" max="2100">
-            </div>
-          </div>
-
-          <div class="row g-3 mb-3">
-            <div class="col-md-6">
-              <label class="form-label fw-semibold">Автор *</label>
-              <select name="author_id" id="fAuthor" class="form-select" required>
-                <option value="">— выберите автора —</option>
-                {% for a in authors %}
-                <option value="{{ a.id }}">{{ a.name }}</option>
-                {% endfor %}
-              </select>
-              <div class="mt-1">
-                <a href="/authors/new" target="_blank" class="small text-primary">
-                  <i class="bi bi-plus-circle me-1"></i>Создать нового автора
-                </a>
-              </div>
-            </div>
-            <div class="col-md-6">
-              <label class="form-label fw-semibold">Полка *</label>
-              <select name="shelf_id" class="form-select" required>
-                <option value="">— выберите полку —</option>
-                {% for s in shelves %}
-                <option value="{{ s.id }}" {% if selected_shelf and selected_shelf.id == s.id %}selected{% endif %}>
-                  {{ s.name }}
-                </option>
-                {% endfor %}
-              </select>
-              <div class="mt-1">
-                <a href="/shelves/new" target="_blank" class="small text-primary">
-                  <i class="bi bi-plus-circle me-1"></i>Создать новую полку
-                </a>
-              </div>
-            </div>
-          </div>
-
-          <!-- Цикл -->
-          <div class="row g-3 mb-3">
-            <div class="col-md-8">
-              <label class="form-label fw-semibold">Цикл / серия <small class="text-muted fw-normal">(необязательно)</small></label>
-              <select name="series_id" id="fSeries" class="form-select">
-                <option value="">— без цикла —</option>
-              </select>
-              <div class="mt-1">
-                <a href="#" id="newSeriesLink" class="small text-primary d-none">
-                  <i class="bi bi-plus-circle me-1"></i>Создать цикл для этого автора
-                </a>
-              </div>
-            </div>
-            <div class="col-md-4">
-              <label class="form-label fw-semibold">Номер в цикле</label>
-              <input type="number" name="series_order" class="form-control" step="0.1" min="0" placeholder="1">
-            </div>
-          </div>
-
-          <div class="mb-3">
-            <label class="form-label fw-semibold">Описание</label>
-            <textarea name="description" id="fDesc" class="form-control" rows="4">{{ meta.get('description','') }}</textarea>
-          </div>
-
-          <div class="mb-3">
-            <label class="form-label fw-semibold">Теги <small class="text-muted fw-normal">(через запятую)</small></label>
-            <input type="text" name="tags" class="form-control" placeholder="фантастика, классика, к прочтению">
-          </div>
-
-          <div class="row g-3 mb-4">
-            <div class="col-md-4">
-              <label class="form-label fw-semibold">Язык</label>
-              <input type="text" name="language" id="fLang" class="form-control" value="{{ meta.get('language','') }}" placeholder="ru">
-            </div>
-            <div class="col-md-8">
-              <label class="form-label fw-semibold">Обложка <small class="text-muted fw-normal">(jpg/png — заменит извлечённую)</small></label>
-              <input type="file" name="cover_file" class="form-control" accept="image/*">
-            </div>
-          </div>
-
-          <div class="d-flex gap-2">
-            <button type="submit" class="btn btn-primary px-4">
-              <i class="bi bi-cloud-upload me-1"></i>Загрузить
-            </button>
-            <a href="/books" class="btn btn-outline-secondary">Отмена</a>
-          </div>
-        </form>
-      </div>
+<div class="card mb-4">
+  <div class="card-body">
+    <label class="form-label fw-semibold">Выберите файлы</label>
+    <input type="file" id="fileInput" class="form-control" multiple
+           accept=".epub,.fb2,.pdf,.mp3,.m4a,.m4b,.ogg,.oga,.opus,.aac,.flac,.wav,.webm">
+    <div class="form-text">
+      Книги (epub, fb2, pdf) — каждый файл станет отдельной книгой, можно загрузить сразу несколько.
+      Аудиофайлы — одной аудиокнигой (главами). <strong>Обязательно только название</strong>;
+      автора, полку и цикл можно указать сейчас или позже.
     </div>
   </div>
 </div>
+
+<datalist id="authorsList">{% for a in authors %}<option value="{{ a.name }}"></option>{% endfor %}</datalist>
+<datalist id="seriesList">{% for s in series_all %}<option value="{{ s.name }}"></option>{% endfor %}</datalist>
+<datalist id="shelvesList">{% for s in shelves %}<option value="{{ s.name }}"></option>{% endfor %}</datalist>
+
+<!-- Книги -->
+<div id="bookSection" class="card mb-4 d-none">
+  <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <span class="fw-semibold"><i class="bi bi-journals me-1"></i>Книги (<span id="bookCount">0</span>)</span>
+    <button type="button" class="btn btn-sm btn-primary book-submit">
+      <i class="bi bi-cloud-upload me-1"></i>Загрузить книги
+    </button>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm align-middle mb-0">
+      <thead class="small text-muted">
+        <tr>
+          <th style="min-width:130px">Файл</th>
+          <th style="min-width:200px">Название *</th>
+          <th style="min-width:150px">Автор</th>
+          <th style="min-width:150px">Цикл</th>
+          <th style="width:64px">№</th>
+          <th style="min-width:130px">Полка</th>
+        </tr>
+      </thead>
+      <tbody id="bookRows"></tbody>
+    </table>
+  </div>
+  <div class="card-footer text-end">
+    <button type="button" class="btn btn-sm btn-primary book-submit">
+      <i class="bi bi-cloud-upload me-1"></i>Загрузить книги
+    </button>
+  </div>
+</div>
+
+<!-- Аудиокнига -->
+<div id="audioSection" class="card mb-4 d-none">
+  <div class="card-header fw-semibold"><i class="bi bi-headphones me-1"></i>Аудиокнига (<span id="audioCount">0</span> глав)</div>
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-md-6"><label class="form-label small">Название *</label><input id="abTitle" class="form-control"></div>
+      <div class="col-md-6"><label class="form-label small">Автор</label><input id="abAuthor" class="form-control" list="authorsList"></div>
+      <div class="col-md-6"><label class="form-label small">Чтец</label><input id="abNarrator" class="form-control"></div>
+      <div class="col-md-6"><label class="form-label small">Обложка</label><input type="file" id="abCover" class="form-control" accept="image/*"></div>
+    </div>
+    <div class="form-text mt-2">Главы будут упорядочены по именам файлов.</div>
+    <ul class="small text-muted mt-2 mb-0" id="audioFileList"></ul>
+  </div>
+  <div class="card-footer text-end">
+    <button type="button" class="btn btn-sm btn-primary" id="audioSubmit"><i class="bi bi-cloud-upload me-1"></i>Загрузить аудиокнигу</button>
+  </div>
+</div>
+
+<div id="emptyHint" class="text-muted text-center py-4"><i class="bi bi-arrow-up-circle me-1"></i>Выберите файлы выше.</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-const authorSelect = document.getElementById('fAuthor');
-const seriesSelect = document.getElementById('fSeries');
-const newSeriesLink = document.getElementById('newSeriesLink');
+const BOOK_EXT = ['epub', 'fb2', 'pdf'];
+const fileInput = document.getElementById('fileInput');
+let bookFiles = [], audioFiles = [];
 
-async function loadSeries(authorId) {
-  seriesSelect.innerHTML = '<option value="">— без цикла —</option>';
-  if (!authorId) { newSeriesLink.classList.add('d-none'); return; }
-  newSeriesLink.href = `/series/new?author_id=${authorId}`;
-  newSeriesLink.classList.remove('d-none');
-  const r = await fetch(`/series/search?author_id=${authorId}`);
-  const data = await r.json();
-  data.forEach(s => {
-    const opt = new Option(s.name, s.id);
-    seriesSelect.appendChild(opt);
+function ext(n) { return (n.split('.').pop() || '').toLowerCase(); }
+function stripExt(n) { return n.replace(/\.[^.]+$/, ''); }
+function esc(s) { return s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+
+fileInput.addEventListener('change', function () {
+  bookFiles = []; audioFiles = [];
+  Array.from(fileInput.files).forEach(f => {
+    if (BOOK_EXT.includes(ext(f.name))) bookFiles.push(f); else audioFiles.push(f);
   });
+  renderBooks();
+  renderAudio();
+  document.getElementById('emptyHint').classList.toggle('d-none', !!(bookFiles.length || audioFiles.length));
+});
+
+function renderBooks() {
+  const sec = document.getElementById('bookSection');
+  const tbody = document.getElementById('bookRows');
+  tbody.innerHTML = '';
+  if (!bookFiles.length) { sec.classList.add('d-none'); return; }
+  sec.classList.remove('d-none');
+  document.getElementById('bookCount').textContent = bookFiles.length;
+  bookFiles.forEach((f, i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="small text-muted text-truncate" style="max-width:150px" title="' + esc(f.name) + '">' + esc(f.name) + '</td>' +
+      '<td><input class="form-control form-control-sm bk-title" value="' + esc(stripExt(f.name)) + '" required></td>' +
+      '<td><input class="form-control form-control-sm bk-author" list="authorsList" placeholder="Неизвестный автор"></td>' +
+      '<td><input class="form-control form-control-sm bk-series" list="seriesList" placeholder="—"></td>' +
+      '<td><input class="form-control form-control-sm bk-order" type="number" step="0.1" min="0"></td>' +
+      '<td><input class="form-control form-control-sm bk-shelf" list="shelvesList" placeholder="Без полки"></td>';
+    tbody.appendChild(tr);
+  });
+  bookFiles.forEach((f, i) => prefillTitle(f, i));
 }
 
-authorSelect.addEventListener('change', () => loadSeries(authorSelect.value));
-
-// Auto-parse metadata on file select
-document.getElementById('bookFile').addEventListener('change', async function() {
-  if (!this.files[0]) return;
-  const fd = new FormData();
-  fd.append('file', this.files[0]);
+async function prefillTitle(f, i) {
   try {
-    const r = await fetch('/books/parse-meta', { method: 'GET' });
-    // parse-meta is GET with form data workaround — use POST form approach
-    const r2 = await fetch('/books/parse-meta', { method: 'POST', body: fd });
-    if (!r2.ok) return;
-    const m = await r2.json();
-    if (m.title) document.getElementById('fTitle').value = m.title;
-    if (m.description) document.getElementById('fDesc').value = m.description;
-    if (m.language) document.getElementById('fLang').value = m.language;
-    if (Object.keys(m).length > 0) document.getElementById('parsedBadge').classList.remove('d-none');
-  } catch(e) {}
-});
+    const fd = new FormData(); fd.append('file', f);
+    const r = await fetch('/books/parse-meta', { method: 'POST', body: fd });
+    if (!r.ok) return;
+    const m = await r.json();
+    const inp = document.querySelectorAll('.bk-title')[i];
+    if (m.title && inp && inp.value === stripExt(f.name)) inp.value = m.title;
+  } catch (e) {}
+}
+
+function renderAudio() {
+  const sec = document.getElementById('audioSection');
+  if (!audioFiles.length) { sec.classList.add('d-none'); return; }
+  sec.classList.remove('d-none');
+  document.getElementById('audioCount').textContent = audioFiles.length;
+  const ul = document.getElementById('audioFileList'); ul.innerHTML = '';
+  audioFiles.forEach(f => { const li = document.createElement('li'); li.textContent = f.name; ul.appendChild(li); });
+  const t = document.getElementById('abTitle');
+  if (!t.value && audioFiles[0]) t.value = stripExt(audioFiles[0].name);
+}
+
+async function postAndGo(url, fd) {
+  document.querySelectorAll('button').forEach(b => b.disabled = true);
+  try {
+    const r = await fetch(url, { method: 'POST', body: fd });
+    if (r.redirected) { window.location = r.url; return; }
+    if (r.ok) { window.location = '/books'; return; }
+    const html = await r.text();
+    document.open(); document.write(html); document.close();
+  } catch (e) {
+    alert('Ошибка загрузки. Попробуйте ещё раз.');
+    document.querySelectorAll('button').forEach(b => b.disabled = false);
+  }
+}
+
+function submitBooks() {
+  if (!bookFiles.length) return;
+  const fd = new FormData();
+  const titles = document.querySelectorAll('.bk-title');
+  const authors = document.querySelectorAll('.bk-author');
+  const series = document.querySelectorAll('.bk-series');
+  const orders = document.querySelectorAll('.bk-order');
+  const shelves = document.querySelectorAll('.bk-shelf');
+  bookFiles.forEach((f, i) => {
+    fd.append('files', f);
+    fd.append('titles', titles[i].value);
+    fd.append('author_names', authors[i].value);
+    fd.append('series_names', series[i].value);
+    fd.append('series_orders', orders[i].value);
+    fd.append('shelf_names', shelves[i].value);
+  });
+  postAndGo('/books/bulk-upload', fd);
+}
+
+function submitAudio() {
+  if (!audioFiles.length) return;
+  const fd = new FormData();
+  audioFiles.forEach(f => fd.append('files', f));
+  fd.append('title', document.getElementById('abTitle').value);
+  fd.append('author', document.getElementById('abAuthor').value);
+  fd.append('narrator', document.getElementById('abNarrator').value);
+  const cover = document.getElementById('abCover').files[0];
+  if (cover) fd.append('cover', cover);
+  postAndGo('/audiobooks/upload', fd);
+}
+
+document.querySelectorAll('.book-submit').forEach(b => b.addEventListener('click', submitBooks));
+document.getElementById('audioSubmit').addEventListener('click', submitAudio);
 </script>
 {% endblock %}
