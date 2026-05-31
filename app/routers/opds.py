@@ -3,8 +3,8 @@ from datetime import datetime
 from xml.etree.ElementTree import Element, SubElement, tostring
 from xml.etree import ElementTree as ET
 
-from fastapi import APIRouter, Depends, Request
-from fastapi.responses import Response
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import Response, FileResponse
 from sqlalchemy.orm import Session
 
 from app.dependencies import get_db, opds_auth
@@ -13,6 +13,7 @@ from app.models.book import Book
 from app.models.series import Series
 from app.models.shelf import Shelf
 from app.models.user import User
+from app.config import BOOKS_DIR, COVERS_DIR
 
 router = APIRouter(prefix="/opds")
 
@@ -93,11 +94,11 @@ def _book_entry(feed, book: Book, base_url: str):
         s.text = book.description
 
     if book.cover_path:
-        _link(entry, rel="http://opds-spec.org/image", href=f"/books/{book.id}/cover", type_="image/jpeg")
-        _link(entry, rel="http://opds-spec.org/image/thumbnail", href=f"/books/{book.id}/cover", type_="image/jpeg")
+        _link(entry, rel="http://opds-spec.org/image", href=f"/opds/books/{book.id}/cover", type_="image/jpeg")
+        _link(entry, rel="http://opds-spec.org/image/thumbnail", href=f"/opds/books/{book.id}/cover", type_="image/jpeg")
 
     mime = MIME_MAP.get(book.file_format, "application/octet-stream")
-    _link(entry, rel="http://opds-spec.org/acquisition", href=f"/books/{book.id}/download",
+    _link(entry, rel="http://opds-spec.org/acquisition", href=f"/opds/books/{book.id}/download",
           type_=mime)
 
 
@@ -193,6 +194,35 @@ def opds_all_books(request: Request, user: User = Depends(opds_auth), db: Sessio
     for book in books:
         _book_entry(feed, book, str(request.base_url))
     return _xml_response(feed)
+
+
+@router.get("/books/{book_id}/download")
+def opds_download(book_id: int, user: User = Depends(opds_auth), db: Session = Depends(get_db)):
+    """Скачивание книги для OPDS-читалок (HTTP Basic Auth, не cookie)."""
+    from app.routers.books import _download_filename
+    book = db.query(Book).filter(Book.id == book_id, Book.user_id == user.id).first()
+    if not book:
+        raise HTTPException(status_code=404)
+    path = BOOKS_DIR / book.file_path
+    if not path.exists():
+        raise HTTPException(status_code=404)
+    return FileResponse(
+        path,
+        media_type=MIME_MAP.get(book.file_format, "application/octet-stream"),
+        filename=_download_filename(book),
+    )
+
+
+@router.get("/books/{book_id}/cover")
+def opds_cover(book_id: int, user: User = Depends(opds_auth), db: Session = Depends(get_db)):
+    """Обложка книги для OPDS-читалок (HTTP Basic Auth)."""
+    book = db.query(Book).filter(Book.id == book_id, Book.user_id == user.id).first()
+    if not book or not book.cover_path:
+        raise HTTPException(status_code=404)
+    path = COVERS_DIR / book.cover_path
+    if not path.exists():
+        raise HTTPException(status_code=404)
+    return FileResponse(path, media_type="image/jpeg")
 
 
 @router.get("/search")
