@@ -130,6 +130,7 @@ def books_list(
     q: str = "",
     tag: str = "",
     favorite: int = 0,
+    reading: int = 0,
     sort: str = "",
     type: str = "all",
     page: int = 1,
@@ -139,7 +140,7 @@ def books_list(
     from app.models.tag import Tag
 
     type_ = type if type in ("all", "book", "audio") else "all"
-    book_only_filter = bool(shelf_id or author_id or tag or favorite or sort)
+    book_only_filter = bool(shelf_id or author_id or tag or favorite or reading or sort)
     if type_ == "audio":
         include_books, include_audio = False, True
     elif type_ == "book":
@@ -160,6 +161,8 @@ def books_list(
             query = query.join(Book.tags).filter(Tag.name == tag)
         if favorite:
             query = query.filter(Book.is_favorite == True)
+        if reading:
+            query = query.filter(Book.in_reading_list == True)
         if sort == "rating":
             query = query.order_by(Book.rating.is_(None), Book.rating.desc(), Book.title)
         else:
@@ -171,7 +174,7 @@ def books_list(
                 "cover": f"/books/{b.id}/cover" if b.cover_path else None,
                 "url": f"/books/{b.id}", "fmt": b.file_format,
                 "is_read": b.is_read, "is_favorite": b.is_favorite, "rating": b.rating,
-                "sort_key": (b.title or "").lower(),
+                "in_reading_list": b.in_reading_list, "sort_key": (b.title or "").lower(),
             })
 
     audio_items = []
@@ -201,8 +204,8 @@ def books_list(
 
     base_qs = urlencode({k: v for k, v in
                          {"shelf_id": shelf_id or "", "author_id": author_id or "",
-                          "q": q, "tag": tag, "favorite": favorite or "", "sort": sort,
-                          "type": type_ if type_ != "all" else ""}.items() if v})
+                          "q": q, "tag": tag, "favorite": favorite or "", "reading": reading or "",
+                          "sort": sort, "type": type_ if type_ != "all" else ""}.items() if v})
     shelves = db.query(Shelf).filter(Shelf.user_id == user.id).all()
 
     # books shared with this user (shown as a separate section)
@@ -224,7 +227,7 @@ def books_list(
     return templates.TemplateResponse(
         "books/list.html",
         {"request": request, "user": user, "items": items, "shelves": shelves,
-         "q": q, "shelf_id": shelf_id, "tag": tag, "favorite": favorite, "sort": sort,
+         "q": q, "shelf_id": shelf_id, "tag": tag, "favorite": favorite, "reading": reading, "sort": sort,
          "type": type_, "shared_books": shared_books,
          "page": page, "total_pages": total_pages, "total": total, "base_qs": base_qs},
     )
@@ -528,6 +531,14 @@ def rate_book(book_id: int, rating: int = Form(...), user: User = Depends(get_cu
 def toggle_favorite_book(book_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     book = _own_book(book_id, user, db)
     book.is_favorite = not book.is_favorite
+    db.commit()
+    return RedirectResponse(f"/books/{book_id}", status_code=302)
+
+
+@router.post("/{book_id}/reading")
+def toggle_reading_list(book_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    book = _own_book(book_id, user, db)
+    book.in_reading_list = not book.in_reading_list
     db.commit()
     return RedirectResponse(f"/books/{book_id}", status_code=302)
 

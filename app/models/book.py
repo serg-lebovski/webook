@@ -26,6 +26,7 @@ class Book(Base):
     read_at = Column(DateTime, nullable=True)
     rating = Column(Integer, nullable=True)        # 1..5, NULL — без оценки
     is_favorite = Column(Boolean, default=False)
+    in_reading_list = Column(Boolean, default=False)  # «Хочу прочитать»
 
     user = relationship("User")
     author = relationship("Author", back_populates="books")

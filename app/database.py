@@ -16,7 +16,7 @@ Base = declarative_base()
 def init_db():
     from app.models import (  # noqa: F401
         user, shelf, author, series, book, link, site_settings, share,
-        read_progress, login_attempt, tag, highlight, feed, audiobook,
+        read_progress, login_attempt, tag, highlight, feed, audiobook, series_tier,
     )
     Base.metadata.create_all(bind=engine)
     _migrate_db()
@@ -39,6 +39,7 @@ def _migrate_db():
             "ALTER TABLE books ADD COLUMN IF NOT EXISTS rating INTEGER",
             "ALTER TABLE books ADD COLUMN IF NOT EXISTS is_favorite BOOLEAN NOT NULL DEFAULT FALSE",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS reading_goal INTEGER DEFAULT 0",
+            "ALTER TABLE books ADD COLUMN IF NOT EXISTS in_reading_list BOOLEAN NOT NULL DEFAULT FALSE",
         ]
         backfill_expires = (
             "UPDATE shares SET expires_at = created_at + INTERVAL '7 days' WHERE expires_at IS NULL"
@@ -56,6 +57,7 @@ def _migrate_db():
             "ALTER TABLE books ADD COLUMN rating INTEGER",
             "ALTER TABLE books ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0",
             "ALTER TABLE users ADD COLUMN reading_goal INTEGER DEFAULT 0",
+            "ALTER TABLE books ADD COLUMN in_reading_list INTEGER NOT NULL DEFAULT 0",
         ]
         backfill_expires = (
             "UPDATE shares SET expires_at = datetime(created_at, '+7 days') WHERE expires_at IS NULL"

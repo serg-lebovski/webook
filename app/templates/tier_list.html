@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Тир-лист циклов — WeBook{% endblock %}
+
+{% block head %}
+<style>
+  .tier-row { display:flex; align-items:stretch; margin-bottom:4px; }
+  .tier-label { width:56px; min-width:56px; display:flex; align-items:center; justify-content:center;
+                font-weight:700; font-size:1.5rem; color:#1a1a1a; border-radius:5px 0 0 5px; }
+  .tier-zone { flex:1; min-height:96px; display:flex; flex-wrap:wrap; gap:6px; padding:6px;
+               background:var(--bs-tertiary-bg); border-radius:0 5px 5px 0; align-content:flex-start; }
+  .tier-zone.pool { border-radius:6px; border:1px dashed var(--bs-border-color); min-height:110px; }
+  .tier-zone.drag-over { outline:2px dashed var(--bs-primary); outline-offset:-2px; }
+  .tier-card { width:62px; cursor:grab; text-align:center; }
+  .tier-card:active { cursor:grabbing; }
+  .tier-card img, .tier-card .ph { width:62px; height:93px; object-fit:cover; border-radius:4px;
+                                   box-shadow:0 1px 5px rgba(0,0,0,.25); display:block; }
+  .tier-card .ph { display:flex; align-items:center; justify-content:center;
+                   background:linear-gradient(135deg,#667eea,#764ba2); color:#fff; font-size:1.4rem; }
+  .tier-card-name { display:block; font-size:.6rem; line-height:1.1; margin-top:2px;
+                    max-height:2.3em; overflow:hidden; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+  <h2 class="mb-0"><i class="bi bi-bar-chart-steps me-2"></i>Тир-лист циклов</h2>
+  <span class="text-muted small">{{ total }} цикл(ов)</span>
+</div>
+<p class="text-muted small mb-4">Перетаскивайте циклы между рангами. Раскладка сохраняется автоматически.</p>
+
+{% if total %}
+<div class="tier-board mb-4">
+  {% for t in tiers %}
+  <div class="tier-row">
+    <div class="tier-label" style="background:{{ tier_colors[t] }}">{{ t }}</div>
+    <div class="tier-zone" data-tier="{{ t }}">
+      {% for c in rows[t] %}
+      <div class="tier-card" draggable="true" data-series-id="{{ c.id }}" title="{{ c.name }}{% if c.author %} · {{ c.author }}{% endif %}">
+        {% if c.cover %}<img src="{{ c.cover }}" alt="">{% else %}<div class="ph"><i class="bi bi-collection"></i></div>{% endif %}
+        <span class="tier-card-name">{{ c.name }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<h6 class="text-muted"><i class="bi bi-inboxes me-1"></i>Без ранга</h6>
+<div class="tier-zone pool" data-tier="">
+  {% for c in unranked %}
+  <div class="tier-card" draggable="true" data-series-id="{{ c.id }}" title="{{ c.name }}{% if c.author %} · {{ c.author }}{% endif %}">
+    {% if c.cover %}<img src="{{ c.cover }}" alt="">{% else %}<div class="ph"><i class="bi bi-collection"></i></div>{% endif %}
+    <span class="tier-card-name">{{ c.name }}</span>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="text-center text-muted py-5">
+  <i class="bi bi-collection fs-1 d-block mb-2"></i>
+  Циклов пока нет. Добавьте книги с указанием цикла — и они появятся здесь.
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+  let dragId = null;
+  document.addEventListener('dragstart', function (e) {
+    const c = e.target.closest('.tier-card');
+    if (!c) return;
+    dragId = c.dataset.seriesId;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', dragId);
+  });
+  document.querySelectorAll('.tier-zone').forEach(function (z) {
+    z.addEventListener('dragover', function (e) { e.preventDefault(); z.classList.add('drag-over'); });
+    z.addEventListener('dragleave', function () { z.classList.remove('drag-over'); });
+    z.addEventListener('drop', function (e) {
+      e.preventDefault();
+      z.classList.remove('drag-over');
+      const id = dragId || e.dataTransfer.getData('text/plain');
+      const card = document.querySelector('.tier-card[data-series-id="' + id + '"]');
+      if (card) z.appendChild(card);
+      const fd = new FormData();
+      fd.append('series_id', id);
+      fd.append('tier', z.dataset.tier);
+      fetch('/tier-list/set', { method: 'POST', body: fd }).catch(function () {});
+      dragId = null;
+    });
+  });
+</script>
+{% endblock %}

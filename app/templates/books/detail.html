@@ -126,6 +126,12 @@
           <i class="bi bi-heart{% if book.is_favorite %}-fill{% endif %}"></i>
         </button>
       </form>
+      <form action="/books/{{ book.id }}/reading" method="post" class="d-inline">
+        <button class="btn {% if book.in_reading_list %}btn-warning{% else %}btn-outline-warning{% endif %}"
+                title="{% if book.in_reading_list %}Убрать из списка «Хочу прочитать»{% else %}В список «Хочу прочитать»{% endif %}">
+          <i class="bi bi-bookmark{% if book.in_reading_list %}-check-fill{% endif %}"></i>
+        </button>
+      </form>
       <form action="/books/{{ book.id }}/toggle-read" method="post" class="d-inline">
         <button class="btn {% if book.is_read %}btn-secondary{% else %}btn-outline-secondary{% endif %}"
                 title="{% if book.is_read %}Отметить непрочитанным{% else %}Отметить прочитанным{% endif %}">

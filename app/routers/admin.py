@@ -409,4 +409,8 @@ def _purge_user_data(uid: int, db: Session):
     # 8. highlights
     db.query(Highlight).filter_by(user_id=uid).delete(synchronize_session=False)
 
+    # 9. series tiers (личный тир-лист)
+    from app.models.series_tier import SeriesTier
+    db.query(SeriesTier).filter_by(user_id=uid).delete(synchronize_session=False)
+
     db.flush()
