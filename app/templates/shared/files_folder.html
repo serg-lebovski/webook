@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}{{ folder.name }} — Общий доступ{% endblock %}
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb mb-0">
+    <li class="breadcrumb-item"><a href="/shared">Общий доступ</a></li>
+    <li class="breadcrumb-item active">{{ folder.name }}</li>
+  </ol>
+</nav>
+
+<h2 class="mb-1"><i class="bi bi-folder-fill text-warning me-2"></i>{{ folder.name }}</h2>
+<p class="text-muted small mb-4">
+  от {{ share.owner.username }} · доступ ещё
+  <span class="cd fw-semibold" data-exp="{{ share.expires_at.isoformat() }}Z"></span>
+</p>
+
+{% if files %}
+<div class="row g-3">
+  {% for f in files %}
+  <div class="col-6 col-sm-4 col-md-3 col-lg-2">
+    <div class="card h-100">
+      {% if f.is_image %}
+      <a href="/shared/files-folder/{{ share.id }}/{{ f.id }}/view" target="_blank" rel="noopener">
+        <img src="/shared/files-folder/{{ share.id }}/{{ f.id }}/view" class="card-img-top"
+             style="height:120px;object-fit:cover" alt="{{ f.original_name }}">
+      </a>
+      {% else %}
+      <a href="/shared/files-folder/{{ share.id }}/{{ f.id }}/{{ 'view' if f.previewable else 'download' }}"
+         target="_blank" rel="noopener"
+         class="d-flex align-items-center justify-content-center text-secondary" style="height:120px">
+        <i class="bi bi-{{ f.icon }}" style="font-size:2.6rem"></i>
+      </a>
+      {% endif %}
+      <div class="card-body p-2">
+        <div class="small fw-semibold text-truncate" title="{{ f.original_name }}">{{ f.original_name }}</div>
+        <div class="text-muted" style="font-size:.72rem">{{ f.size_human }}</div>
+      </div>
+      <div class="card-footer p-1 text-center">
+        <a href="/shared/files-folder/{{ share.id }}/{{ f.id }}/download" class="btn btn-sm btn-outline-secondary py-0 w-100">
+          <i class="bi bi-download me-1"></i>Скачать
+        </a>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="text-muted py-4">Папка пуста.</div>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+<script>
+  (function () {
+    const el = document.querySelector('.cd');
+    if (!el) return;
+    const exp = new Date(el.dataset.exp).getTime();
+    function tick() {
+      let s = Math.floor((exp - Date.now()) / 1000);
+      if (s <= 0) { el.textContent = 'истекло'; return; }
+      const d = Math.floor(s / 86400); s %= 86400;
+      const h = Math.floor(s / 3600); s %= 3600;
+      const m = Math.floor(s / 60);
+      el.textContent = (d ? d + ' д ' : '') + h + ' ч ' + m + ' мин';
+    }
+    tick(); setInterval(tick, 30000);
+  })();
+</script>
+{% endblock %}

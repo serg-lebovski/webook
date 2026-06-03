@@ -18,6 +18,7 @@ COVERS_DIR = Path(os.getenv("COVERS_DIR", str(BASE_DIR / "files")))
 LINKS_CONTENT_DIR = Path(os.getenv("LINKS_DIR", str(BASE_DIR / "links")))
 AUDIOBOOKS_DIR = Path(os.getenv("AUDIOBOOKS_DIR", str(BASE_DIR / "audiobooks")))
 WORKSPACE_DIR = Path(os.getenv("WORKSPACE_DIR", str(BASE_DIR / "workspace")))
+FILES_DIR = Path(os.getenv("FILES_DIR", str(BASE_DIR / "userfiles")))
 LOGS_DIR = Path(os.getenv("LOGS_DIR", str(BASE_DIR / "logs")))
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
@@ -27,5 +28,6 @@ ALLOWED_AUDIO_FORMATS = {".mp3", ".m4a", ".m4b", ".ogg", ".oga", ".opus", ".aac"
 MAX_BOOK_SIZE = 100 * 1024 * 1024            # 100 MB
 MAX_COVER_SIZE = 5 * 1024 * 1024             # 5 MB
 MAX_AUDIO_SIZE = 1024 * 1024 * 1024          # 1 GB на файл
+MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024        # 2 GB на файл (файловая шара)
 
 APP_TITLE = os.getenv("APP_TITLE", "WeBook")

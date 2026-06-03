@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block title %}Файлы — WeBook{% endblock %}
+{% block content %}
+
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+  <h2 class="mb-0"><i class="bi bi-folder2-open me-2"></i>Файлы</h2>
+  <div class="d-flex gap-2">
+    {% if not current %}
+    <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="collapse" data-bs-target="#newFolder">
+      <i class="bi bi-folder-plus me-1"></i>Папка
+    </button>
+    {% endif %}
+    <button class="btn btn-primary btn-sm" data-bs-toggle="collapse" data-bs-target="#uploadBox">
+      <i class="bi bi-cloud-upload me-1"></i>Загрузить
+    </button>
+  </div>
+</div>
+
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb mb-0">
+    <li class="breadcrumb-item"><a href="/files"><i class="bi bi-hdd me-1"></i>Все файлы</a></li>
+    {% if current %}<li class="breadcrumb-item active">{{ current.name }}</li>{% endif %}
+  </ol>
+</nav>
+
+{% if not current %}
+<div class="collapse mb-3" id="newFolder">
+  <form method="post" action="/files/folders" class="card card-body d-flex flex-row gap-2">
+    <input name="name" class="form-control" placeholder="Название папки" required>
+    <button class="btn btn-primary text-nowrap"><i class="bi bi-check-lg me-1"></i>Создать</button>
+  </form>
+</div>
+{% endif %}
+
+<div class="collapse mb-4" id="uploadBox">
+  <form method="post" action="/files/upload" enctype="multipart/form-data" class="card card-body">
+    {% if current %}<input type="hidden" name="folder_id" value="{{ current.id }}">{% endif %}
+    <input type="file" name="files" class="form-control mb-2" multiple required>
+    <div class="d-flex align-items-center gap-2">
+      <button class="btn btn-success"><i class="bi bi-upload me-1"></i>Загрузить</button>
+      <span class="text-muted small">До {{ max_mb }} МБ на файл{% if current %} · в папку «{{ current.name }}»{% endif %}</span>
+    </div>
+  </form>
+</div>
+
+{# ───────────────────── папки (только в корне) ───────────────────── #}
+{% if folders %}
+<div class="row g-3 mb-4">
+  {% for fol in folders %}
+  <div class="col-6 col-sm-4 col-md-3 col-lg-2">
+    <div class="card h-100">
+      <a href="/files?folder={{ fol.id }}" class="text-decoration-none text-body">
+        <div class="card-body text-center py-3">
+          <i class="bi bi-folder-fill text-warning" style="font-size:2.4rem"></i>
+          {% if fol.id in shared_folders %}<i class="bi bi-people-fill text-primary ms-1" title="В общем доступе"></i>{% endif %}
+          <div class="small fw-semibold text-truncate mt-1">{{ fol.name }}</div>
+          <div class="text-muted" style="font-size:.72rem">{{ folder_counts.get(fol.id, 0) }} файл(ов)</div>
+        </div>
+      </a>
+      <div class="card-footer p-1 d-flex justify-content-center gap-1">
+        <a href="/files/folders/{{ fol.id }}/share-user" class="btn btn-sm btn-outline-primary py-0" title="Поделиться с пользователем">
+          <i class="bi bi-person-plus"></i>
+        </a>
+        <button class="btn btn-sm btn-outline-secondary py-0" data-bs-toggle="collapse" data-bs-target="#ren{{ fol.id }}" title="Переименовать">
+          <i class="bi bi-pencil"></i>
+        </button>
+        <form method="post" action="/files/folders/{{ fol.id }}/delete"
+              onsubmit="return confirm('Удалить папку «{{ fol.name }}» и все файлы внутри?')">
+          <button class="btn btn-sm btn-outline-danger py-0" title="Удалить"><i class="bi bi-trash"></i></button>
+        </form>
+      </div>
+      <div class="collapse" id="ren{{ fol.id }}">
+        <form method="post" action="/files/folders/{{ fol.id }}/rename" class="p-2 d-flex gap-1">
+          <input name="name" class="form-control form-control-sm" value="{{ fol.name }}" required>
+          <button class="btn btn-sm btn-primary"><i class="bi bi-check-lg"></i></button>
+        </form>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{# ───────────────────── файлы ───────────────────── #}
+{% if items %}
+<div class="row g-3">
+  {% for f in items %}
+  <div class="col-6 col-sm-4 col-md-3 col-lg-2">
+    <div class="card h-100">
+      {% if f.is_image %}
+      <a href="/files/{{ f.id }}/view" target="_blank" rel="noopener">
+        <img src="/files/{{ f.id }}/view" class="card-img-top" alt="{{ f.original_name }}"
+             style="height:120px;object-fit:cover">
+      </a>
+      {% else %}
+      <a href="/files/{{ f.id }}/{{ 'view' if f.previewable else 'download' }}" target="_blank" rel="noopener"
+         class="d-flex align-items-center justify-content-center text-secondary" style="height:120px">
+        <i class="bi bi-{{ f.icon }}" style="font-size:2.6rem"></i>
+      </a>
+      {% endif %}
+
+      <div class="card-body p-2">
+        <div class="small fw-semibold text-truncate" title="{{ f.original_name }}">{{ f.original_name }}</div>
+        <div class="text-muted d-flex align-items-center gap-1" style="font-size:.72rem">
+          <span>{{ f.size_human }}</span>
+          {% if f.id in shared_files %}<i class="bi bi-globe text-success" title="Публичная ссылка активна"></i>{% endif %}
+        </div>
+      </div>
+
+      <div class="card-footer p-1 d-flex justify-content-between align-items-center">
+        <a href="/files/{{ f.id }}/download" class="btn btn-sm btn-outline-secondary py-0" title="Скачать">
+          <i class="bi bi-download"></i>
+        </a>
+        <div class="dropdown">
+          <button class="btn btn-sm btn-outline-secondary py-0" data-bs-toggle="dropdown" data-bs-auto-close="outside">
+            <i class="bi bi-three-dots"></i>
+          </button>
+          <ul class="dropdown-menu dropdown-menu-end p-2" style="min-width:240px">
+            {% if f.previewable %}
+            <li><a class="dropdown-item" href="/files/{{ f.id }}/view" target="_blank" rel="noopener">
+              <i class="bi bi-box-arrow-up-right me-2"></i>Открыть в браузере</a></li>
+            <li><hr class="dropdown-divider"></li>
+            {% endif %}
+
+            <li class="px-1">
+              <div class="small text-muted mb-1"><i class="bi bi-globe me-1"></i>Публичная ссылка</div>
+              {% if f.id in shared_files %}
+              <a href="/files/{{ f.id }}/link" target="_blank" rel="noopener" class="btn btn-sm btn-success w-100 mb-1">
+                <i class="bi bi-link-45deg me-1"></i>Открыть ссылку
+              </a>
+              <form method="post" action="/files/{{ f.id }}/unshare">
+                <button class="btn btn-sm btn-outline-danger w-100">Отозвать</button>
+              </form>
+              {% else %}
+              <form method="post" action="/files/{{ f.id }}/share" class="d-flex gap-1">
+                <select name="hours" class="form-select form-select-sm">
+                  {% for label, h in durations %}
+                  <option value="{{ h }}" {% if h == 168 %}selected{% endif %}>{{ label }}</option>
+                  {% endfor %}
+                </select>
+                <button class="btn btn-sm btn-primary text-nowrap">Создать</button>
+              </form>
+              {% endif %}
+            </li>
+
+            <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item" href="/files/{{ f.id }}/share-user">
+              <i class="bi bi-person-plus me-2"></i>Поделиться с пользователем</a></li>
+            <li>
+              <form method="post" action="/files/{{ f.id }}/delete"
+                    onsubmit="return confirm('Удалить файл «{{ f.original_name }}»?')">
+                <button class="dropdown-item text-danger"><i class="bi bi-trash me-2"></i>Удалить</button>
+              </form>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% elif not folders %}
+<div class="text-center text-muted py-5">
+  <i class="bi bi-folder2-open fs-1 d-block mb-2"></i>
+  Здесь пока пусто. Нажмите «Загрузить».
+</div>
+{% endif %}
+
+{% endblock %}

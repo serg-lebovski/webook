@@ -9,7 +9,8 @@ from app.dependencies import get_db
 from app.models.share import Share
 from app.models.book import Book
 from app.models.link import Link
-from app.config import BOOKS_DIR, COVERS_DIR
+from app.models.stored_file import StoredFile
+from app.config import BOOKS_DIR, COVERS_DIR, FILES_DIR
 from app.services.book_service import convert_fb2_to_html
 
 router = APIRouter(prefix="/share")
@@ -45,8 +46,36 @@ def shared_view(token: str, request: Request, db: Session = Depends(get_db)):
         return _shared_book(share, request, db)
     elif share.resource_type == "link":
         return _shared_link(share, request, db)
+    elif share.resource_type == "file":
+        return _shared_file(share, request, db)
 
     raise HTTPException(status_code=404, detail="Неизвестный тип ресурса")
+
+
+def _get_file_or_404(share: Share, db: Session) -> StoredFile:
+    if share.resource_type != "file":
+        raise HTTPException(status_code=404, detail="Неизвестный тип ресурса")
+    f = db.query(StoredFile).filter_by(id=share.resource_id).first()
+    if not f:
+        raise HTTPException(status_code=404, detail="Файл не найден")
+    return f
+
+
+def _shared_file(share: Share, request: Request, db: Session):
+    f = _get_file_or_404(share, db)
+    return templates.TemplateResponse("share/file.html", {
+        "request": request, "user": None, "file": f, "share": share,
+    })
+
+
+@router.get("/{token}/view")
+def shared_file_view(token: str, db: Session = Depends(get_db)):
+    share = _get_share_or_404(token, db)
+    f = _get_file_or_404(share, db)
+    path = FILES_DIR / f.stored_name
+    if not path.exists():
+        raise HTTPException(status_code=404)
+    return FileResponse(path, media_type=f.content_type or "application/octet-stream")
 
 
 @router.get("/{token}/cover")
@@ -64,6 +93,16 @@ def shared_book_cover(token: str, db: Session = Depends(get_db)):
 @router.get("/{token}/download")
 def shared_book_download(token: str, db: Session = Depends(get_db)):
     share = _get_share_or_404(token, db)
+    if share.resource_type == "file":
+        f = _get_file_or_404(share, db)
+        path = FILES_DIR / f.stored_name
+        if not path.exists():
+            raise HTTPException(status_code=404)
+        from urllib.parse import quote
+        return FileResponse(
+            path, media_type=f.content_type or "application/octet-stream",
+            headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(f.original_name)}"},
+        )
     book = _get_book_or_404(share, db)
     path = BOOKS_DIR / book.file_path
     if not path.exists():

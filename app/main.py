@@ -8,12 +8,12 @@ from fastapi.templating import Jinja2Templates
 from jose import JWTError, jwt
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.config import BOOKS_DIR, COVERS_DIR, LINKS_CONTENT_DIR, AUDIOBOOKS_DIR, WORKSPACE_DIR, LOGS_DIR, APP_TITLE, SECRET_KEY, ALGORITHM
+from app.config import BOOKS_DIR, COVERS_DIR, LINKS_CONTENT_DIR, AUDIOBOOKS_DIR, WORKSPACE_DIR, FILES_DIR, LOGS_DIR, APP_TITLE, SECRET_KEY, ALGORITHM
 from app.database import init_db
 from app.dependencies import get_current_user
 from app.logging_config import setup_logging, access_log, actions_log, error_log, db_log
 from app.services.security_service import client_ip
-from app.routers import auth, shelves, authors, series, books, opds, settings, links, admin, share, shared, dashboard, api, search, tags, highlights, feeds, pwa, audiobooks, tier_list, workspace
+from app.routers import auth, shelves, authors, series, books, opds, settings, links, admin, share, shared, dashboard, api, search, tags, highlights, feeds, pwa, audiobooks, tier_list, workspace, files
 
 app = FastAPI(title=APP_TITLE, docs_url=None, redoc_url=None)
 
@@ -79,6 +79,7 @@ app.include_router(pwa.router)
 app.include_router(audiobooks.router)
 app.include_router(tier_list.router)
 app.include_router(workspace.router)
+app.include_router(files.router)
 
 templates = Jinja2Templates(directory="app/templates")
 
@@ -90,6 +91,7 @@ def on_startup():
     LINKS_CONTENT_DIR.mkdir(parents=True, exist_ok=True)
     AUDIOBOOKS_DIR.mkdir(parents=True, exist_ok=True)
     WORKSPACE_DIR.mkdir(parents=True, exist_ok=True)
+    FILES_DIR.mkdir(parents=True, exist_ok=True)
     LOGS_DIR.mkdir(parents=True, exist_ok=True)
     setup_logging()
     init_db()

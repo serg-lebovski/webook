@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Публичная ссылка — WeBook{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-7">
+    <div class="card">
+      <div class="card-header fw-semibold"><i class="bi bi-globe me-1"></i>Публичная ссылка на файл</div>
+      <div class="card-body">
+        <div class="fw-semibold text-truncate mb-1"><i class="bi bi-{{ file.icon }} me-1"></i>{{ file.original_name }}</div>
+        <p class="text-muted small mb-3">
+          Действует до <span class="lt" data-iso="{{ share.expires_at.isoformat() }}Z">{{ share.expires_at.strftime('%d.%m.%Y %H:%M') }}</span>
+          · осталось <span class="cd fw-semibold" data-exp="{{ share.expires_at.isoformat() }}Z"></span>
+        </p>
+        <div class="input-group mb-2">
+          <input id="purl" class="form-control" readonly
+                 value="{{ request.base_url }}share/{{ share.token }}">
+          <button class="btn btn-primary" id="copyBtn"><i class="bi bi-clipboard me-1"></i>Копировать</button>
+        </div>
+        <a href="/share/{{ share.token }}" target="_blank" rel="noopener" class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-box-arrow-up-right me-1"></i>Открыть страницу
+        </a>
+      </div>
+    </div>
+    <a href="/files{% if file.folder_id %}?folder={{ file.folder_id }}{% endif %}" class="btn btn-outline-secondary mt-3">
+      <i class="bi bi-arrow-left me-1"></i>Назад к файлам
+    </a>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  document.getElementById('copyBtn').addEventListener('click', function () {
+    const inp = document.getElementById('purl');
+    inp.select();
+    navigator.clipboard.writeText(inp.value).then(() => {
+      this.innerHTML = '<i class="bi bi-check-lg me-1"></i>Скопировано';
+      setTimeout(() => { this.innerHTML = '<i class="bi bi-clipboard me-1"></i>Копировать'; }, 1500);
+    });
+  });
+  document.querySelectorAll('.lt').forEach(function (el) {
+    const d = new Date(el.dataset.iso);
+    if (!isNaN(d)) el.textContent = d.toLocaleString();
+  });
+  (function () {
+    const el = document.querySelector('.cd');
+    if (!el) return;
+    const exp = new Date(el.dataset.exp).getTime();
+    function tick() {
+      let s = Math.floor((exp - Date.now()) / 1000);
+      if (s <= 0) { el.textContent = 'истекло'; return; }
+      const d = Math.floor(s / 86400); s %= 86400;
+      const h = Math.floor(s / 3600); s %= 3600;
+      const m = Math.floor(s / 60);
+      el.textContent = (d ? d + ' д ' : '') + h + ' ч ' + m + ' мин';
+    }
+    tick(); setInterval(tick, 30000);
+  })();
+</script>
+{% endblock %}

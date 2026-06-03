@@ -424,4 +424,12 @@ def _purge_user_data(uid: int, db: Session):
     db.query(Note).filter_by(user_id=uid).delete(synchronize_session=False)
     db.query(TimeInterval).filter_by(user_id=uid).delete(synchronize_session=False)
 
+    # 11. файловая шара: файлы (+ файлы на диске) и папки
+    from app.models.stored_file import StoredFile, FileFolder
+    from app.config import FILES_DIR
+    for f in db.query(StoredFile).filter_by(user_id=uid).all():
+        (FILES_DIR / f.stored_name).unlink(missing_ok=True)
+        db.delete(f)
+    db.query(FileFolder).filter_by(user_id=uid).delete(synchronize_session=False)
+
     db.flush()

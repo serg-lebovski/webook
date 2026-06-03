@@ -14,7 +14,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-RUN mkdir -p books files links audiobooks workspace logs
+RUN mkdir -p books files links audiobooks workspace userfiles logs
 
 EXPOSE 8000
 

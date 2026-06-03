@@ -1,0 +1,50 @@
+{% extends "share/base.html" %}
+{% block title %}{{ file.original_name }} — WeBook{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-9">
+    <h4 class="mb-1 text-break"><i class="bi bi-{{ file.icon }} me-2"></i>{{ file.original_name }}</h4>
+    <p class="text-muted small mb-3">
+      {{ file.size_human }} · поделился пользователь WeBook ·
+      ссылка действует ещё <span class="cd fw-semibold" data-exp="{{ share.expires_at.isoformat() }}Z"></span>
+    </p>
+
+    <div class="mb-3 text-center">
+      {% if file.is_image %}
+      <img src="/share/{{ share.token }}/view" class="img-fluid rounded shadow-sm" alt="{{ file.original_name }}">
+      {% elif file.is_video %}
+      <video src="/share/{{ share.token }}/view" controls class="w-100 rounded shadow-sm" style="max-height:75vh"></video>
+      {% elif file.is_audio %}
+      <audio src="/share/{{ share.token }}/view" controls class="w-100"></audio>
+      {% elif file.is_pdf %}
+      <iframe src="/share/{{ share.token }}/view" class="w-100 rounded border" style="height:80vh"></iframe>
+      {% else %}
+      <div class="card card-body text-muted">
+        <i class="bi bi-{{ file.icon }} d-block mb-2" style="font-size:3rem"></i>
+        Предпросмотр недоступен — скачайте файл.
+      </div>
+      {% endif %}
+    </div>
+
+    <a href="/share/{{ share.token }}/download" class="btn btn-success">
+      <i class="bi bi-download me-1"></i>Скачать
+    </a>
+  </div>
+</div>
+<script>
+  (function () {
+    const el = document.querySelector('.cd');
+    if (!el) return;
+    const exp = new Date(el.dataset.exp).getTime();
+    function tick() {
+      let s = Math.floor((exp - Date.now()) / 1000);
+      if (s <= 0) { el.textContent = 'истекло'; return; }
+      const d = Math.floor(s / 86400); s %= 86400;
+      const h = Math.floor(s / 3600); s %= 3600;
+      const m = Math.floor(s / 60);
+      el.textContent = (d ? d + ' д ' : '') + h + ' ч ' + m + ' мин';
+    }
+    tick(); setInterval(tick, 30000);
+  })();
+</script>
+{% endblock %}
