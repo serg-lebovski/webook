@@ -1,0 +1,100 @@
+{% extends "workspace/base.html" %}
+{% block title %}Тайм-менеджер — WeBook{% endblock %}
+{% block ws %}
+<h4 class="mb-3"><i class="bi bi-stopwatch me-2"></i>Тайм-менеджер</h4>
+
+<div class="card card-body mb-4 text-center">
+  {% if running %}
+  <div class="text-muted small mb-1">{% if running.kind == 'rest' %}<i class="bi bi-cup-hot me-1"></i>Отдых{% else %}<i class="bi bi-briefcase me-1"></i>Работа{% endif %} идёт</div>
+  <div class="display-4 fw-bold" id="clock"
+       data-start="{{ running.started_at.isoformat() }}Z" data-target="{{ running.target_seconds or 0 }}">00:00</div>
+  <div class="d-flex gap-2 justify-content-center mt-3 flex-wrap">
+    <form method="post" action="/workspace/timer/mark" class="d-flex gap-1">
+      <input name="label" class="form-control form-control-sm" placeholder="что делал на этом отрезке" style="max-width:260px">
+      <button class="btn btn-outline-primary btn-sm" title="Закрыть отрезок и начать новый, не останавливая таймер">
+        <i class="bi bi-flag me-1"></i>Отметка
+      </button>
+    </form>
+    <form method="post" action="/workspace/timer/stop" class="d-flex gap-1">
+      <input name="label" class="form-control form-control-sm" placeholder="что делал" style="max-width:200px">
+      <button class="btn btn-danger btn-sm"><i class="bi bi-stop-fill me-1"></i>Стоп</button>
+    </form>
+  </div>
+  {% else %}
+  <div class="display-4 fw-bold text-muted">00:00</div>
+  <div class="d-flex gap-2 justify-content-center mt-3 flex-wrap">
+    <form method="post" action="/workspace/timer/start">
+      <input type="hidden" name="kind" value="work">
+      <button class="btn btn-primary"><i class="bi bi-play-fill me-1"></i>Старт (работа)</button>
+    </form>
+    <form method="post" action="/workspace/timer/start" class="d-flex gap-1">
+      <input type="hidden" name="kind" value="rest">
+      <input type="number" name="target_minutes" class="form-control form-control-sm" placeholder="мин" min="1" style="width:84px">
+      <button class="btn btn-outline-success"><i class="bi bi-cup-hot me-1"></i>Отдых (обратный таймер)</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+
+<h6 class="text-muted"><i class="bi bi-list-ul me-1"></i>Отрезки за последние 24 часа</h6>
+{% if intervals %}
+<div class="list-group">
+  {% for iv in intervals %}
+  <div class="list-group-item">
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+      <span class="badge {% if iv.kind == 'rest' %}bg-success{% else %}bg-primary{% endif %}">
+        {% if iv.kind == 'rest' %}отдых{% else %}работа{% endif %}
+      </span>
+      <span class="small text-muted">
+        {{ iv.started_at.strftime('%H:%M') }}–{% if iv.ended_at %}{{ iv.ended_at.strftime('%H:%M') }}{% else %}<span class="text-success">сейчас</span>{% endif %}
+      </span>
+      <span class="badge bg-light text-dark border">{{ (iv.duration_seconds // 60)|int }} мин {{ (iv.duration_seconds % 60)|int }} с</span>
+      <form method="post" action="/workspace/timer/{{ iv.id }}/label" class="d-flex gap-1 flex-grow-1" style="min-width:220px">
+        <input name="label" class="form-control form-control-sm" value="{{ iv.label }}" placeholder="что делал в это время">
+        <button class="btn btn-sm btn-outline-secondary" title="Сохранить подпись"><i class="bi bi-check-lg"></i></button>
+      </form>
+      <form method="post" action="/workspace/timer/{{ iv.id }}/delete">
+        <button class="btn btn-sm btn-outline-danger" title="Удалить"><i class="bi bi-trash"></i></button>
+      </form>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="text-muted small py-3">Пока нет отрезков. Нажмите «Старт».</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const clock = document.getElementById('clock');
+  if (!clock || !clock.dataset.start) return;
+  const start = new Date(clock.dataset.start).getTime();
+  const target = parseInt(clock.dataset.target || '0', 10);
+  function fmt(s) {
+    s = Math.max(0, Math.floor(s));
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+    const mm = h ? String(m).padStart(2, '0') : m;
+    return (h ? h + ':' : '') + mm + ':' + String(sec).padStart(2, '0');
+  }
+  let notified = false;
+  function tick() {
+    const elapsed = (Date.now() - start) / 1000;
+    if (target > 0) {
+      const left = target - elapsed;
+      clock.textContent = fmt(left > 0 ? left : 0);
+      if (left <= 0) {
+        clock.classList.add('text-danger');
+        if (!notified) { notified = true; if ('Notification' in window && Notification.permission === 'granted') new Notification('Отдых окончен'); }
+      }
+    } else {
+      clock.textContent = fmt(elapsed);
+    }
+  }
+  tick();
+  setInterval(tick, 1000);
+  if ('Notification' in window && Notification.permission === 'default' && target > 0) Notification.requestPermission();
+})();
+</script>
+{% endblock %}

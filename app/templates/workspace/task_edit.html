@@ -1,0 +1,62 @@
+{% extends "workspace/base.html" %}
+{% block title %}{{ task.title }} — Задача{% endblock %}
+{% block ws %}
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/workspace/tasks">Задачи</a></li>
+    <li class="breadcrumb-item active">Редактирование</li>
+  </ol>
+</nav>
+
+<form method="post" action="/workspace/tasks/{{ task.id }}" enctype="multipart/form-data" class="card card-body">
+  <div class="row g-3">
+    <div class="col-md-6">
+      <label class="form-label small">Название</label>
+      <input name="title" class="form-control" value="{{ task.title }}" required>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label small">Статус</label>
+      <select name="status" class="form-select">
+        <option value="todo" {% if task.status == 'todo' %}selected{% endif %}>К выполнению</option>
+        <option value="doing" {% if task.status == 'doing' %}selected{% endif %}>В работе</option>
+        <option value="done" {% if task.status == 'done' %}selected{% endif %}>Готово</option>
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label small">Срок выполнения</label>
+      <input type="datetime-local" name="due_at" class="form-control"
+             value="{{ task.due_at.strftime('%Y-%m-%dT%H:%M') if task.due_at else '' }}">
+    </div>
+    <div class="col-12">
+      <label class="form-label small">Описание</label>
+      <textarea name="content" class="form-control" rows="6">{{ task.content }}</textarea>
+    </div>
+    <div class="col-12">
+      <label class="form-label small">Добавить изображения</label>
+      <input type="file" name="images" class="form-control" multiple accept="image/*">
+    </div>
+  </div>
+  <div class="d-flex gap-2 mt-3">
+    <button class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Сохранить</button>
+    <a href="/workspace/tasks" class="btn btn-outline-secondary">Назад</a>
+  </div>
+</form>
+
+{% if task.images %}
+<div class="card card-body mt-3">
+  <div class="fw-semibold mb-2">Изображения</div>
+  <div class="d-flex gap-3 flex-wrap">
+    {% for im in task.images %}
+    <div class="text-center">
+      <a href="/workspace/image/{{ im.filename }}" target="_blank">
+        <img src="/workspace/image/{{ im.filename }}" style="height:120px;border-radius:6px" alt="">
+      </a>
+      <form method="post" action="/workspace/tasks/{{ task.id }}/images/{{ im.id }}/delete" class="mt-1">
+        <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+      </form>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+{% endblock %}

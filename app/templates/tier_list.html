@@ -3,21 +3,21 @@
 
 {% block head %}
 <style>
-  .tier-row { display:flex; align-items:stretch; margin-bottom:4px; }
-  .tier-label { width:56px; min-width:56px; display:flex; align-items:center; justify-content:center;
-                font-weight:700; font-size:1.5rem; color:#1a1a1a; border-radius:5px 0 0 5px; }
-  .tier-zone { flex:1; min-height:96px; display:flex; flex-wrap:wrap; gap:6px; padding:6px;
-               background:var(--bs-tertiary-bg); border-radius:0 5px 5px 0; align-content:flex-start; }
-  .tier-zone.pool { border-radius:6px; border:1px dashed var(--bs-border-color); min-height:110px; }
+  .tier-row { display:flex; align-items:stretch; margin-bottom:3px; }
+  .tier-label { width:42px; min-width:42px; display:flex; align-items:center; justify-content:center;
+                font-weight:700; font-size:1.15rem; color:#1a1a1a; border-radius:4px 0 0 4px; }
+  .tier-zone { flex:1; min-height:58px; display:flex; flex-wrap:wrap; gap:4px; padding:4px;
+               background:var(--bs-tertiary-bg); border-radius:0 4px 4px 0; align-content:flex-start; }
+  .tier-zone.pool { border-radius:5px; border:1px dashed var(--bs-border-color); min-height:72px; }
   .tier-zone.drag-over { outline:2px dashed var(--bs-primary); outline-offset:-2px; }
-  .tier-card { width:62px; cursor:grab; text-align:center; }
+  .tier-card { width:42px; cursor:grab; text-align:center; }
   .tier-card:active { cursor:grabbing; }
-  .tier-card img, .tier-card .ph { width:62px; height:93px; object-fit:cover; border-radius:4px;
-                                   box-shadow:0 1px 5px rgba(0,0,0,.25); display:block; }
+  .tier-card img, .tier-card .ph { width:42px; height:63px; object-fit:cover; border-radius:3px;
+                                   box-shadow:0 1px 4px rgba(0,0,0,.25); display:block; }
   .tier-card .ph { display:flex; align-items:center; justify-content:center;
-                   background:linear-gradient(135deg,#667eea,#764ba2); color:#fff; font-size:1.4rem; }
-  .tier-card-name { display:block; font-size:.6rem; line-height:1.1; margin-top:2px;
-                    max-height:2.3em; overflow:hidden; }
+                   background:linear-gradient(135deg,#667eea,#764ba2); color:#fff; font-size:1rem; }
+  .tier-card-name { display:block; font-size:.5rem; line-height:1.05; margin-top:1px;
+                    max-height:2.1em; overflow:hidden; }
 </style>
 {% endblock %}
 

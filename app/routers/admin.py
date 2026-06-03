@@ -413,4 +413,15 @@ def _purge_user_data(uid: int, db: Session):
     from app.models.series_tier import SeriesTier
     db.query(SeriesTier).filter_by(user_id=uid).delete(synchronize_session=False)
 
+    # 10. рабочее пространство: задачи (+ файлы картинок), заметки, тайм-отрезки
+    from app.models.workspace import Task, Note, TimeInterval
+    from app.services.book_service import delete_file as _del_ws
+    from app.config import WORKSPACE_DIR
+    for t in db.query(Task).filter_by(user_id=uid).all():
+        for img in t.images:
+            _del_ws(img.filename, WORKSPACE_DIR)
+        db.delete(t)
+    db.query(Note).filter_by(user_id=uid).delete(synchronize_session=False)
+    db.query(TimeInterval).filter_by(user_id=uid).delete(synchronize_session=False)
+
     db.flush()

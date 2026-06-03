@@ -29,6 +29,7 @@ services:
       - ./files:/app/files
       - ./links:/app/links
       - ./audiobooks:/app/audiobooks
+      - ./workspace:/app/workspace
       - ./logs:/app/logs
     env_file:
       - .env

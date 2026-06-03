@@ -1,0 +1,38 @@
+{% extends "workspace/base.html" %}
+{% block title %}Заметки — WeBook{% endblock %}
+{% block ws %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <h4 class="mb-0"><i class="bi bi-journal-text me-2"></i>Заметки</h4>
+  <div class="d-flex gap-2 flex-wrap">
+    <form method="post" action="/workspace/notes">
+      <button class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>Новая</button>
+    </form>
+    <form method="post" action="/workspace/notes/import" enctype="multipart/form-data" class="d-flex gap-1">
+      <input type="file" name="file" accept=".md,.markdown,.txt" class="form-control form-control-sm" required style="max-width:170px">
+      <button class="btn btn-outline-secondary btn-sm" title="Импорт .md"><i class="bi bi-upload"></i></button>
+    </form>
+  </div>
+</div>
+
+{% if notes %}
+<div class="row g-2">
+  {% for n in notes %}
+  <div class="col-md-6 col-lg-4">
+    <a href="/workspace/notes/{{ n.id }}" class="text-decoration-none">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="fw-semibold text-body text-truncate">{{ n.title }}</div>
+          <div class="small text-muted">обновлено {{ n.updated_at.strftime('%d.%m.%Y %H:%M') }}</div>
+          {% if n.remind_at %}
+          <div class="small text-warning mt-1"><i class="bi bi-bell me-1"></i>{{ n.remind_at.strftime('%d.%m.%Y %H:%M') }}</div>
+          {% endif %}
+        </div>
+      </div>
+    </a>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="text-center text-muted py-5"><i class="bi bi-journal-text fs-1 d-block mb-2"></i>Заметок пока нет.</div>
+{% endif %}
+{% endblock %}

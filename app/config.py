@@ -17,6 +17,7 @@ BOOKS_DIR = Path(os.getenv("BOOKS_DIR", str(BASE_DIR / "books")))
 COVERS_DIR = Path(os.getenv("COVERS_DIR", str(BASE_DIR / "files")))
 LINKS_CONTENT_DIR = Path(os.getenv("LINKS_DIR", str(BASE_DIR / "links")))
 AUDIOBOOKS_DIR = Path(os.getenv("AUDIOBOOKS_DIR", str(BASE_DIR / "audiobooks")))
+WORKSPACE_DIR = Path(os.getenv("WORKSPACE_DIR", str(BASE_DIR / "workspace")))
 LOGS_DIR = Path(os.getenv("LOGS_DIR", str(BASE_DIR / "logs")))
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
