@@ -1,13 +1,19 @@
 """Файловая шара: загрузка файлов, папки, просмотр медиа в браузере, общий доступ."""
 import mimetypes
+import os
+import re
+import tempfile
 import uuid
+import zipfile
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Optional
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Form, Request, UploadFile, File, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 from fastapi.templating import Jinja2Templates
+from starlette.background import BackgroundTask
 from sqlalchemy.orm import Session
 
 from app.dependencies import get_db, get_current_user
@@ -106,9 +112,14 @@ def files_index(
                 db.query(StoredFile).filter_by(user_id=user.id, folder_id=fol.id).count()
             )
 
+    all_folders = (
+        db.query(FileFolder).filter_by(user_id=user.id).order_by(FileFolder.name).all()
+    )
+
     return templates.TemplateResponse("files/list.html", {
         "request": request, "user": user,
         "current": current, "folders": folders, "items": items,
+        "all_folders": all_folders,
         "folder_counts": folder_counts,
         "shared_files": shared_files, "shared_folders": shared_folders,
         "public_tokens": public_tokens,
@@ -248,6 +259,73 @@ def delete_stored_file(file_id: int, user: User = Depends(get_current_user), db:
     db.commit()
     back = f"/files?folder={folder_id}" if folder_id else "/files"
     return RedirectResponse(back, status_code=302)
+
+
+@router.post("/{file_id}/rename")
+def rename_file(file_id: int, name: str = Form(...),
+                user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    f = _own_file(file_id, user, db)
+    new = Path(name.strip()).name
+    if new:
+        # сохраняем исходное расширение, если пользователь его не указал
+        if not Path(new).suffix and f.ext:
+            new = f"{new}.{f.ext}"
+        f.original_name = new[:255]
+        db.commit()
+    back = f"/files?folder={f.folder_id}" if f.folder_id else "/files"
+    return RedirectResponse(back, status_code=302)
+
+
+@router.post("/{file_id}/move")
+def move_file(file_id: int, target_folder: str = Form(""),
+              user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    f = _own_file(file_id, user, db)
+    src = f.folder_id
+    if target_folder.strip().isdigit():
+        f.folder_id = _own_folder(int(target_folder), user, db).id
+    else:
+        f.folder_id = None
+    db.commit()
+    back = f"/files?folder={src}" if src else "/files"
+    return RedirectResponse(back, status_code=302)
+
+
+def _zip_filename(name: str) -> str:
+    safe = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", name).strip() or "files"
+    return f"{safe}.zip"
+
+
+@router.get("/folders/{folder_id}/download-zip")
+def download_folder_zip(folder_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    fol = _own_folder(folder_id, user, db)
+    files = db.query(StoredFile).filter_by(user_id=user.id, folder_id=fol.id).all()
+    if not files:
+        raise HTTPException(status_code=404, detail="Папка пуста")
+    tmp = tempfile.NamedTemporaryFile(prefix="webook_files_", suffix=".zip", delete=False)
+    tmp.close()
+    used: dict = {}
+    with zipfile.ZipFile(tmp.name, "w") as zf:
+        for f in files:
+            path = FILES_DIR / f.stored_name
+            if not path.exists():
+                continue
+            arc = Path(f.original_name).name or f.stored_name
+            # развести одинаковые имена
+            if arc in used:
+                used[arc] += 1
+                stem, dot, ext = arc.partition(".")
+                arc = f"{stem}_{used[arc]}" + (dot + ext if dot else "")
+            else:
+                used[arc] = 0
+            # уже сжатые форматы кладём без повторного сжатия
+            ctype = (f.content_type or "")
+            compress = zipfile.ZIP_STORED if (f.previewable or "zip" in ctype or "compressed" in ctype) else zipfile.ZIP_DEFLATED
+            zf.write(path, arcname=arc, compress_type=compress)
+    return FileResponse(
+        tmp.name, media_type="application/zip", filename=_zip_filename(fol.name),
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(_zip_filename(fol.name))}"},
+        background=BackgroundTask(lambda: os.unlink(tmp.name)),
+    )
 
 
 # ─────────────────────────── публичный доступ (токен) ───────────────────────────
