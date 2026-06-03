@@ -57,7 +57,7 @@ def _download_filename(book: Book) -> str:
 
 
 def _user_books(db: Session, user: User):
-    return db.query(Book).filter(Book.user_id == user.id)
+    return db.query(Book).filter(Book.user_id == user.id, Book.deleted_at.is_(None))
 
 
 def _own_book(book_id: int, user: User, db: Session) -> Book:
@@ -577,19 +577,16 @@ def books_bulk(
                 if t.id not in have:
                     book.tags.append(t)
         elif action == "delete":
-            delete_file(book.file_path, BOOKS_DIR)
-            delete_file(book.cover_path, COVERS_DIR)
-            db.delete(book)
+            book.deleted_at = now
     db.commit()
     return RedirectResponse("/books", status_code=302)
 
 
 @router.post("/{book_id}/delete")
 def delete_book(book_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    from app.services.trash_service import trash_book
     book = _own_book(book_id, user, db)
-    delete_file(book.file_path, BOOKS_DIR)
-    delete_file(book.cover_path, COVERS_DIR)
-    db.delete(book)
+    trash_book(book, db)
     db.commit()
     return RedirectResponse("/books", status_code=302)
 

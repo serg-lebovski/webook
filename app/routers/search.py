@@ -35,7 +35,7 @@ def search(
             db.query(Book)
             .outerjoin(Author, Book.author_id == Author.id)
             .outerjoin(Series, Book.series_id == Series.id)
-            .filter(Book.user_id == user.id)
+            .filter(Book.user_id == user.id, Book.deleted_at.is_(None))
             .filter(
                 or_(
                     Book.title.ilike(pattern),
@@ -50,7 +50,7 @@ def search(
         for b in (
             db.query(Book)
             .join(Book.tags)
-            .filter(Book.user_id == user.id, Tag.name.ilike(pattern))
+            .filter(Book.user_id == user.id, Book.deleted_at.is_(None), Tag.name.ilike(pattern))
             .all()
         ):
             if b.id not in book_ids:
@@ -61,7 +61,7 @@ def search(
         # ── Статьи: заголовок, описание, URL, теги, полный текст ──────────
         link_q = (
             db.query(Link)
-            .filter(Link.user_id == user.id)
+            .filter(Link.user_id == user.id, Link.deleted_at.is_(None))
             .filter(
                 or_(
                     Link.title.ilike(pattern),
@@ -75,7 +75,7 @@ def search(
         for l in (
             db.query(Link)
             .join(Link.tags)
-            .filter(Link.user_id == user.id, Tag.name.ilike(pattern))
+            .filter(Link.user_id == user.id, Link.deleted_at.is_(None), Tag.name.ilike(pattern))
             .all()
         ):
             if l.id not in link_ids:
@@ -84,7 +84,7 @@ def search(
 
         # Полнотекстовый поиск по содержимому статей (хранится в файлах)
         ql = q.lower()
-        for l in db.query(Link).filter(Link.user_id == user.id).all():
+        for l in db.query(Link).filter(Link.user_id == user.id, Link.deleted_at.is_(None)).all():
             if l.id in link_ids:
                 continue
             content = l.content

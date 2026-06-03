@@ -33,6 +33,7 @@ class Link(Base):
     content_fetched_at = Column(DateTime, nullable=True)
     word_count = Column(Integer, default=0)
     read_progress = Column(Float, default=0.0)  # 0..1, прокрутка статьи
+    deleted_at = Column(DateTime, nullable=True)  # корзина (soft-delete)
 
     user = relationship("User")
     folder = relationship("LinkFolder", back_populates="links")

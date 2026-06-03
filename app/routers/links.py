@@ -46,7 +46,7 @@ def _get_folder_or_404(folder_id: int, user_id: int, db: Session) -> LinkFolder:
 
 
 def _get_link_or_404(link_id: int, user_id: int, db: Session) -> Link:
-    link = db.query(Link).filter_by(id=link_id, user_id=user_id).first()
+    link = db.query(Link).filter_by(id=link_id, user_id=user_id, deleted_at=None).first()
     if not link:
         raise HTTPException(status_code=404, detail="Ссылка не найдена")
     return link
@@ -76,7 +76,7 @@ def links_list(
 ):
     folders = db.query(LinkFolder).filter_by(user_id=user.id).order_by(LinkFolder.sort_order, LinkFolder.name).all()
 
-    q = db.query(Link).filter_by(user_id=user.id)
+    q = db.query(Link).filter_by(user_id=user.id, deleted_at=None)
     if folder_id:
         q = q.filter_by(folder_id=folder_id)
     if show == "unread":
@@ -163,8 +163,7 @@ def links_bulk(
                 if t.id not in have:
                     link.tags.append(t)
         elif action == "delete":
-            _delete_content(link.id)
-            db.delete(link)
+            link.deleted_at = datetime.utcnow()
     db.commit()
     return RedirectResponse("/links", status_code=302)
 
@@ -373,8 +372,7 @@ def delete_link(
 ):
     link = _get_link_or_404(link_id, user.id, db)
     folder_id = link.folder_id or 0
-    _delete_content(link.id)
-    db.delete(link)
+    link.deleted_at = datetime.utcnow()
     db.commit()
     return RedirectResponse(f"/links?folder_id={folder_id}", status_code=302)
 

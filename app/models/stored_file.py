@@ -35,6 +35,7 @@ class StoredFile(Base):
     size = Column(BigInteger, default=0)
     content_type = Column(String, default="application/octet-stream")
     created_at = Column(DateTime, default=datetime.utcnow)
+    deleted_at = Column(DateTime, nullable=True)  # корзина (soft-delete)
 
     folder = relationship("FileFolder", back_populates="files")
 

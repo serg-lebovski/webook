@@ -133,7 +133,7 @@ def opds_shelf_books(shelf_id: int, request: Request, user: User = Depends(opds_
     if not shelf:
         return _xml_response(_feed("Не найдено", "empty", request))
     feed = _feed(f"Полка: {shelf.name}", f"shelf:{shelf_id}", request)
-    books = db.query(Book).filter(Book.shelf_id == shelf_id, Book.user_id == user.id).order_by(Book.title).all()
+    books = db.query(Book).filter(Book.shelf_id == shelf_id, Book.user_id == user.id, Book.deleted_at.is_(None)).order_by(Book.title).all()
     for book in books:
         _book_entry(feed, book, str(request.base_url))
     return _xml_response(feed)
@@ -167,7 +167,7 @@ def opds_author_books(author_id: int, request: Request, user: User = Depends(opd
                    f"{len(series.books)} книг")
     standalone = (
         db.query(Book)
-        .filter(Book.author_id == author_id, Book.user_id == user.id, Book.series_id == None)  # noqa: E711
+        .filter(Book.author_id == author_id, Book.user_id == user.id, Book.deleted_at.is_(None), Book.series_id == None)  # noqa: E711
         .all()
     )
     for book in standalone:
@@ -181,7 +181,7 @@ def opds_series_books(series_id: int, request: Request, user: User = Depends(opd
     if not series:
         return _xml_response(_feed("Не найдено", "empty", request))
     feed = _feed(f"Цикл: {series.name}", f"series:{series_id}", request)
-    books = db.query(Book).filter(Book.series_id == series_id, Book.user_id == user.id).order_by(Book.series_order).all()
+    books = db.query(Book).filter(Book.series_id == series_id, Book.user_id == user.id, Book.deleted_at.is_(None)).order_by(Book.series_order).all()
     for book in books:
         _book_entry(feed, book, str(request.base_url))
     return _xml_response(feed)
@@ -190,7 +190,7 @@ def opds_series_books(series_id: int, request: Request, user: User = Depends(opd
 @router.get("/books")
 def opds_all_books(request: Request, user: User = Depends(opds_auth), db: Session = Depends(get_db)):
     feed = _feed("Все книги", "all-books", request)
-    books = db.query(Book).filter(Book.user_id == user.id).order_by(Book.title).all()
+    books = db.query(Book).filter(Book.user_id == user.id, Book.deleted_at.is_(None)).order_by(Book.title).all()
     for book in books:
         _book_entry(feed, book, str(request.base_url))
     return _xml_response(feed)
@@ -231,7 +231,7 @@ def opds_search(q: str = "", request: Request = None, user: User = Depends(opds_
     if q:
         books = (
             db.query(Book)
-            .filter(Book.user_id == user.id, Book.title.ilike(f"%{q}%"))
+            .filter(Book.user_id == user.id, Book.deleted_at.is_(None), Book.title.ilike(f"%{q}%"))
             .order_by(Book.title)
             .limit(50)
             .all()

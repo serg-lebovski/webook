@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Корзина — WeBook{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+  <h2 class="mb-0"><i class="bi bi-trash3 me-2"></i>Корзина</h2>
+  {% if not empty %}
+  <form method="post" action="/trash/empty" onsubmit="return confirm('Окончательно удалить всё из корзины? Действие необратимо.')">
+    <button class="btn btn-outline-danger btn-sm"><i class="bi bi-trash me-1"></i>Очистить корзину</button>
+  </form>
+  {% endif %}
+</div>
+
+<p class="text-muted small">Удалённое хранится {{ retention }} дней, затем удаляется автоматически. Восстановите нужное или удалите окончательно.</p>
+
+{% macro row(kind, id, icon, title, subtitle) %}
+<div class="list-group-item d-flex align-items-center gap-3 py-2">
+  <i class="bi bi-{{ icon }} fs-5 text-secondary"></i>
+  <div class="flex-grow-1 min-width-0">
+    <div class="fw-semibold text-truncate">{{ title }}</div>
+    {% if subtitle %}<div class="text-muted small text-truncate">{{ subtitle }}</div>{% endif %}
+  </div>
+  <form method="post" action="/trash/restore">
+    <input type="hidden" name="kind" value="{{ kind }}"><input type="hidden" name="item_id" value="{{ id }}">
+    <button class="btn btn-sm btn-outline-success" title="Восстановить"><i class="bi bi-arrow-counterclockwise"></i></button>
+  </form>
+  <form method="post" action="/trash/purge" onsubmit="return confirm('Удалить окончательно? Действие необратимо.')">
+    <input type="hidden" name="kind" value="{{ kind }}"><input type="hidden" name="item_id" value="{{ id }}">
+    <button class="btn btn-sm btn-outline-danger" title="Удалить навсегда"><i class="bi bi-x-lg"></i></button>
+  </form>
+</div>
+{% endmacro %}
+
+{% if empty %}
+<div class="text-center text-muted py-5">
+  <i class="bi bi-trash3 fs-1 d-block mb-2"></i>
+  Корзина пуста.
+</div>
+{% endif %}
+
+{% if books %}
+<h5 class="text-muted text-uppercase fw-semibold mb-2 small"><i class="bi bi-book me-1"></i>Книги</h5>
+<div class="list-group mb-4">
+  {% for b in books %}{{ row('book', b.id, 'book', b.title, b.author.name if b.author else '') }}{% endfor %}
+</div>
+{% endif %}
+
+{% if links %}
+<h5 class="text-muted text-uppercase fw-semibold mb-2 small"><i class="bi bi-bookmarks me-1"></i>Статьи</h5>
+<div class="list-group mb-4">
+  {% for l in links %}{{ row('link', l.id, 'bookmark', l.title, l.url) }}{% endfor %}
+</div>
+{% endif %}
+
+{% if files %}
+<h5 class="text-muted text-uppercase fw-semibold mb-2 small"><i class="bi bi-folder2-open me-1"></i>Файлы</h5>
+<div class="list-group mb-4">
+  {% for f in files %}{{ row('file', f.id, f.icon, f.original_name, f.size_human) }}{% endfor %}
+</div>
+{% endif %}
+{% endblock %}

@@ -49,7 +49,7 @@ def _expires_from(hours_raw: str) -> datetime:
 
 
 def _own_file(file_id: int, user: User, db: Session) -> StoredFile:
-    f = db.query(StoredFile).filter_by(id=file_id, user_id=user.id).first()
+    f = db.query(StoredFile).filter_by(id=file_id, user_id=user.id, deleted_at=None).first()
     if not f:
         raise HTTPException(status_code=404, detail="Файл не найден")
     return f
@@ -81,7 +81,7 @@ def files_index(
             .order_by(FileFolder.name)
             .all()
         )
-    q = db.query(StoredFile).filter(StoredFile.user_id == user.id)
+    q = db.query(StoredFile).filter(StoredFile.user_id == user.id, StoredFile.deleted_at.is_(None))
     q = q.filter(StoredFile.folder_id == (current.id if current else None))
     items = q.order_by(StoredFile.created_at.desc()).all()
 
@@ -109,7 +109,7 @@ def files_index(
     if folders:
         for fol in folders:
             folder_counts[fol.id] = (
-                db.query(StoredFile).filter_by(user_id=user.id, folder_id=fol.id).count()
+                db.query(StoredFile).filter_by(user_id=user.id, folder_id=fol.id, deleted_at=None).count()
             )
 
     all_folders = (
@@ -151,11 +151,13 @@ def rename_folder(folder_id: int, name: str = Form(...), user: User = Depends(ge
 @router.post("/folders/{folder_id}/delete")
 def delete_folder(folder_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     fol = _own_folder(folder_id, user, db)
-    files = db.query(StoredFile).filter_by(user_id=user.id, folder_id=fol.id).all()
+    now = datetime.utcnow()
+    files = db.query(StoredFile).filter_by(user_id=user.id, folder_id=fol.id, deleted_at=None).all()
     file_ids = [f.id for f in files]
+    # файлы — в корзину, отвязав от удаляемой папки
     for f in files:
-        (FILES_DIR / f.stored_name).unlink(missing_ok=True)
-        db.delete(f)
+        f.folder_id = None
+        f.deleted_at = now
     # снять связанные шары (на папку и на файлы внутри)
     if file_ids:
         db.query(Share).filter(
@@ -251,11 +253,11 @@ def download_file(file_id: int, user: User = Depends(get_current_user), db: Sess
 def delete_stored_file(file_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     f = _own_file(file_id, user, db)
     folder_id = f.folder_id
-    (FILES_DIR / f.stored_name).unlink(missing_ok=True)
+    # в корзину: снимаем активные шары, файл остаётся на диске до окончательного удаления
     db.query(Share).filter(
         Share.owner_id == user.id, Share.resource_type == "file", Share.resource_id == f.id,
     ).delete(synchronize_session=False)
-    db.delete(f)
+    f.deleted_at = datetime.utcnow()
     db.commit()
     back = f"/files?folder={folder_id}" if folder_id else "/files"
     return RedirectResponse(back, status_code=302)
@@ -298,7 +300,7 @@ def _zip_filename(name: str) -> str:
 @router.get("/folders/{folder_id}/download-zip")
 def download_folder_zip(folder_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     fol = _own_folder(folder_id, user, db)
-    files = db.query(StoredFile).filter_by(user_id=user.id, folder_id=fol.id).all()
+    files = db.query(StoredFile).filter_by(user_id=user.id, folder_id=fol.id, deleted_at=None).all()
     if not files:
         raise HTTPException(status_code=404, detail="Папка пуста")
     tmp = tempfile.NamedTemporaryFile(prefix="webook_files_", suffix=".zip", delete=False)

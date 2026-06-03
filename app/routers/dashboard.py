@@ -67,22 +67,22 @@ def _reading_stats(db: Session, user_id: int, goal: int) -> dict:
     year_start = datetime(now.year, 1, 1)
 
     books_year = db.query(Book).filter(
-        Book.user_id == user_id, Book.is_read == True, Book.read_at >= year_start,
+        Book.user_id == user_id, Book.deleted_at.is_(None), Book.is_read == True, Book.read_at >= year_start,
     ).count()
     links_year = db.query(Link).filter(
-        Link.user_id == user_id, Link.is_read == True, Link.read_at >= year_start,
+        Link.user_id == user_id, Link.deleted_at.is_(None), Link.is_read == True, Link.read_at >= year_start,
     ).count()
 
     # Собираем все даты с активностью чтения (книги + статьи) за последний год
     since = now - timedelta(days=400)
     days: set[date] = set()
     for (dt,) in db.query(Book.read_at).filter(
-        Book.user_id == user_id, Book.is_read == True, Book.read_at >= since,
+        Book.user_id == user_id, Book.deleted_at.is_(None), Book.is_read == True, Book.read_at >= since,
     ).all():
         if dt:
             days.add(dt.date())
     for (dt,) in db.query(Link.read_at).filter(
-        Link.user_id == user_id, Link.is_read == True, Link.read_at >= since,
+        Link.user_id == user_id, Link.deleted_at.is_(None), Link.is_read == True, Link.read_at >= since,
     ).all():
         if dt:
             days.add(dt.date())
@@ -124,6 +124,7 @@ def _month_history(db: Session, user_id: int) -> dict:
 
         b_count = db.query(Book).filter(
             Book.user_id == user_id,
+            Book.deleted_at.is_(None),
             Book.is_read == True,
             Book.read_at >= month_start,
             Book.read_at < month_end,
@@ -131,6 +132,7 @@ def _month_history(db: Session, user_id: int) -> dict:
 
         l_count = db.query(Link).filter(
             Link.user_id == user_id,
+            Link.deleted_at.is_(None),
             Link.is_read == True,
             Link.read_at >= month_start,
             Link.read_at < month_end,
@@ -149,11 +151,11 @@ def dashboard(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    books_total = db.query(Book).filter_by(user_id=user.id).count()
-    books_read  = db.query(Book).filter_by(user_id=user.id, is_read=True).count()
+    books_total = db.query(Book).filter_by(user_id=user.id, deleted_at=None).count()
+    books_read  = db.query(Book).filter_by(user_id=user.id, deleted_at=None, is_read=True).count()
 
-    links_total = db.query(Link).filter_by(user_id=user.id).count()
-    links_read  = db.query(Link).filter_by(user_id=user.id, is_read=True).count()
+    links_total = db.query(Link).filter_by(user_id=user.id, deleted_at=None).count()
+    links_read  = db.query(Link).filter_by(user_id=user.id, deleted_at=None, is_read=True).count()
 
     history = _month_history(db, user.id)
     expiring_shares = _expiring_shares(db, user.id)
