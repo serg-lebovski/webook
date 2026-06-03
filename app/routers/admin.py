@@ -147,6 +147,8 @@ def admin_page(
     _require_admin(user)
     users = db.query(User).order_by(User.created_at).all()
     allow_registration = get_setting(db, "allow_registration", "false") == "true"
+    from app.services.settings_service import get_max_file_mb
+    max_file_mb = get_max_file_mb(db)
     system = _get_system_info()
     bans = (
         db.query(IpBan)
@@ -159,6 +161,7 @@ def admin_page(
         "user": user,
         "users": users,
         "allow_registration": allow_registration,
+        "max_file_mb": max_file_mb,
         "success": success,
         "error": None,
         "system": system,
@@ -170,12 +173,19 @@ def admin_page(
 def update_admin_settings(
     request: Request,
     allow_registration: str = Form("off"),
+    max_file_mb: str = Form(""),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     _require_admin(user)
     value = "true" if allow_registration == "on" else "false"
     set_setting(db, "allow_registration", value)
+    try:
+        mb = int(max_file_mb)
+        if mb > 0:
+            set_setting(db, "max_file_mb", str(mb))
+    except (TypeError, ValueError):
+        pass
     return RedirectResponse("/admin?success=settings", status_code=302)
 
 

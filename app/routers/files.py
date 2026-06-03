@@ -14,7 +14,8 @@ from app.dependencies import get_db, get_current_user
 from app.models.user import User
 from app.models.stored_file import StoredFile, FileFolder
 from app.models.share import Share
-from app.config import FILES_DIR, MAX_FILE_SIZE
+from app.services.settings_service import get_max_file_bytes
+from app.config import FILES_DIR
 
 router = APIRouter(prefix="/files")
 templates = Jinja2Templates(directory="app/templates")
@@ -106,7 +107,7 @@ def files_index(
         "folder_counts": folder_counts,
         "shared_files": shared_files, "shared_folders": shared_folders,
         "durations": SHARE_DURATIONS,
-        "max_mb": MAX_FILE_SIZE // (1024 * 1024),
+        "max_mb": get_max_file_bytes(db) // (1024 * 1024),
     })
 
 
@@ -167,6 +168,7 @@ async def upload_files(
     if folder_id.strip().isdigit():
         target_folder = _own_folder(int(folder_id), user, db)
 
+    max_bytes = get_max_file_bytes(db)
     for f in files or []:
         if not f or not f.filename:
             continue
@@ -182,7 +184,7 @@ async def upload_files(
                 if not chunk:
                     break
                 size += len(chunk)
-                if size > MAX_FILE_SIZE:
+                if size > max_bytes:
                     too_big = True
                     break
                 out.write(chunk)
