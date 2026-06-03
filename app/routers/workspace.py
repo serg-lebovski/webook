@@ -18,6 +18,15 @@ router = APIRouter(prefix="/workspace")
 templates = Jinja2Templates(directory="app/templates")
 
 
+def _fmt_dur(secs) -> str:
+    secs = int(secs or 0)
+    h, m = divmod(secs // 60, 60)
+    return f"{h} ч {m} мин" if h else f"{m} мин"
+
+
+templates.env.filters["dur"] = _fmt_dur
+
+
 def _parse_dt(s: str):
     s = (s or "").strip()
     if not s:
@@ -70,6 +79,18 @@ def tasks_page(request: Request, user: User = Depends(get_current_user), db: Ses
     return templates.TemplateResponse("workspace/tasks.html", {
         "request": request, "user": user, "active": "tasks", "tasks": tasks,
         "now": datetime.utcnow(),
+    })
+
+
+@router.get("/board", response_class=HTMLResponse)
+def board_page(request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    tasks = db.query(Task).filter(Task.user_id == user.id).all()
+    columns = {"todo": [], "doing": [], "done": []}
+    for t in sorted(tasks, key=lambda t: (t.due_at or datetime.max, -t.id)):
+        columns.get(t.status, columns["todo"]).append(t)
+    return templates.TemplateResponse("workspace/board.html", {
+        "request": request, "user": user, "active": "board",
+        "columns": columns, "now": datetime.utcnow(),
     })
 
 
@@ -353,3 +374,70 @@ def timer_delete(interval_id: int, user: User = Depends(get_current_user), db: S
         db.delete(iv)
         db.commit()
     return RedirectResponse("/workspace/timer", status_code=302)
+
+
+@router.post("/timer/pomodoro")
+def log_pomodoro(minutes: str = Form("25"), label: str = Form(""),
+                 user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Записывает завершённый помодоро как закрытый отрезок (для отчёта)."""
+    from datetime import timedelta
+    try:
+        mins = max(1, min(180, int(float(minutes))))
+    except ValueError:
+        mins = 25
+    now = datetime.utcnow()
+    db.add(TimeInterval(
+        user_id=user.id, started_at=now - timedelta(minutes=mins), ended_at=now,
+        label=(label.strip() or "🍅 Помодоро"), kind="work",
+    ))
+    db.commit()
+    return JSONResponse({"ok": True})
+
+
+# ─────────────────────────── Отчёт за неделю ───────────────────────────
+
+_WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
+
+
+@router.get("/report", response_class=HTMLResponse)
+def report_page(request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    from datetime import timedelta
+    now = datetime.utcnow()
+    since = (now - timedelta(days=6)).replace(hour=0, minute=0, second=0, microsecond=0)
+    intervals = (
+        db.query(TimeInterval)
+        .filter(TimeInterval.user_id == user.id, TimeInterval.started_at >= since)
+        .all()
+    )
+    # по дням (последние 7) и по подписям
+    day_secs = {}
+    for i in range(7):
+        d = (since + timedelta(days=i)).date()
+        day_secs[d] = 0.0
+    label_secs = {}
+    total = 0.0
+    for iv in intervals:
+        secs = iv.duration_seconds
+        total += secs
+        d = iv.started_at.date()
+        if d in day_secs:
+            day_secs[d] += secs
+        key = (iv.label or "").strip() or "Без подписи"
+        label_secs[key] = label_secs.get(key, 0.0) + secs
+
+    days = [{
+        "date": d, "weekday": _WEEKDAYS[d.weekday()],
+        "label": d.strftime("%d.%m"), "secs": s,
+    } for d, s in sorted(day_secs.items())]
+    max_day = max((d["secs"] for d in days), default=0) or 1
+    for d in days:
+        d["pct"] = round(d["secs"] / max_day * 100)
+
+    labels = sorted(
+        [{"label": k, "secs": v} for k, v in label_secs.items()],
+        key=lambda x: x["secs"], reverse=True,
+    )[:12]
+    return templates.TemplateResponse("workspace/report.html", {
+        "request": request, "user": user, "active": "report",
+        "days": days, "labels": labels, "total": total,
+    })

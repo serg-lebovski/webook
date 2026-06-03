@@ -1,0 +1,38 @@
+{% extends "workspace/base.html" %}
+{% block title %}Отчёт за неделю — WeBook{% endblock %}
+{% block ws %}
+<h4 class="mb-3"><i class="bi bi-bar-chart me-2"></i>Отчёт за неделю</h4>
+
+<div class="card card-body mb-4">
+  <div class="text-muted small">Всего за 7 дней</div>
+  <div class="display-6 fw-bold">{{ total|dur }}</div>
+</div>
+
+<h6 class="text-muted text-uppercase small fw-semibold mb-2">По дням</h6>
+<div class="card card-body mb-4">
+  {% for d in days %}
+  <div class="d-flex align-items-center gap-2 mb-2">
+    <div class="text-muted small text-nowrap" style="width:74px">{{ d.weekday }} {{ d.label }}</div>
+    <div class="flex-grow-1">
+      <div class="progress" style="height:18px">
+        <div class="progress-bar" style="width:{{ d.pct }}%">{% if d.secs %}{{ d.secs|dur }}{% endif %}</div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<h6 class="text-muted text-uppercase small fw-semibold mb-2">По задачам</h6>
+{% if labels %}
+<div class="list-group">
+  {% for l in labels %}
+  <div class="list-group-item d-flex justify-content-between align-items-center py-2">
+    <span class="text-truncate">{{ l.label }}</span>
+    <span class="badge bg-primary rounded-pill">{{ l.secs|dur }}</span>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="text-muted small py-3">Пока нет данных. Засекайте время в тайм-менеджере или завершайте помодоро.</div>
+{% endif %}
+{% endblock %}
