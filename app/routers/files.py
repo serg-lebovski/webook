@@ -90,7 +90,12 @@ def files_index(
         )
         .all()
     )
-    shared_files = {s.resource_id for s in shares if s.resource_type == "file"}
+    # публичная ссылка активна (is_public) → отметка + токен для копирования
+    public_tokens = {
+        s.resource_id: s.token
+        for s in shares if s.resource_type == "file" and s.is_public
+    }
+    shared_files = set(public_tokens.keys())
     shared_folders = {s.resource_id for s in shares if s.resource_type == "file_folder"}
 
     # счётчики файлов в папках (для корневого вида)
@@ -106,6 +111,7 @@ def files_index(
         "current": current, "folders": folders, "items": items,
         "folder_counts": folder_counts,
         "shared_files": shared_files, "shared_folders": shared_folders,
+        "public_tokens": public_tokens,
         "durations": SHARE_DURATIONS,
         "max_mb": get_max_file_bytes(db) // (1024 * 1024),
     })
