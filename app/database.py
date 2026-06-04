@@ -44,6 +44,9 @@ def _migrate_db():
             "ALTER TABLE books ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP",
             "ALTER TABLE links ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP",
             "ALTER TABLE stored_files ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_chat_id VARCHAR",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_link_code VARCHAR",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS tg_last_check TIMESTAMP",
         ]
         backfill_expires = (
             "UPDATE shares SET expires_at = created_at + INTERVAL '7 days' WHERE expires_at IS NULL"
@@ -65,6 +68,9 @@ def _migrate_db():
             "ALTER TABLE books ADD COLUMN deleted_at DATETIME",
             "ALTER TABLE links ADD COLUMN deleted_at DATETIME",
             "ALTER TABLE stored_files ADD COLUMN deleted_at DATETIME",
+            "ALTER TABLE users ADD COLUMN telegram_chat_id VARCHAR",
+            "ALTER TABLE users ADD COLUMN telegram_link_code VARCHAR",
+            "ALTER TABLE users ADD COLUMN tg_last_check DATETIME",
         ]
         backfill_expires = (
             "UPDATE shares SET expires_at = datetime(created_at, '+7 days') WHERE expires_at IS NULL"

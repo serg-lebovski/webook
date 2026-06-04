@@ -149,6 +149,7 @@ def admin_page(
     allow_registration = get_setting(db, "allow_registration", "false") == "true"
     from app.services.settings_service import get_max_file_mb
     max_file_mb = get_max_file_mb(db)
+    telegram_bot_token = get_setting(db, "telegram_bot_token", "")
     system = _get_system_info()
     bans = (
         db.query(IpBan)
@@ -162,6 +163,7 @@ def admin_page(
         "users": users,
         "allow_registration": allow_registration,
         "max_file_mb": max_file_mb,
+        "telegram_bot_token": telegram_bot_token,
         "success": success,
         "error": None,
         "system": system,
@@ -174,6 +176,7 @@ def update_admin_settings(
     request: Request,
     allow_registration: str = Form("off"),
     max_file_mb: str = Form(""),
+    telegram_bot_token: str = Form(""),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -186,6 +189,7 @@ def update_admin_settings(
             set_setting(db, "max_file_mb", str(mb))
     except (TypeError, ValueError):
         pass
+    set_setting(db, "telegram_bot_token", telegram_bot_token.strip())
     return RedirectResponse("/admin?success=settings", status_code=302)
 
 

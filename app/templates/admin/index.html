@@ -71,6 +71,17 @@
               Максимальный размер одного файла в разделе «Файлы». Сейчас: {{ max_file_mb }} МБ.
             </div>
           </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold" for="telegram_bot_token">
+              <i class="bi bi-telegram me-1"></i>Токен Telegram-бота
+            </label>
+            <input type="text" class="form-control form-control-sm" name="telegram_bot_token" id="telegram_bot_token"
+                   value="{{ telegram_bot_token }}" placeholder="123456:ABC-DEF… (от @BotFather)" autocomplete="off">
+            <div class="form-text">
+              Создайте бота через @BotFather и вставьте токен. Пользователи смогут подключить
+              уведомления в своих настройках. Пусто — уведомления отключены.
+            </div>
+          </div>
           <button type="submit" class="btn btn-primary btn-sm">
             <i class="bi bi-floppy me-1"></i>Сохранить
           </button>
