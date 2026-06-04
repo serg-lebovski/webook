@@ -28,21 +28,35 @@ router = APIRouter(prefix="/settings")
 templates = Jinja2Templates(directory="app/templates")
 
 
-def _get_stats(db: Session) -> dict:
-    books_count = db.query(Book).count()
-    authors_count = db.query(Author).count()
-    shelves_count = db.query(Shelf).count()
-    series_count = db.query(Series).count()
+def _get_stats(db: Session, user: User) -> dict:
+    """Статистика и занятое место по всему контенту пользователя (счёт из БД)."""
+    from sqlalchemy import func
+    from app.models.audiobook import Audiobook, AudiobookTrack
+    from app.models.stored_file import StoredFile
 
-    storage_bytes = sum(
-        f.stat().st_size for f in BOOKS_DIR.iterdir() if f.is_file()
-    ) if BOOKS_DIR.exists() else 0
+    uid = user.id
+
+    def _sum(col, *filters):
+        return int(db.query(func.coalesce(func.sum(col), 0)).filter(*filters).scalar() or 0)
+
+    books_count = db.query(Book).filter_by(user_id=uid, deleted_at=None).count()
+    articles_count = db.query(Link).filter_by(user_id=uid, deleted_at=None).count()
+    audiobooks_count = db.query(Audiobook).filter_by(user_id=uid).count()
+    files_count = db.query(StoredFile).filter_by(user_id=uid, deleted_at=None).count()
+    shelves_count = db.query(Shelf).filter_by(user_id=uid).count()
+
+    books_bytes = _sum(Book.file_size, Book.user_id == uid, Book.deleted_at.is_(None))
+    audio_bytes = _sum(AudiobookTrack.file_size,
+                       AudiobookTrack.audiobook_id == Audiobook.id, Audiobook.user_id == uid)
+    files_bytes = _sum(StoredFile.size, StoredFile.user_id == uid, StoredFile.deleted_at.is_(None))
+    storage_bytes = books_bytes + audio_bytes + files_bytes
 
     return {
         "books": books_count,
-        "authors": authors_count,
+        "articles": articles_count,
+        "audiobooks": audiobooks_count,
+        "files": files_count,
         "shelves": shelves_count,
-        "series": series_count,
         "storage_mb": round(storage_bytes / 1024 / 1024, 1),
     }
 
@@ -54,7 +68,7 @@ def settings_page(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    stats = _get_stats(db)
+    stats = _get_stats(db, user)
     from app.services import telegram_service
     return templates.TemplateResponse("settings.html", {
         "request": request,
@@ -122,15 +136,18 @@ def update_profile(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    stats = _get_stats(db)
+    stats = _get_stats(db, user)
 
     def error(msg):
+        from app.services import telegram_service
         return templates.TemplateResponse("settings.html", {
             "request": request,
             "user": user,
             "stats": stats,
             "success": "",
             "error": msg,
+            "tg_configured": telegram_service.is_configured(db),
+            "tg_code": "",
         }, status_code=400)
 
     # Проверяем текущий пароль
@@ -278,9 +295,11 @@ async def restore(
     finally:
         if os.path.exists(tmp_path):
             os.unlink(tmp_path)
+    from app.services import telegram_service
     return templates.TemplateResponse("settings.html", {
-        "request": request, "user": user, "stats": _get_stats(db),
+        "request": request, "user": user, "stats": _get_stats(db, user),
         "success": "", "error": error, "restore_result": result,
+        "tg_configured": telegram_service.is_configured(db), "tg_code": "",
     })
 
 

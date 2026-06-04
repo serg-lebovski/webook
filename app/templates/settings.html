@@ -141,23 +141,27 @@
       <div class="card-body p-0">
         <ul class="list-group list-group-flush">
           <li class="list-group-item d-flex justify-content-between align-items-center">
-            <span><i class="bi bi-bookshelf me-2 text-secondary"></i>Полок</span>
-            <span class="badge bg-primary rounded-pill">{{ stats.shelves }}</span>
-          </li>
-          <li class="list-group-item d-flex justify-content-between align-items-center">
-            <span><i class="bi bi-people me-2 text-secondary"></i>Авторов</span>
-            <span class="badge bg-primary rounded-pill">{{ stats.authors }}</span>
-          </li>
-          <li class="list-group-item d-flex justify-content-between align-items-center">
-            <span><i class="bi bi-collection me-2 text-secondary"></i>Циклов</span>
-            <span class="badge bg-primary rounded-pill">{{ stats.series }}</span>
-          </li>
-          <li class="list-group-item d-flex justify-content-between align-items-center">
             <span><i class="bi bi-journals me-2 text-secondary"></i>Книг</span>
             <span class="badge bg-primary rounded-pill">{{ stats.books }}</span>
           </li>
           <li class="list-group-item d-flex justify-content-between align-items-center">
-            <span><i class="bi bi-hdd me-2 text-secondary"></i>Занято на диске</span>
+            <span><i class="bi bi-headphones me-2 text-secondary"></i>Аудиокниг</span>
+            <span class="badge bg-primary rounded-pill">{{ stats.audiobooks }}</span>
+          </li>
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-bookmarks me-2 text-secondary"></i>Статей</span>
+            <span class="badge bg-primary rounded-pill">{{ stats.articles }}</span>
+          </li>
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-folder2-open me-2 text-secondary"></i>Файлов</span>
+            <span class="badge bg-primary rounded-pill">{{ stats.files }}</span>
+          </li>
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-bookshelf me-2 text-secondary"></i>Полок</span>
+            <span class="badge bg-primary rounded-pill">{{ stats.shelves }}</span>
+          </li>
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-hdd me-2 text-secondary"></i>Занято контентом</span>
             <span class="text-muted">{{ stats.storage_mb }} МБ</span>
           </li>
         </ul>

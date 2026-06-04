@@ -19,6 +19,18 @@ from app.config import LOGS_DIR
 router = APIRouter(prefix="/admin")
 templates = Jinja2Templates(directory="app/templates")
 
+
+def _humanbytes(n) -> str:
+    n = float(n or 0)
+    for unit in ("Б", "КБ", "МБ", "ГБ", "ТБ"):
+        if n < 1024 or unit == "ТБ":
+            return f"{n:.0f} {unit}" if unit in ("Б", "КБ") else f"{n:.1f} {unit}"
+        n /= 1024
+    return f"{n:.1f} ТБ"
+
+
+templates.env.filters["humanbytes"] = _humanbytes
+
 LOG_VIEW_FILES = {
     "errors": "errors.log",
     "db": "db.log",
@@ -29,7 +41,8 @@ LOG_VIEW_FILES = {
 
 
 def _get_system_info() -> dict:
-    from app.config import DATABASE_URL, BOOKS_DIR, COVERS_DIR, LINKS_CONTENT_DIR
+    from app.config import (DATABASE_URL, BOOKS_DIR, COVERS_DIR, LINKS_CONTENT_DIR,
+                            AUDIOBOOKS_DIR, FILES_DIR, WORKSPACE_DIR)
 
     db_type = "PostgreSQL" if DATABASE_URL.startswith("postgresql") else "SQLite"
 
@@ -57,6 +70,11 @@ def _get_system_info() -> dict:
     books_bytes = dir_size_bytes(BOOKS_DIR)
     covers_bytes = dir_size_bytes(COVERS_DIR)
     links_bytes = dir_size_bytes(LINKS_CONTENT_DIR)
+    audiobooks_bytes = dir_size_bytes(AUDIOBOOKS_DIR)
+    files_bytes = dir_size_bytes(FILES_DIR)
+    workspace_bytes = dir_size_bytes(WORKSPACE_DIR)
+    content_bytes = (books_bytes + covers_bytes + links_bytes
+                     + audiobooks_bytes + files_bytes + workspace_bytes)
 
     try:
         check_path = BOOKS_DIR if BOOKS_DIR.exists() else BOOKS_DIR.parent
@@ -73,9 +91,16 @@ def _get_system_info() -> dict:
         "books_dir": str(BOOKS_DIR),
         "covers_dir": str(COVERS_DIR),
         "links_dir": str(LINKS_CONTENT_DIR),
+        "audiobooks_dir": str(AUDIOBOOKS_DIR),
+        "files_dir": str(FILES_DIR),
+        "workspace_dir": str(WORKSPACE_DIR),
         "books_bytes": books_bytes,
         "covers_bytes": covers_bytes,
         "links_bytes": links_bytes,
+        "audiobooks_bytes": audiobooks_bytes,
+        "files_bytes": files_bytes,
+        "workspace_bytes": workspace_bytes,
+        "content_bytes": content_bytes,
         "disk_total": disk.total,
         "disk_used": disk.used,
         "disk_free": disk.free,
