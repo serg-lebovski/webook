@@ -72,6 +72,17 @@
             </div>
           </div>
           <div class="mb-3">
+            <label class="form-label small fw-semibold" for="user_quota_mb">
+              <i class="bi bi-hdd me-1"></i>Квота на пользователя (МБ)
+            </label>
+            <input type="number" min="0" step="1" class="form-control form-control-sm" style="max-width:160px"
+                   name="user_quota_mb" id="user_quota_mb" value="{{ user_quota_mb }}">
+            <div class="form-text">
+              Суммарный лимит файловой шары на пользователя. 0 — без ограничений
+              (сейчас: {% if user_quota_mb %}{{ user_quota_mb }} МБ{% else %}без ограничений{% endif %}).
+            </div>
+          </div>
+          <div class="mb-3">
             <label class="form-label small fw-semibold" for="telegram_bot_token">
               <i class="bi bi-telegram me-1"></i>Токен Telegram-бота
             </label>

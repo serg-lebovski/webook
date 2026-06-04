@@ -16,12 +16,27 @@
   </div>
 </div>
 
-<nav aria-label="breadcrumb" class="mb-3">
+<nav aria-label="breadcrumb" class="mb-2">
   <ol class="breadcrumb mb-0">
     <li class="breadcrumb-item"><a href="/files"><i class="bi bi-hdd me-1"></i>Все файлы</a></li>
     {% if current %}<li class="breadcrumb-item active">{{ current.name }}</li>{% endif %}
   </ol>
 </nav>
+
+<div class="mb-3" style="max-width:420px">
+  {% if quota %}
+  <div class="d-flex justify-content-between small text-muted">
+    <span><i class="bi bi-hdd me-1"></i>{{ used|filesize }} из {{ quota|filesize }}</span>
+    <span>{{ quota_pct }}%</span>
+  </div>
+  <div class="progress" style="height:6px">
+    <div class="progress-bar {% if quota_pct >= 90 %}bg-danger{% elif quota_pct >= 70 %}bg-warning{% endif %}"
+         style="width:{{ [quota_pct, 100]|min }}%"></div>
+  </div>
+  {% else %}
+  <div class="small text-muted"><i class="bi bi-hdd me-1"></i>Занято: {{ used|filesize }}</div>
+  {% endif %}
+</div>
 
 {% if not current %}
 <div class="collapse mb-3" id="newFolder">

@@ -20,11 +20,25 @@ from app.dependencies import get_db, get_current_user
 from app.models.user import User
 from app.models.stored_file import StoredFile, FileFolder
 from app.models.share import Share
-from app.services.settings_service import get_max_file_bytes
+from app.services.settings_service import (
+    get_max_file_bytes, get_user_quota_bytes, user_files_usage,
+)
 from app.config import FILES_DIR
 
 router = APIRouter(prefix="/files")
 templates = Jinja2Templates(directory="app/templates")
+
+
+def _filesize(n) -> str:
+    n = float(n or 0)
+    for unit in ("Б", "КБ", "МБ", "ГБ", "ТБ"):
+        if n < 1024 or unit == "ТБ":
+            return f"{n:.0f} {unit}" if unit == "Б" else f"{n:.1f} {unit}"
+        n /= 1024
+    return f"{n:.1f} ТБ"
+
+
+templates.env.filters["filesize"] = _filesize
 
 # Пресеты длительности доступа: подпись -> часы
 SHARE_DURATIONS = [
@@ -121,6 +135,10 @@ def files_index(
         db.query(FileFolder).filter_by(user_id=user.id).order_by(FileFolder.name).all()
     )
 
+    quota = get_user_quota_bytes(db)
+    used = user_files_usage(db, user.id)
+    quota_pct = round(used / quota * 100) if quota else 0
+
     return templates.TemplateResponse("files/list.html", {
         "request": request, "user": user,
         "current": current, "folders": folders, "items": items,
@@ -130,6 +148,7 @@ def files_index(
         "public_tokens": public_tokens, "public_folder_tokens": public_folder_tokens,
         "durations": SHARE_DURATIONS,
         "max_mb": get_max_file_bytes(db) // (1024 * 1024),
+        "quota": quota, "used": used, "quota_pct": quota_pct,
     })
 
 
@@ -193,6 +212,8 @@ async def upload_files(
         target_folder = _own_folder(int(folder_id), user, db)
 
     max_bytes = get_max_file_bytes(db)
+    quota = get_user_quota_bytes(db)
+    used = user_files_usage(db, user.id) if quota else 0
     for f in files or []:
         if not f or not f.filename:
             continue
@@ -208,13 +229,15 @@ async def upload_files(
                 if not chunk:
                     break
                 size += len(chunk)
-                if size > max_bytes:
+                # лимит на файл или превышение квоты пользователя
+                if size > max_bytes or (quota and used + size > quota):
                     too_big = True
                     break
                 out.write(chunk)
         if too_big:
             dest.unlink(missing_ok=True)
             continue
+        used += size
         ctype = f.content_type or mimetypes.guess_type(original)[0] or "application/octet-stream"
         db.add(StoredFile(
             user_id=user.id,

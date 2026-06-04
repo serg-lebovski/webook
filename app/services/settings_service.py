@@ -35,3 +35,26 @@ def get_max_file_mb(db: Session) -> int:
 
 def get_max_file_bytes(db: Session) -> int:
     return get_max_file_mb(db) * 1024 * 1024
+
+
+def get_user_quota_mb(db: Session) -> int:
+    """Квота на пользователя для файловой шары (в МБ); 0 = без ограничений."""
+    raw = get_setting(db, "user_quota_mb", "0")
+    try:
+        return max(0, int(raw))
+    except (TypeError, ValueError):
+        return 0
+
+
+def get_user_quota_bytes(db: Session) -> int:
+    return get_user_quota_mb(db) * 1024 * 1024
+
+
+def user_files_usage(db: Session, user_id: int) -> int:
+    """Сумма размеров неудалённых файлов пользователя (файловая шара)."""
+    from sqlalchemy import func
+    from app.models.stored_file import StoredFile
+    total = (db.query(func.coalesce(func.sum(StoredFile.size), 0))
+             .filter(StoredFile.user_id == user_id, StoredFile.deleted_at.is_(None))
+             .scalar())
+    return int(total or 0)
