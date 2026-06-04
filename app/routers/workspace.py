@@ -230,6 +230,79 @@ def checklist_delete(task_id: int, item_id: int, user: User = Depends(get_curren
     return RedirectResponse(f"/workspace/tasks/{task_id}", status_code=302)
 
 
+# ─────────────────────────── Календарь / повестка ───────────────────────────
+
+@router.get("/calendar", response_class=HTMLResponse)
+def calendar_page(request: Request, month: str = "", user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    import calendar as _cal
+    from datetime import timedelta
+    now = datetime.utcnow()
+    try:
+        y, m = (int(x) for x in month.split("-"))
+        first = datetime(y, m, 1)
+    except (ValueError, AttributeError):
+        first = datetime(now.year, now.month, 1)
+    # границы месяца
+    last_day = _cal.monthrange(first.year, first.month)[1]
+    month_end = first + timedelta(days=last_day)
+    prev_m = (first - timedelta(days=1)).strftime("%Y-%m")
+    next_m = month_end.strftime("%Y-%m")
+
+    # элементы: задачи с дедлайном + заметки с напоминанием
+    tasks = (db.query(Task)
+             .filter(Task.user_id == user.id, Task.due_at.isnot(None))
+             .all())
+    notes = (db.query(Note)
+             .filter(Note.user_id == user.id, Note.remind_at.isnot(None))
+             .all())
+    by_day: dict = {}
+    items_all = []
+    for t in tasks:
+        d = t.due_at.date()
+        ev = {"kind": "task", "id": t.id, "title": t.title, "when": t.due_at,
+              "status": t.status, "url": f"/workspace/tasks/{t.id}"}
+        by_day.setdefault(d, []).append(ev)
+        items_all.append(ev)
+    for n in notes:
+        d = n.remind_at.date()
+        ev = {"kind": "note", "id": n.id, "title": n.title, "when": n.remind_at,
+              "status": None, "url": f"/workspace/notes/{n.id}"}
+        by_day.setdefault(d, []).append(ev)
+        items_all.append(ev)
+
+    # сетка месяца (недели, Пн–Вс)
+    weeks = []
+    cal = _cal.Calendar(firstweekday=0)  # 0 = понедельник
+    for week in cal.monthdatescalendar(first.year, first.month):
+        cells = []
+        for d in week:
+            cells.append({
+                "date": d, "in_month": d.month == first.month,
+                "is_today": d == now.date(),
+                "items": sorted(by_day.get(d, []), key=lambda e: e["when"]),
+            })
+        weeks.append(cells)
+
+    # повестка: просрочено + ближайшие 14 дней
+    overdue = sorted([e for e in items_all
+                      if e["when"] < now and not (e["kind"] == "task" and e["status"] == "done")],
+                     key=lambda e: e["when"])
+    horizon = now + timedelta(days=14)
+    upcoming = sorted([e for e in items_all if now <= e["when"] <= horizon],
+                      key=lambda e: e["when"])
+
+    return templates.TemplateResponse("workspace/calendar.html", {
+        "request": request, "user": user, "active": "calendar",
+        "weeks": weeks, "month_label": f"{_MONTHS[first.month - 1]} {first.year}",
+        "prev_m": prev_m, "next_m": next_m, "this_m": now.strftime("%Y-%m"),
+        "overdue": overdue, "upcoming": upcoming,
+    })
+
+
+_MONTHS = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
+           "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"]
+
+
 # ─────────────────────────── Заметки ───────────────────────────
 
 @router.get("/notes", response_class=HTMLResponse)
