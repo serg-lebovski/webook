@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, Form, Request, UploadFile, File, HTTPExc
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.dependencies import get_db, get_current_user
 from app.models.author import Author
@@ -150,7 +150,7 @@ def books_list(
 
     book_items = []
     if include_books:
-        query = _user_books(db, user)
+        query = _user_books(db, user).options(joinedload(Book.author))
         if shelf_id:
             query = query.filter(Book.shelf_id == shelf_id)
         if author_id:
@@ -179,7 +179,8 @@ def books_list(
 
     audio_items = []
     if include_audio:
-        aq = db.query(Audiobook).filter(Audiobook.user_id == user.id)
+        aq = db.query(Audiobook).filter(Audiobook.user_id == user.id).options(
+            selectinload(Audiobook.tracks))
         if q:
             aq = aq.filter(or_(Audiobook.title.ilike(f"%{q}%"), Audiobook.author.ilike(f"%{q}%")))
         for ab in aq.all():

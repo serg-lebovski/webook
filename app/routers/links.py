@@ -29,13 +29,6 @@ def _save_content(link_id: int, content):
     (LINKS_CONTENT_DIR / f"{link_id}.txt").write_text(content, encoding="utf-8")
 
 
-def _delete_content(link_id: int):
-    from app.config import LINKS_CONTENT_DIR
-    path = LINKS_CONTENT_DIR / f"{link_id}.txt"
-    if path.exists():
-        path.unlink()
-
-
 # ---------- Helpers ----------
 
 def _get_folder_or_404(folder_id: int, user_id: int, db: Session) -> LinkFolder:

@@ -83,31 +83,28 @@
       </a>
       <div class="card-footer p-1 d-flex justify-content-center gap-1">
         {% if folder_counts.get(fol.id, 0) %}
-        <a href="/files/folders/{{ fol.id }}/download-zip" class="btn btn-sm btn-outline-success py-0" title="Скачать ZIP">
-          <i class="bi bi-file-zip"></i>
+        <a href="/files/folders/{{ fol.id }}/download-zip" class="btn btn-sm btn-outline-success py-0 flex-grow-1" title="Скачать ZIP">
+          <i class="bi bi-file-zip me-1"></i>ZIP
         </a>
         {% endif %}
-        <a href="/files/folders/{{ fol.id }}/share-user" class="btn btn-sm btn-outline-primary py-0" title="Поделиться с пользователем">
-          <i class="bi bi-person-plus"></i>
-        </a>
         <div class="dropdown">
-          <button class="btn btn-sm btn-outline-success py-0" data-bs-toggle="dropdown" data-bs-auto-close="outside"
-                  title="Публичная ссылка">
-            <i class="bi bi-globe{% if fol.id in public_folder_tokens %}2{% endif %}"></i>
+          <button class="btn btn-sm btn-outline-secondary py-0" data-bs-toggle="dropdown" data-bs-auto-close="outside" title="Действия">
+            <i class="bi bi-three-dots"></i>
           </button>
-          <ul class="dropdown-menu p-2" style="min-width:240px">
-            <li class="small text-muted mb-1"><i class="bi bi-globe me-1"></i>Публичная ссылка на папку</li>
-            {% if fol.id in public_folder_tokens %}
-            <li>
+          <ul class="dropdown-menu dropdown-menu-end p-2" style="min-width:250px">
+            <li><a class="dropdown-item" href="/files/folders/{{ fol.id }}/share-user">
+              <i class="bi bi-person-plus me-2"></i>Поделиться с пользователем</a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li class="px-1">
+              <div class="small text-muted mb-1"><i class="bi bi-globe me-1"></i>Публичная ссылка на папку</div>
+              {% if fol.id in public_folder_tokens %}
               <div class="input-group input-group-sm mb-1">
                 <input class="form-control purl" readonly value="{{ request.base_url }}share/{{ public_folder_tokens.get(fol.id) }}">
                 <button type="button" class="btn btn-success copy-link"><i class="bi bi-clipboard"></i></button>
               </div>
               <a href="/files/folders/{{ fol.id }}/link" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary w-100 mb-1">Открыть страницу</a>
               <form method="post" action="/files/folders/{{ fol.id }}/unshare"><button class="btn btn-sm btn-outline-danger w-100">Отозвать</button></form>
-            </li>
-            {% else %}
-            <li>
+              {% else %}
               <form method="post" action="/files/folders/{{ fol.id }}/share">
                 <select name="hours" class="form-select form-select-sm mb-1">
                   {% for label, h in durations %}<option value="{{ h }}" {% if h == 168 %}selected{% endif %}>{{ label }}</option>{% endfor %}
@@ -116,23 +113,23 @@
                 <input name="max_downloads" type="number" min="1" class="form-control form-control-sm mb-1" placeholder="Лимит скачиваний">
                 <button class="btn btn-sm btn-primary w-100">Создать ссылку</button>
               </form>
+              {% endif %}
             </li>
-            {% endif %}
+            <li><hr class="dropdown-divider"></li>
+            <li class="px-1">
+              <form method="post" action="/files/folders/{{ fol.id }}/rename" class="input-group input-group-sm">
+                <input name="name" class="form-control" value="{{ fol.name }}" required>
+                <button class="btn btn-outline-secondary" title="Переименовать"><i class="bi bi-pencil"></i></button>
+              </form>
+            </li>
+            <li>
+              <form method="post" action="/files/folders/{{ fol.id }}/delete"
+                    onsubmit="return confirm('Удалить папку «{{ fol.name }}» и все файлы внутри?')">
+                <button class="dropdown-item text-danger"><i class="bi bi-trash me-2"></i>Удалить папку</button>
+              </form>
+            </li>
           </ul>
         </div>
-        <button class="btn btn-sm btn-outline-secondary py-0" data-bs-toggle="collapse" data-bs-target="#ren{{ fol.id }}" title="Переименовать">
-          <i class="bi bi-pencil"></i>
-        </button>
-        <form method="post" action="/files/folders/{{ fol.id }}/delete"
-              onsubmit="return confirm('Удалить папку «{{ fol.name }}» и все файлы внутри?')">
-          <button class="btn btn-sm btn-outline-danger py-0" title="Удалить"><i class="bi bi-trash"></i></button>
-        </form>
-      </div>
-      <div class="collapse" id="ren{{ fol.id }}">
-        <form method="post" action="/files/folders/{{ fol.id }}/rename" class="p-2 d-flex gap-1">
-          <input name="name" class="form-control form-control-sm" value="{{ fol.name }}" required>
-          <button class="btn btn-sm btn-primary"><i class="bi bi-check-lg"></i></button>
-        </form>
       </div>
     </div>
   </div>

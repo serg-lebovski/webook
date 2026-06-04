@@ -111,7 +111,7 @@
         {% if it.author %}<div class="lib-author">{{ it.author }}</div>{% endif %}
         <div class="lib-badges">
           {% if it.kind == 'book' %}
-          <span class="badge bg-secondary" style="font-size:.6rem">{{ it.fmt }}</span>
+          {% if it.fmt %}<span class="badge bg-secondary" style="font-size:.6rem">{{ it.fmt }}</span>{% endif %}
           {% if it.is_favorite %}<span class="badge bg-danger" style="font-size:.6rem"><i class="bi bi-heart-fill"></i></span>{% endif %}
           {% if it.is_read %}<span class="badge bg-success" style="font-size:.6rem"><i class="bi bi-check2"></i></span>{% endif %}
           {% if it.in_reading_list %}<span class="badge bg-warning text-dark" style="font-size:.6rem" title="Хочу прочитать"><i class="bi bi-bookmark-check-fill"></i></span>{% endif %}

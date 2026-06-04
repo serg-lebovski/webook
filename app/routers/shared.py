@@ -30,12 +30,14 @@ def _group_shares(shares, db: Session) -> dict:
     books: dict = {}
     if book_shares:
         ids = [s.resource_id for s in book_shares]
-        books = {b.id: b for b in db.query(Book).filter(Book.id.in_(ids)).all()}
+        books = {b.id: b for b in db.query(Book).filter(
+            Book.id.in_(ids), Book.deleted_at.is_(None)).all()}
 
     links: dict = {}
     if link_shares:
         ids = [s.resource_id for s in link_shares]
-        links = {l.id: l for l in db.query(Link).filter(Link.id.in_(ids)).all()}
+        links = {l.id: l for l in db.query(Link).filter(
+            Link.id.in_(ids), Link.deleted_at.is_(None)).all()}
 
     shelves: dict = {}
     if shelf_shares:
@@ -50,7 +52,8 @@ def _group_shares(shares, db: Session) -> dict:
     files: dict = {}
     if file_shares:
         ids = [s.resource_id for s in file_shares]
-        files = {f.id: f for f in db.query(StoredFile).filter(StoredFile.id.in_(ids)).all()}
+        files = {f.id: f for f in db.query(StoredFile).filter(
+            StoredFile.id.in_(ids), StoredFile.deleted_at.is_(None)).all()}
 
     file_folders: dict = {}
     if file_folder_shares:

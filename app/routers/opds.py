@@ -80,6 +80,9 @@ def _nav_entry(feed, title, feed_id, href, content=""):
 
 
 def _book_entry(feed, book: Book, base_url: str):
+    # бесфайловые карточки (импорт по ISBN) не показываем в OPDS — скачивать нечего
+    if not book.file_path:
+        return
     entry = SubElement(feed, _atom("entry"))
     _t(entry, "title", book.title)
     _t(entry, "id", f"urn:webook:book:{book.id}")

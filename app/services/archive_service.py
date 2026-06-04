@@ -119,9 +119,12 @@ def export_user(user, db, zip_path: str):
     with zipfile.ZipFile(zip_path, "w", allowZip64=True) as zf:
         used_books, used_covers, used_articles, used_ab = set(), set(), set(), set()
 
-        for b in db.query(Book).filter(Book.user_id == user.id).all():
+        for b in db.query(Book).filter(Book.user_id == user.id,
+                                        Book.deleted_at.is_(None)).all():
+            if not b.file_path:           # бесфайловые карточки (импорт по ISBN)
+                continue
             fp = BOOKS_DIR / b.file_path
-            if not fp.exists():
+            if not fp.is_file():
                 continue
             author = b.author.name if b.author else "Неизвестный автор"
             authors_seen.setdefault(author, (b.author.bio if b.author else "") or "")
@@ -150,7 +153,8 @@ def export_user(user, db, zip_path: str):
         for sname, aname in series_seen:
             manifest["series"].append({"name": sname, "author": aname})
 
-        for l in db.query(Link).filter(Link.user_id == user.id).all():
+        for l in db.query(Link).filter(Link.user_id == user.id,
+                                       Link.deleted_at.is_(None)).all():
             content = l.content
             content_arc = None
             if content:

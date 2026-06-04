@@ -259,7 +259,6 @@ def _serve(f: StoredFile, *, attachment: bool) -> FileResponse:
     headers = None
     if attachment:
         # quote, чтобы кириллица/спецсимволы в имени не ломали заголовок
-        from urllib.parse import quote
         headers = {"Content-Disposition": f"attachment; filename*=UTF-8''{quote(f.original_name)}"}
     return FileResponse(path, media_type=f.content_type or "application/octet-stream",
                         headers=headers)
