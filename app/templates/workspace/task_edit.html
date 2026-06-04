@@ -42,6 +42,38 @@
   </div>
 </form>
 
+<div class="card card-body mt-3">
+  <div class="d-flex justify-content-between align-items-center mb-2">
+    <span class="fw-semibold"><i class="bi bi-check2-square me-1"></i>Чек-лист</span>
+    {% if task.checklist %}<span class="badge bg-light text-dark border">{{ task.checklist_done }}/{{ task.checklist|length }}</span>{% endif %}
+  </div>
+  {% if task.checklist %}
+  {% set total = task.checklist|length %}
+  <div class="progress mb-2" style="height:5px">
+    <div class="progress-bar bg-success" style="width:{{ (task.checklist_done / total * 100)|round }}%"></div>
+  </div>
+  <ul class="list-group list-group-flush mb-2">
+    {% for item in task.checklist %}
+    <li class="list-group-item d-flex align-items-center gap-2 px-0 py-1">
+      <form method="post" action="/workspace/tasks/{{ task.id }}/checklist/{{ item.id }}/toggle">
+        <button class="btn btn-sm p-0 border-0 bg-transparent" title="Переключить">
+          <i class="bi bi-{{ 'check-square-fill text-success' if item.done else 'square' }} fs-6"></i>
+        </button>
+      </form>
+      <span class="flex-grow-1 {% if item.done %}text-decoration-line-through text-muted{% endif %}">{{ item.text }}</span>
+      <form method="post" action="/workspace/tasks/{{ task.id }}/checklist/{{ item.id }}/delete">
+        <button class="btn btn-sm btn-outline-danger border-0 py-0"><i class="bi bi-x"></i></button>
+      </form>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+  <form method="post" action="/workspace/tasks/{{ task.id }}/checklist/add" class="input-group input-group-sm">
+    <input name="text" class="form-control" placeholder="Новый пункт чек-листа" required>
+    <button class="btn btn-outline-primary"><i class="bi bi-plus-lg"></i></button>
+  </form>
+</div>
+
 {% if task.images %}
 <div class="card card-body mt-3">
   <div class="fw-semibold mb-2">Изображения</div>

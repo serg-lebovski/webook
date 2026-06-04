@@ -31,14 +31,33 @@
       <div class="card h-100"><div class="card-body" id="preview" style="overflow:auto;max-height:70vh"></div></div>
     </div>
   </div>
+  <div class="form-text mt-1"><i class="bi bi-link-45deg me-1"></i>Связи: пишите <code>[[Название заметки]]</code> — превратится в ссылку (откроет или создаст заметку).</div>
 </form>
+
+{% if backlinks %}
+<div class="card card-body mt-3">
+  <div class="fw-semibold mb-2"><i class="bi bi-arrow-return-left me-1"></i>Упоминается в</div>
+  <div class="d-flex flex-wrap gap-2">
+    {% for b in backlinks %}
+    <a href="/workspace/notes/{{ b.id }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-journal-text me-1"></i>{{ b.title }}</a>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
 <form method="post" action="/workspace/notes/{{ note.id }}/delete" id="delForm" class="d-none"></form>
 {% endblock %}
 {% block scripts %}
 <script>
 const ta = document.getElementById('noteContent');
 const preview = document.getElementById('preview');
-function render(){ preview.innerHTML = marked.parse(ta.value || ''); }
+function wikiLinks(text){
+  // [[Заголовок]] → markdown-ссылка на резолвер
+  return (text || '').replace(/\[\[([^\]]+)\]\]/g, function(_, t){
+    t = t.trim();
+    return '[' + t + '](/workspace/notes/go?title=' + encodeURIComponent(t) + ')';
+  });
+}
+function render(){ preview.innerHTML = marked.parse(wikiLinks(ta.value || '')); }
 ta.addEventListener('input', render); render();
 
 const imgBtn = document.getElementById('imgBtn'), imgInput = document.getElementById('imgInput');

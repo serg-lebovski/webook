@@ -30,7 +30,9 @@
         {% if t.status == 'done' %}Готово{% elif t.status == 'doing' %}В работе{% else %}К выполнению{% endif %}
       </span>
       <div class="flex-grow-1 min-width-0">
-        <div class="fw-semibold {% if t.status == 'done' %}text-decoration-line-through{% endif %}">{{ t.title }}</div>
+        <div class="fw-semibold {% if t.status == 'done' %}text-decoration-line-through{% endif %}">{{ t.title }}
+          {% if t.checklist %}<span class="badge bg-light text-dark border ms-1"><i class="bi bi-check2-square me-1"></i>{{ t.checklist_done }}/{{ t.checklist|length }}</span>{% endif %}
+        </div>
         {% if t.content %}<div class="small text-muted" style="white-space:pre-wrap">{{ t.content }}</div>{% endif %}
         {% if t.images %}
         <div class="d-flex gap-2 flex-wrap mt-2">

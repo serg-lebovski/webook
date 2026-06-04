@@ -18,6 +18,23 @@ class Task(Base):
 
     images = relationship("TaskImage", back_populates="task",
                           cascade="all, delete-orphan", order_by="TaskImage.id")
+    checklist = relationship("TaskChecklistItem", back_populates="task",
+                             cascade="all, delete-orphan", order_by="TaskChecklistItem.id")
+
+    @property
+    def checklist_done(self) -> int:
+        return sum(1 for i in self.checklist if i.done)
+
+
+class TaskChecklistItem(Base):
+    __tablename__ = "task_checklist"
+
+    id = Column(Integer, primary_key=True, index=True)
+    task_id = Column(Integer, ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False, index=True)
+    text = Column(String, nullable=False)
+    done = Column(Integer, default=0)  # 0/1 — чекбокс
+
+    task = relationship("Task", back_populates="checklist")
 
 
 class TaskImage(Base):

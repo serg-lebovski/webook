@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.dependencies import get_db, get_current_user
 from app.models.user import User
-from app.models.workspace import Task, TaskImage, Note, TimeInterval
+from app.models.workspace import Task, TaskImage, TaskChecklistItem, Note, TimeInterval
 from app.services.book_service import save_upload, delete_file
 from app.config import WORKSPACE_DIR, ALLOWED_IMAGE_FORMATS
 
@@ -199,6 +199,37 @@ def task_image_delete(task_id: int, img_id: int, user: User = Depends(get_curren
     return RedirectResponse(f"/workspace/tasks/{task_id}", status_code=302)
 
 
+# ── чек-лист (подзадачи) ──
+
+@router.post("/tasks/{task_id}/checklist/add")
+def checklist_add(task_id: int, text: str = Form(...), user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    task = _own_task(task_id, user, db)
+    if text.strip():
+        db.add(TaskChecklistItem(task_id=task.id, text=text.strip()[:300], done=0))
+        db.commit()
+    return RedirectResponse(f"/workspace/tasks/{task_id}", status_code=302)
+
+
+@router.post("/tasks/{task_id}/checklist/{item_id}/toggle")
+def checklist_toggle(task_id: int, item_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    task = _own_task(task_id, user, db)
+    item = db.query(TaskChecklistItem).filter_by(id=item_id, task_id=task.id).first()
+    if item:
+        item.done = 0 if item.done else 1
+        db.commit()
+    return RedirectResponse(f"/workspace/tasks/{task_id}", status_code=302)
+
+
+@router.post("/tasks/{task_id}/checklist/{item_id}/delete")
+def checklist_delete(task_id: int, item_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    task = _own_task(task_id, user, db)
+    item = db.query(TaskChecklistItem).filter_by(id=item_id, task_id=task.id).first()
+    if item:
+        db.delete(item)
+        db.commit()
+    return RedirectResponse(f"/workspace/tasks/{task_id}", status_code=302)
+
+
 # ─────────────────────────── Заметки ───────────────────────────
 
 @router.get("/notes", response_class=HTMLResponse)
@@ -243,11 +274,34 @@ def _own_note(note_id: int, user: User, db: Session) -> Note:
     return n
 
 
+@router.get("/notes/go")
+def note_go(title: str = "", user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Переход по вики-ссылке [[Заголовок]]: открыть заметку с таким названием или создать."""
+    title = (title or "").strip()
+    if not title:
+        return RedirectResponse("/workspace/notes", status_code=302)
+    note = (db.query(Note)
+            .filter(Note.user_id == user.id, Note.title.ilike(title))
+            .first())
+    if not note:
+        note = Note(user_id=user.id, title=title[:200], content="")
+        db.add(note)
+        db.commit()
+        db.refresh(note)
+    return RedirectResponse(f"/workspace/notes/{note.id}", status_code=302)
+
+
 @router.get("/notes/{note_id}", response_class=HTMLResponse)
 def note_edit_page(note_id: int, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     note = _own_note(note_id, user, db)
+    # обратные ссылки: заметки, упоминающие [[этот заголовок]]
+    backlinks = (db.query(Note)
+                 .filter(Note.user_id == user.id, Note.id != note.id,
+                         Note.content.ilike(f"%[[{note.title}]]%"))
+                 .order_by(Note.updated_at.desc()).all())
     return templates.TemplateResponse("workspace/note_edit.html", {
         "request": request, "user": user, "active": "notes", "note": note,
+        "backlinks": backlinks,
     })
 
 

@@ -19,7 +19,9 @@
         {% for t in columns[col] %}
         <div class="card mb-2 board-card" draggable="true" data-id="{{ t.id }}">
           <div class="card-body p-2">
-            <div class="fw-semibold small {% if t.status == 'done' %}text-decoration-line-through text-muted{% endif %}">{{ t.title }}</div>
+            <div class="fw-semibold small {% if t.status == 'done' %}text-decoration-line-through text-muted{% endif %}">{{ t.title }}
+              {% if t.checklist %}<span class="badge bg-light text-dark border" style="font-size:.62rem">{{ t.checklist_done }}/{{ t.checklist|length }}</span>{% endif %}
+            </div>
             {% if t.content %}<div class="text-muted" style="font-size:.75rem;white-space:pre-wrap">{{ t.content[:160] }}</div>{% endif %}
             <div class="d-flex justify-content-between align-items-center mt-1">
               {% if t.due_at %}
