@@ -102,7 +102,12 @@ def files_index(
         for s in shares if s.resource_type == "file" and s.is_public
     }
     shared_files = set(public_tokens.keys())
-    shared_folders = {s.resource_id for s in shares if s.resource_type == "file_folder"}
+    public_folder_tokens = {
+        s.resource_id: s.token
+        for s in shares if s.resource_type == "file_folder" and s.is_public
+    }
+    # внутренние шары папок (для значка «люди»)
+    shared_folders = {s.resource_id for s in shares if s.resource_type == "file_folder" and not s.is_public}
 
     # счётчики файлов в папках (для корневого вида)
     folder_counts = {}
@@ -122,7 +127,7 @@ def files_index(
         "all_folders": all_folders,
         "folder_counts": folder_counts,
         "shared_files": shared_files, "shared_folders": shared_folders,
-        "public_tokens": public_tokens,
+        "public_tokens": public_tokens, "public_folder_tokens": public_folder_tokens,
         "durations": SHARE_DURATIONS,
         "max_mb": get_max_file_bytes(db) // (1024 * 1024),
     })
@@ -332,19 +337,35 @@ def download_folder_zip(folder_id: int, user: User = Depends(get_current_user), 
 
 # ─────────────────────────── публичный доступ (токен) ───────────────────────────
 
+def _parse_limit(raw: str):
+    try:
+        n = int(raw)
+        return n if n > 0 else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _upsert_public(db, user, rtype, obj_id, hours, password, max_downloads):
+    from app.services.auth_service import hash_password
+    share = db.query(Share).filter_by(
+        owner_id=user.id, resource_type=rtype, resource_id=obj_id, is_public=True,
+    ).first()
+    if not share:
+        share = Share(owner_id=user.id, resource_type=rtype, resource_id=obj_id, is_public=True)
+        db.add(share)
+    share.expires_at = _expires_from(hours)
+    share.password_hash = hash_password(password.strip()) if password.strip() else None
+    share.max_downloads = _parse_limit(max_downloads)
+    share.download_count = 0
+    db.commit()
+
+
 @router.post("/{file_id}/share")
-def share_public(file_id: int, hours: str = Form("168"),
+def share_public(file_id: int, hours: str = Form("168"), password: str = Form(""),
+                 max_downloads: str = Form(""),
                  user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     f = _own_file(file_id, user, db)
-    existing = db.query(Share).filter_by(
-        owner_id=user.id, resource_type="file", resource_id=f.id, is_public=True,
-    ).first()
-    if existing:
-        existing.expires_at = _expires_from(hours)
-    else:
-        db.add(Share(owner_id=user.id, resource_type="file", resource_id=f.id,
-                     is_public=True, expires_at=_expires_from(hours)))
-    db.commit()
+    _upsert_public(db, user, "file", f.id, hours, password, max_downloads)
     back = f"/files?folder={f.folder_id}" if f.folder_id else "/files"
     return RedirectResponse(back, status_code=302)
 
@@ -360,6 +381,25 @@ def unshare_public(file_id: int, user: User = Depends(get_current_user), db: Ses
     return RedirectResponse(back, status_code=302)
 
 
+@router.post("/folders/{folder_id}/share")
+def share_folder_public(folder_id: int, hours: str = Form("168"), password: str = Form(""),
+                        max_downloads: str = Form(""),
+                        user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    fol = _own_folder(folder_id, user, db)
+    _upsert_public(db, user, "file_folder", fol.id, hours, password, max_downloads)
+    return RedirectResponse("/files", status_code=302)
+
+
+@router.post("/folders/{folder_id}/unshare")
+def unshare_folder_public(folder_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    fol = _own_folder(folder_id, user, db)
+    db.query(Share).filter_by(
+        owner_id=user.id, resource_type="file_folder", resource_id=fol.id, is_public=True,
+    ).delete(synchronize_session=False)
+    db.commit()
+    return RedirectResponse("/files", status_code=302)
+
+
 @router.get("/{file_id}/link", response_class=HTMLResponse)
 def public_link_page(file_id: int, request: Request,
                      user: User = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -371,7 +411,21 @@ def public_link_page(file_id: int, request: Request,
     if not share or share.is_expired:
         raise HTTPException(status_code=404, detail="Публичная ссылка не активна")
     return templates.TemplateResponse("files/public_link.html", {
-        "request": request, "user": user, "file": f, "share": share,
+        "request": request, "user": user, "file": f, "share": share, "is_folder": False,
+    })
+
+
+@router.get("/folders/{folder_id}/link", response_class=HTMLResponse)
+def folder_public_link_page(folder_id: int, request: Request,
+                            user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    fol = _own_folder(folder_id, user, db)
+    share = db.query(Share).filter_by(
+        owner_id=user.id, resource_type="file_folder", resource_id=fol.id, is_public=True,
+    ).first()
+    if not share or share.is_expired:
+        raise HTTPException(status_code=404, detail="Публичная ссылка не активна")
+    return templates.TemplateResponse("files/public_link.html", {
+        "request": request, "user": user, "file": fol, "share": share, "is_folder": True,
     })
 
 

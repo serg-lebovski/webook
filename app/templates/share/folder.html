@@ -1,0 +1,59 @@
+{% extends "share/base.html" %}
+{% block title %}{{ folder.name }} — WeBook{% endblock %}
+{% block content %}
+<h4 class="mb-1"><i class="bi bi-folder-fill text-warning me-2"></i>{{ folder.name }}</h4>
+<p class="text-muted small mb-3">
+  {{ files|length }} файл(ов) · поделился пользователь WeBook ·
+  действует ещё <span class="cd fw-semibold" data-exp="{{ share.expires_at.isoformat() }}Z"></span>
+  {% if share.max_downloads %} · лимит скачиваний: {{ share.download_count }}/{{ share.max_downloads }}{% endif %}
+</p>
+
+{% if files %}
+<div class="row g-3">
+  {% for f in files %}
+  <div class="col-6 col-sm-4 col-md-3 col-lg-2">
+    <div class="card h-100">
+      {% if f.is_image %}
+      <img src="/share/{{ share.token }}/f/{{ f.id }}/view" class="card-img-top gallery-img"
+           data-full="/share/{{ share.token }}/f/{{ f.id }}/view" data-name="{{ f.original_name }}"
+           style="height:120px;object-fit:cover;cursor:zoom-in" alt="{{ f.original_name }}">
+      {% else %}
+      <a href="/share/{{ share.token }}/f/{{ f.id }}/{{ 'view' if f.previewable else 'download' }}" target="_blank" rel="noopener"
+         class="d-flex align-items-center justify-content-center text-secondary" style="height:120px">
+        <i class="bi bi-{{ f.icon }}" style="font-size:2.6rem"></i>
+      </a>
+      {% endif %}
+      <div class="card-body p-2">
+        <div class="small fw-semibold text-truncate" title="{{ f.original_name }}">{{ f.original_name }}</div>
+        <div class="text-muted" style="font-size:.72rem">{{ f.size_human }}</div>
+      </div>
+      <div class="card-footer p-1 text-center">
+        <a href="/share/{{ share.token }}/f/{{ f.id }}/download" class="btn btn-sm btn-outline-secondary py-0 w-100">
+          <i class="bi bi-download me-1"></i>Скачать
+        </a>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="text-muted py-4">Папка пуста.</div>
+{% endif %}
+
+{% include "share/_gallery.html" %}
+<script>
+  (function () {
+    const el = document.querySelector('.cd');
+    if (!el) return;
+    const exp = new Date(el.dataset.exp).getTime();
+    function tick() {
+      let s = Math.floor((exp - Date.now()) / 1000);
+      if (s <= 0) { el.textContent = 'истекло'; return; }
+      const d = Math.floor(s / 86400); s %= 86400;
+      const h = Math.floor(s / 3600); s %= 3600;
+      el.textContent = (d ? d + ' д ' : '') + h + ' ч ' + Math.floor(s / 60) + ' мин';
+    }
+    tick(); setInterval(tick, 30000);
+  })();
+</script>
+{% endblock %}

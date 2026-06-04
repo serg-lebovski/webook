@@ -47,6 +47,9 @@ def _migrate_db():
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_chat_id VARCHAR",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_link_code VARCHAR",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS tg_last_check TIMESTAMP",
+            "ALTER TABLE shares ADD COLUMN IF NOT EXISTS password_hash VARCHAR",
+            "ALTER TABLE shares ADD COLUMN IF NOT EXISTS max_downloads INTEGER",
+            "ALTER TABLE shares ADD COLUMN IF NOT EXISTS download_count INTEGER NOT NULL DEFAULT 0",
         ]
         backfill_expires = (
             "UPDATE shares SET expires_at = created_at + INTERVAL '7 days' WHERE expires_at IS NULL"
@@ -71,6 +74,9 @@ def _migrate_db():
             "ALTER TABLE users ADD COLUMN telegram_chat_id VARCHAR",
             "ALTER TABLE users ADD COLUMN telegram_link_code VARCHAR",
             "ALTER TABLE users ADD COLUMN tg_last_check DATETIME",
+            "ALTER TABLE shares ADD COLUMN password_hash VARCHAR",
+            "ALTER TABLE shares ADD COLUMN max_downloads INTEGER",
+            "ALTER TABLE shares ADD COLUMN download_count INTEGER NOT NULL DEFAULT 0",
         ]
         backfill_expires = (
             "UPDATE shares SET expires_at = datetime(created_at, '+7 days') WHERE expires_at IS NULL"

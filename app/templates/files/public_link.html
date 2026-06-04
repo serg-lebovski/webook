@@ -4,12 +4,16 @@
 <div class="row justify-content-center">
   <div class="col-lg-7">
     <div class="card">
-      <div class="card-header fw-semibold"><i class="bi bi-globe me-1"></i>Публичная ссылка на файл</div>
+      <div class="card-header fw-semibold"><i class="bi bi-globe me-1"></i>Публичная ссылка на {{ 'папку' if is_folder else 'файл' }}</div>
       <div class="card-body">
-        <div class="fw-semibold text-truncate mb-1"><i class="bi bi-{{ file.icon }} me-1"></i>{{ file.original_name }}</div>
+        <div class="fw-semibold text-truncate mb-1">
+          <i class="bi bi-{{ 'folder-fill text-warning' if is_folder else file.icon }} me-1"></i>{{ file.name if is_folder else file.original_name }}
+        </div>
         <p class="text-muted small mb-3">
           Действует до <span class="lt" data-iso="{{ share.expires_at.isoformat() }}Z">{{ share.expires_at.strftime('%d.%m.%Y %H:%M') }}</span>
           · осталось <span class="cd fw-semibold" data-exp="{{ share.expires_at.isoformat() }}Z"></span>
+          {% if share.password_hash %}<br><i class="bi bi-lock-fill me-1"></i>Защищено паролем{% endif %}
+          {% if share.max_downloads %}<br><i class="bi bi-download me-1"></i>Скачиваний: {{ share.download_count }}/{{ share.max_downloads }}{% endif %}
         </p>
         <div class="input-group mb-2">
           <input id="purl" class="form-control" readonly
@@ -21,7 +25,7 @@
         </a>
       </div>
     </div>
-    <a href="/files{% if file.folder_id %}?folder={{ file.folder_id }}{% endif %}" class="btn btn-outline-secondary mt-3">
+    <a href="/files{% if not is_folder and file.folder_id %}?folder={{ file.folder_id }}{% endif %}" class="btn btn-outline-secondary mt-3">
       <i class="bi bi-arrow-left me-1"></i>Назад к файлам
     </a>
   </div>

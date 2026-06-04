@@ -75,6 +75,36 @@
         <a href="/files/folders/{{ fol.id }}/share-user" class="btn btn-sm btn-outline-primary py-0" title="Поделиться с пользователем">
           <i class="bi bi-person-plus"></i>
         </a>
+        <div class="dropdown">
+          <button class="btn btn-sm btn-outline-success py-0" data-bs-toggle="dropdown" data-bs-auto-close="outside"
+                  title="Публичная ссылка">
+            <i class="bi bi-globe{% if fol.id in public_folder_tokens %}2{% endif %}"></i>
+          </button>
+          <ul class="dropdown-menu p-2" style="min-width:240px">
+            <li class="small text-muted mb-1"><i class="bi bi-globe me-1"></i>Публичная ссылка на папку</li>
+            {% if fol.id in public_folder_tokens %}
+            <li>
+              <div class="input-group input-group-sm mb-1">
+                <input class="form-control purl" readonly value="{{ request.base_url }}share/{{ public_folder_tokens.get(fol.id) }}">
+                <button type="button" class="btn btn-success copy-link"><i class="bi bi-clipboard"></i></button>
+              </div>
+              <a href="/files/folders/{{ fol.id }}/link" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary w-100 mb-1">Открыть страницу</a>
+              <form method="post" action="/files/folders/{{ fol.id }}/unshare"><button class="btn btn-sm btn-outline-danger w-100">Отозвать</button></form>
+            </li>
+            {% else %}
+            <li>
+              <form method="post" action="/files/folders/{{ fol.id }}/share">
+                <select name="hours" class="form-select form-select-sm mb-1">
+                  {% for label, h in durations %}<option value="{{ h }}" {% if h == 168 %}selected{% endif %}>{{ label }}</option>{% endfor %}
+                </select>
+                <input name="password" type="text" class="form-control form-control-sm mb-1" placeholder="Пароль (необязательно)">
+                <input name="max_downloads" type="number" min="1" class="form-control form-control-sm mb-1" placeholder="Лимит скачиваний">
+                <button class="btn btn-sm btn-primary w-100">Создать ссылку</button>
+              </form>
+            </li>
+            {% endif %}
+          </ul>
+        </div>
         <button class="btn btn-sm btn-outline-secondary py-0" data-bs-toggle="collapse" data-bs-target="#ren{{ fol.id }}" title="Переименовать">
           <i class="bi bi-pencil"></i>
         </button>
@@ -102,10 +132,9 @@
   <div class="col-6 col-sm-4 col-md-3 col-lg-2">
     <div class="card h-100">
       {% if f.is_image %}
-      <a href="/files/{{ f.id }}/view" target="_blank" rel="noopener">
-        <img src="/files/{{ f.id }}/view" class="card-img-top" alt="{{ f.original_name }}"
-             style="height:120px;object-fit:cover">
-      </a>
+      <img src="/files/{{ f.id }}/view" class="card-img-top gallery-img" alt="{{ f.original_name }}"
+           data-full="/files/{{ f.id }}/view" data-name="{{ f.original_name }}"
+           style="height:120px;object-fit:cover;cursor:zoom-in">
       {% else %}
       <a href="/files/{{ f.id }}/{{ 'view' if f.previewable else 'download' }}" target="_blank" rel="noopener"
          class="d-flex align-items-center justify-content-center text-secondary" style="height:120px">
@@ -153,13 +182,15 @@
                 <button class="btn btn-sm btn-outline-danger w-100">Отозвать</button>
               </form>
               {% else %}
-              <form method="post" action="/files/{{ f.id }}/share" class="d-flex gap-1">
-                <select name="hours" class="form-select form-select-sm">
+              <form method="post" action="/files/{{ f.id }}/share">
+                <select name="hours" class="form-select form-select-sm mb-1">
                   {% for label, h in durations %}
                   <option value="{{ h }}" {% if h == 168 %}selected{% endif %}>{{ label }}</option>
                   {% endfor %}
                 </select>
-                <button class="btn btn-sm btn-primary text-nowrap">Создать</button>
+                <input name="password" type="text" class="form-control form-control-sm mb-1" placeholder="Пароль (необязательно)">
+                <input name="max_downloads" type="number" min="1" class="form-control form-control-sm mb-1" placeholder="Лимит скачиваний">
+                <button class="btn btn-sm btn-primary w-100">Создать ссылку</button>
               </form>
               {% endif %}
             </li>
@@ -206,6 +237,7 @@
 </div>
 {% endif %}
 
+{% include "share/_gallery.html" %}
 {% endblock %}
 
 {% block scripts %}

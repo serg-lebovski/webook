@@ -7,6 +7,7 @@
     <p class="text-muted small mb-3">
       {{ file.size_human }} · поделился пользователь WeBook ·
       ссылка действует ещё <span class="cd fw-semibold" data-exp="{{ share.expires_at.isoformat() }}Z"></span>
+      {% if share.max_downloads %} · скачиваний: {{ share.download_count }}/{{ share.max_downloads }}{% endif %}
     </p>
 
     <div class="mb-3 text-center">
