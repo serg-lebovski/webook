@@ -48,7 +48,8 @@
     </p>
 
     <div class="d-flex flex-wrap gap-2 mb-3">
-      <span class="badge bg-primary text-uppercase">{{ book.file_format }}</span>
+      {% if book.file_format %}<span class="badge bg-primary text-uppercase">{{ book.file_format }}</span>
+      {% else %}<span class="badge bg-warning text-dark"><i class="bi bi-bookmark-star me-1"></i>Хочу прочитать</span>{% endif %}
       {% if book.language %}<span class="badge bg-secondary">{{ book.language }}</span>{% endif %}
       {% if book.published_year %}<span class="badge bg-light text-dark border">{{ book.published_year }}</span>{% endif %}
       {% if book.file_size %}
@@ -116,9 +117,11 @@
         <i class="bi bi-book-open me-1"></i>Читать
       </a>
       {% endif %}
+      {% if book.file_format %}
       <a href="/books/{{ book.id }}/download" class="btn btn-success">
         <i class="bi bi-download me-1"></i>Скачать {{ book.file_format | upper }}
       </a>
+      {% endif %}
       {% if is_owner %}
       <form action="/books/{{ book.id }}/favorite" method="post" class="d-inline">
         <button class="btn {% if book.is_favorite %}btn-danger{% else %}btn-outline-danger{% endif %}"

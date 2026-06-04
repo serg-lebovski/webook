@@ -377,6 +377,43 @@ async def parse_meta(
     return result
 
 
+# ─────────────────────────── импорт по ISBN ───────────────────────────
+# (объявлено до /{book_id}, иначе int-конвертер перехватит "isbn-lookup")
+
+@router.get("/isbn-lookup")
+def isbn_lookup(isbn: str = "", user: User = Depends(get_current_user)):
+    from app.services.isbn_service import fetch_by_isbn
+    meta = fetch_by_isbn(isbn)
+    if not meta:
+        return JSONResponse({"ok": False, "error": "Книга не найдена по этому ISBN"}, status_code=404)
+    return JSONResponse({"ok": True, "meta": meta})
+
+
+@router.post("/isbn-import")
+def isbn_import(isbn: str = Form(...), shelf: str = Form(""),
+                user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    from app.services.isbn_service import fetch_by_isbn, download_cover
+    meta = fetch_by_isbn(isbn)
+    if not meta or not meta.get("title"):
+        return RedirectResponse("/books/upload?isbn_error=1", status_code=302)
+    author = _get_or_create_author(meta.get("author") or "", db)
+    shelf_obj = _get_or_create_shelf(shelf or "Хочу прочитать", user, db)
+    cover_path = None
+    cover = download_cover(meta.get("cover_url"))
+    if cover:
+        cover_path = save_cover_file(cover, ".jpg")
+    book = Book(
+        title=meta["title"], author_id=author.id, shelf_id=shelf_obj.id, user_id=user.id,
+        description=meta.get("description") or "", published_year=meta.get("year"),
+        cover_path=cover_path, file_path="", file_format="", file_size=0,
+        in_reading_list=True,
+    )
+    db.add(book)
+    db.commit()
+    db.refresh(book)
+    return RedirectResponse(f"/books/{book.id}", status_code=302)
+
+
 @router.get("/{book_id}", response_class=HTMLResponse)
 def book_detail(book_id: int, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     book = _accessible_book(book_id, user, db)
