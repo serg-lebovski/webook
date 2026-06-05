@@ -11,6 +11,9 @@ from app.models.author import Author
 from app.models.series import Series
 from app.models.link import Link
 from app.models.tag import Tag
+from app.models.audiobook import Audiobook
+from app.models.stored_file import StoredFile
+from app.models.manga import Manga
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -26,6 +29,9 @@ def search(
     q = q.strip()
     books: list = []
     links: list = []
+    audiobooks: list = []
+    files: list = []
+    manga: list = []
 
     if q:
         pattern = f"%{q}%"
@@ -92,7 +98,37 @@ def search(
                 links.append(l)
                 link_ids.add(l.id)
 
+        # ── Аудиокниги: название, автор, чтец ──────────────────────────────
+        audiobooks = (
+            db.query(Audiobook)
+            .filter(Audiobook.user_id == user.id)
+            .filter(or_(Audiobook.title.ilike(pattern),
+                        Audiobook.author.ilike(pattern),
+                        Audiobook.narrator.ilike(pattern)))
+            .order_by(Audiobook.title)
+            .all()
+        )
+
+        # ── Манга: название, автор ─────────────────────────────────────────
+        manga = (
+            db.query(Manga)
+            .filter(Manga.user_id == user.id, Manga.deleted_at.is_(None))
+            .filter(or_(Manga.title.ilike(pattern), Manga.author.ilike(pattern)))
+            .order_by(Manga.title)
+            .all()
+        )
+
+        # ── Файлы: имя ─────────────────────────────────────────────────────
+        files = (
+            db.query(StoredFile)
+            .filter(StoredFile.user_id == user.id, StoredFile.deleted_at.is_(None))
+            .filter(StoredFile.original_name.ilike(pattern))
+            .order_by(StoredFile.created_at.desc())
+            .all()
+        )
+
     return templates.TemplateResponse(
         "search.html",
-        {"request": request, "user": user, "q": q, "books": books, "links": links},
+        {"request": request, "user": user, "q": q, "books": books, "links": links,
+         "audiobooks": audiobooks, "files": files, "manga": manga},
     )
