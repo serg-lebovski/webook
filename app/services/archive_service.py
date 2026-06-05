@@ -121,16 +121,17 @@ def export_user(user, db, zip_path: str):
 
         for b in db.query(Book).filter(Book.user_id == user.id,
                                         Book.deleted_at.is_(None)).all():
-            if not b.file_path:           # бесфайловые карточки (импорт по ISBN)
-                continue
-            fp = BOOKS_DIR / b.file_path
-            if not fp.is_file():
-                continue
+            # книга может быть бесфайловой (карточка «Хочу прочитать» по ISBN)
+            fp = BOOKS_DIR / b.file_path if b.file_path else None
+            has_file = bool(fp and fp.is_file())
             author = b.author.name if b.author else "Неизвестный автор"
             authors_seen.setdefault(author, (b.author.bio if b.author else "") or "")
             base = _safe_filename(f"{author} - {b.title}")
-            fname = _unique_name(base + _ext(b.file_format), used_books)
-            zf.write(fp, f"books/{fname}", compress_type=_comp(fp.suffix))
+            file_arc = None
+            if has_file:
+                fname = _unique_name(base + _ext(b.file_format), used_books)
+                zf.write(fp, f"books/{fname}", compress_type=_comp(fp.suffix))
+                file_arc = f"books/{fname}"
             cover_arc = None
             if b.cover_path and (COVERS_DIR / b.cover_path).exists():
                 cn = _unique_name(base + ".jpg", used_covers)
@@ -144,7 +145,9 @@ def export_user(user, db, zip_path: str):
                 "description": b.description or "", "language": b.language or "",
                 "published_year": b.published_year, "is_read": b.is_read,
                 "rating": b.rating, "is_favorite": b.is_favorite,
-                "tags": [t.name for t in b.tags], "file": f"books/{fname}", "cover": cover_arc,
+                "in_reading_list": b.in_reading_list,
+                "file_format": b.file_format or "",
+                "tags": [t.name for t in b.tags], "file": file_arc, "cover": cover_arc,
                 "highlights": hl.get(("book", b.id), []),
             })
 
@@ -226,20 +229,22 @@ def import_user(user, db, zip_path: str) -> dict:
         db.flush()
 
         for bm in manifest.get("books", []):
-            if bm.get("file") not in names:
-                continue
-            data = zf.read(bm["file"])
+            has_file = bm.get("file") in names
             author = author_map.get(bm.get("author")) or _goc_author(db, bm.get("author") or "", "")
-            if db.query(Book).filter(Book.user_id == user.id, Book.title == bm["title"],
-                                     Book.author_id == author.id, Book.file_size == len(data)).first():
+            data = zf.read(bm["file"]) if has_file else b""
+            # дедуп: с файлом — по размеру, бесфайловые — по названию+автору
+            dup = db.query(Book).filter(Book.user_id == user.id, Book.title == bm["title"],
+                                        Book.author_id == author.id)
+            dup = dup.filter(Book.file_size == len(data)) if has_file else dup.filter(Book.file_path == "")
+            if dup.first():
                 counts["skipped"] += 1
                 continue
             shelf = shelf_map.get(bm.get("shelf")) or _goc_shelf(db, user, bm.get("shelf") or "", "")
             series = series_map.get((bm.get("series"), bm.get("author"))) if bm.get("series") else None
             if bm.get("series") and not series:
                 series = _goc_series(db, bm["series"], author.id)
-            ext = Path(bm["file"]).suffix
-            fname = save_book_file(data, ext)
+            ext = Path(bm["file"]).suffix if has_file else ""
+            fname = save_book_file(data, ext) if has_file else ""
             cover_path = None
             if bm.get("cover") in names:
                 cover_path = save_cover_file(zf.read(bm["cover"]), ".jpg")
@@ -249,7 +254,9 @@ def import_user(user, db, zip_path: str) -> dict:
                 description=bm.get("description", ""), language=bm.get("language", ""),
                 published_year=bm.get("published_year"), is_read=bool(bm.get("is_read")),
                 rating=bm.get("rating"), is_favorite=bool(bm.get("is_favorite")),
-                cover_path=cover_path, file_path=fname, file_format=ext.lstrip("."), file_size=len(data),
+                in_reading_list=bool(bm.get("in_reading_list")) or not has_file,
+                cover_path=cover_path, file_path=fname,
+                file_format=ext.lstrip(".") if has_file else "", file_size=len(data),
             )
             if bm.get("tags"):
                 book.tags = get_or_create_tags(bm["tags"], user.id, db)
