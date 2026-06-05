@@ -36,13 +36,14 @@ def _get_stats(db: Session, user: User) -> dict:
 
     books_count = db.query(Book).filter_by(user_id=uid, deleted_at=None).count()
     articles_count = db.query(Link).filter_by(user_id=uid, deleted_at=None).count()
-    audiobooks_count = db.query(Audiobook).filter_by(user_id=uid).count()
+    audiobooks_count = db.query(Audiobook).filter_by(user_id=uid, deleted_at=None).count()
     files_count = db.query(StoredFile).filter_by(user_id=uid, deleted_at=None).count()
     shelves_count = db.query(Shelf).filter_by(user_id=uid).count()
 
     books_bytes = _sum(Book.file_size, Book.user_id == uid, Book.deleted_at.is_(None))
     audio_bytes = _sum(AudiobookTrack.file_size,
-                       AudiobookTrack.audiobook_id == Audiobook.id, Audiobook.user_id == uid)
+                       AudiobookTrack.audiobook_id == Audiobook.id, Audiobook.user_id == uid,
+                       Audiobook.deleted_at.is_(None))
     files_bytes = _sum(StoredFile.size, StoredFile.user_id == uid, StoredFile.deleted_at.is_(None))
     storage_bytes = books_bytes + audio_bytes + files_bytes
 

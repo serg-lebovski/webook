@@ -44,6 +44,13 @@
 </div>
 {% endif %}
 
+{% if audiobooks %}
+<h5 class="text-muted text-uppercase fw-semibold mb-2 small"><i class="bi bi-headphones me-1"></i>Аудиокниги</h5>
+<div class="list-group mb-4">
+  {% for ab in audiobooks %}{{ row('audiobook', ab.id, 'headphones', ab.title, ab.author or '') }}{% endfor %}
+</div>
+{% endif %}
+
 {% if links %}
 <h5 class="text-muted text-uppercase fw-semibold mb-2 small"><i class="bi bi-bookmarks me-1"></i>Статьи</h5>
 <div class="list-group mb-4">

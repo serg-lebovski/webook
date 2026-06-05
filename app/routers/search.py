@@ -101,7 +101,7 @@ def search(
         # ── Аудиокниги: название, автор, чтец ──────────────────────────────
         audiobooks = (
             db.query(Audiobook)
-            .filter(Audiobook.user_id == user.id)
+            .filter(Audiobook.user_id == user.id, Audiobook.deleted_at.is_(None))
             .filter(or_(Audiobook.title.ilike(pattern),
                         Audiobook.author.ilike(pattern),
                         Audiobook.narrator.ilike(pattern)))

@@ -169,7 +169,8 @@ def export_user(user, db, zip_path: str):
                 "highlights": hl.get(("link", l.id), []),
             })
 
-        for ab in db.query(Audiobook).filter(Audiobook.user_id == user.id).all():
+        for ab in db.query(Audiobook).filter(Audiobook.user_id == user.id,
+                                             Audiobook.deleted_at.is_(None)).all():
             folder = AUDIOBOOKS_DIR / ab.folder
             base = f"{ab.author} - {ab.title}" if ab.author else ab.title
             ab_dir = _unique_name(_safe_filename(base), used_ab)

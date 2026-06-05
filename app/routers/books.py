@@ -179,7 +179,8 @@ def books_list(
 
     audio_items = []
     if include_audio:
-        aq = db.query(Audiobook).filter(Audiobook.user_id == user.id).options(
+        aq = db.query(Audiobook).filter(
+            Audiobook.user_id == user.id, Audiobook.deleted_at.is_(None)).options(
             selectinload(Audiobook.tracks))
         if q:
             aq = aq.filter(or_(Audiobook.title.ilike(f"%{q}%"), Audiobook.author.ilike(f"%{q}%")))

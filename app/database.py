@@ -50,6 +50,7 @@ def _migrate_db():
             "ALTER TABLE shares ADD COLUMN IF NOT EXISTS password_hash VARCHAR",
             "ALTER TABLE shares ADD COLUMN IF NOT EXISTS max_downloads INTEGER",
             "ALTER TABLE shares ADD COLUMN IF NOT EXISTS download_count INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE audiobooks ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP",
         ]
         backfill_expires = (
             "UPDATE shares SET expires_at = created_at + INTERVAL '7 days' WHERE expires_at IS NULL"
@@ -77,6 +78,7 @@ def _migrate_db():
             "ALTER TABLE shares ADD COLUMN password_hash VARCHAR",
             "ALTER TABLE shares ADD COLUMN max_downloads INTEGER",
             "ALTER TABLE shares ADD COLUMN download_count INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE audiobooks ADD COLUMN deleted_at DATETIME",
         ]
         backfill_expires = (
             "UPDATE shares SET expires_at = datetime(created_at, '+7 days') WHERE expires_at IS NULL"

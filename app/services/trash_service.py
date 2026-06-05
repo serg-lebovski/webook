@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.models.book import Book
 from app.models.link import Link
 from app.models.stored_file import StoredFile
+from app.models.audiobook import Audiobook
 from app.models.share import Share
 from app.config import BOOKS_DIR, COVERS_DIR, LINKS_CONTENT_DIR, FILES_DIR
 from app.services.book_service import delete_file
@@ -32,6 +33,10 @@ def trash_file(f: StoredFile, db: Session) -> None:
     f.deleted_at = datetime.utcnow()
 
 
+def trash_audiobook(ab: Audiobook, db: Session) -> None:
+    ab.deleted_at = datetime.utcnow()
+
+
 # ─────────────────────────── restore ───────────────────────────
 
 def restore_book(book: Book, db: Session) -> None:
@@ -44,6 +49,10 @@ def restore_link(link: Link, db: Session) -> None:
 
 def restore_file(f: StoredFile, db: Session) -> None:
     f.deleted_at = None
+
+
+def restore_audiobook(ab: Audiobook, db: Session) -> None:
+    ab.deleted_at = None
 
 
 # ─────────────────────────── окончательное удаление ───────────────────────────
@@ -70,13 +79,21 @@ def purge_file(f: StoredFile, db: Session) -> None:
     db.delete(f)
 
 
+def purge_audiobook(ab: Audiobook, db: Session) -> None:
+    from app.services.audiobook_service import delete_audiobook_folder
+    delete_audiobook_folder(ab.folder)
+    delete_file(ab.cover_path, COVERS_DIR)
+    db.delete(ab)  # треки удалятся каскадом
+
+
 # ─────────────────────────── авто-очистка ───────────────────────────
 
 def purge_expired(db: Session, user_id: int = None) -> int:
     """Физически удаляет всё, что в корзине дольше RETENTION_DAYS. Возвращает число записей."""
     cutoff = datetime.utcnow() - timedelta(days=RETENTION_DAYS)
     n = 0
-    for model, purge in ((Book, purge_book), (Link, purge_link), (StoredFile, purge_file)):
+    for model, purge in ((Book, purge_book), (Link, purge_link),
+                         (StoredFile, purge_file), (Audiobook, purge_audiobook)):
         q = db.query(model).filter(model.deleted_at.isnot(None), model.deleted_at < cutoff)
         if user_id is not None:
             q = q.filter(model.user_id == user_id)

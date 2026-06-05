@@ -24,6 +24,7 @@ class Audiobook(Base):
 
     created_at = Column(DateTime, default=datetime.utcnow)
     last_played_at = Column(DateTime, nullable=True)
+    deleted_at = Column(DateTime, nullable=True)        # корзина (soft-delete)
 
     user = relationship("User")
     tracks = relationship(

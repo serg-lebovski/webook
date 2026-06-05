@@ -9,6 +9,7 @@ from app.models.user import User
 from app.models.book import Book
 from app.models.link import Link
 from app.models.stored_file import StoredFile
+from app.models.audiobook import Audiobook
 from app.services import trash_service
 
 router = APIRouter(prefix="/trash")
@@ -29,11 +30,14 @@ def trash_index(request: Request, user: User = Depends(get_current_user), db: Se
     files = (db.query(StoredFile)
              .filter(StoredFile.user_id == user.id, StoredFile.deleted_at.isnot(None))
              .order_by(StoredFile.deleted_at.desc()).all())
+    audiobooks = (db.query(Audiobook)
+                  .filter(Audiobook.user_id == user.id, Audiobook.deleted_at.isnot(None))
+                  .order_by(Audiobook.deleted_at.desc()).all())
     return templates.TemplateResponse("trash.html", {
         "request": request, "user": user,
-        "books": books, "links": links, "files": files,
+        "books": books, "links": links, "files": files, "audiobooks": audiobooks,
         "retention": trash_service.RETENTION_DAYS,
-        "empty": not (books or links or files),
+        "empty": not (books or links or files or audiobooks),
     })
 
 
@@ -46,9 +50,11 @@ def _get(model, item_id: int, user: User, db: Session):
     return row
 
 
-_MODELS = {"book": Book, "link": Link, "file": StoredFile}
-_RESTORE = {"book": trash_service.restore_book, "link": trash_service.restore_link, "file": trash_service.restore_file}
-_PURGE = {"book": trash_service.purge_book, "link": trash_service.purge_link, "file": trash_service.purge_file}
+_MODELS = {"book": Book, "link": Link, "file": StoredFile, "audiobook": Audiobook}
+_RESTORE = {"book": trash_service.restore_book, "link": trash_service.restore_link,
+            "file": trash_service.restore_file, "audiobook": trash_service.restore_audiobook}
+_PURGE = {"book": trash_service.purge_book, "link": trash_service.purge_link,
+          "file": trash_service.purge_file, "audiobook": trash_service.purge_audiobook}
 
 
 @router.post("/restore")

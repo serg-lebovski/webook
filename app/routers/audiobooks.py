@@ -15,7 +15,7 @@ from app.services.audiobook_service import (
     new_folder, book_dir, safe_track_name, natural_sort_key, nice_track_title,
     probe_audio, delete_audiobook_folder,
 )
-from app.services.book_service import save_cover_file, delete_file
+from app.services.book_service import save_cover_file
 from app.config import COVERS_DIR, ALLOWED_AUDIO_FORMATS, MAX_AUDIO_SIZE
 
 router = APIRouter(prefix="/audiobooks")
@@ -29,7 +29,7 @@ _AUDIO_MIME = {
 
 
 def _own_audiobook(ab_id: int, user: User, db: Session) -> Audiobook:
-    ab = db.query(Audiobook).filter_by(id=ab_id, user_id=user.id).first()
+    ab = db.query(Audiobook).filter_by(id=ab_id, user_id=user.id, deleted_at=None).first()
     if not ab:
         raise HTTPException(status_code=404, detail="Аудиокнига не найдена")
     return ab
@@ -58,7 +58,7 @@ def _progress(ab: Audiobook):
 def list_audiobooks(request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     books = (
         db.query(Audiobook)
-        .filter_by(user_id=user.id)
+        .filter_by(user_id=user.id, deleted_at=None)
         .order_by(Audiobook.created_at.desc())
         .all()
     )
@@ -238,10 +238,8 @@ def toggle_finish(ab_id: int, user: User = Depends(get_current_user), db: Sessio
 
 @router.post("/{ab_id}/delete")
 def delete_audiobook(ab_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    from app.services.trash_service import trash_audiobook
     ab = _own_audiobook(ab_id, user, db)
-    delete_audiobook_folder(ab.folder)
-    if ab.cover_path:
-        delete_file(ab.cover_path, COVERS_DIR)
-    db.delete(ab)
+    trash_audiobook(ab, db)  # в корзину; файлы удалятся при окончательной очистке
     db.commit()
     return RedirectResponse("/audiobooks", status_code=302)
