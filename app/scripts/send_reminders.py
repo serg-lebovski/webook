@@ -4,8 +4,6 @@
 
 Для каждого пользователя с привязанным Telegram отправляются события,
 наступившие с момента прошлой проверки (`users.tg_last_check`):
-  • задачи с наступившим сроком (due_at);
-  • заметки с временем напоминания (remind_at);
   • ссылки общего доступа, входящие в 24-часовое окно до истечения;
   • новые статьи, добавленные с прошлой проверки.
 """
@@ -13,7 +11,6 @@ from datetime import datetime, timedelta
 
 from app.database import SessionLocal, init_db
 from app.models.user import User
-from app.models.workspace import Task, Note
 from app.models.link import Link
 from app.models.share import Share
 from app.services import telegram_service
@@ -23,28 +20,6 @@ SHARE_WINDOW = timedelta(hours=24)
 
 def _messages_for(db, user, token, last, now):
     msgs = []
-    # due_at/remind_at — «настенное» местное время; окно сдвигаем на смещение,
-    # а created_at/expires_at хранятся в UTC и сравниваются с UTC-now напрямую.
-    from app.config import APP_TZ_OFFSET
-    from datetime import timedelta
-    off = timedelta(hours=APP_TZ_OFFSET)
-    last_local, now_local = last + off, now + off
-
-    # задачи с наступившим сроком (и ещё не выполненные)
-    tasks = (db.query(Task)
-             .filter(Task.user_id == user.id, Task.status != "done",
-                     Task.due_at.isnot(None), Task.due_at > last_local, Task.due_at <= now_local)
-             .all())
-    for t in tasks:
-        msgs.append(f"📌 <b>Срок задачи</b>: {t.title}")
-
-    # заметки с напоминанием
-    notes = (db.query(Note)
-             .filter(Note.user_id == user.id,
-                     Note.remind_at.isnot(None), Note.remind_at > last_local, Note.remind_at <= now_local)
-             .all())
-    for n in notes:
-        msgs.append(f"📝 <b>Напоминание</b>: {n.title}")
 
     # шары, вошедшие в 24-часовое окно до истечения с прошлой проверки
     shares = (db.query(Share)

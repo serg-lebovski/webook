@@ -42,7 +42,7 @@ LOG_VIEW_FILES = {
 
 def _get_system_info() -> dict:
     from app.config import (DATABASE_URL, BOOKS_DIR, COVERS_DIR, LINKS_CONTENT_DIR,
-                            AUDIOBOOKS_DIR, FILES_DIR, WORKSPACE_DIR)
+                            AUDIOBOOKS_DIR, FILES_DIR, MANGA_DIR)
 
     db_type = "PostgreSQL" if DATABASE_URL.startswith("postgresql") else "SQLite"
 
@@ -72,9 +72,9 @@ def _get_system_info() -> dict:
     links_bytes = dir_size_bytes(LINKS_CONTENT_DIR)
     audiobooks_bytes = dir_size_bytes(AUDIOBOOKS_DIR)
     files_bytes = dir_size_bytes(FILES_DIR)
-    workspace_bytes = dir_size_bytes(WORKSPACE_DIR)
+    manga_bytes = dir_size_bytes(MANGA_DIR)
     content_bytes = (books_bytes + covers_bytes + links_bytes
-                     + audiobooks_bytes + files_bytes + workspace_bytes)
+                     + audiobooks_bytes + files_bytes + manga_bytes)
 
     try:
         check_path = BOOKS_DIR if BOOKS_DIR.exists() else BOOKS_DIR.parent
@@ -93,13 +93,13 @@ def _get_system_info() -> dict:
         "links_dir": str(LINKS_CONTENT_DIR),
         "audiobooks_dir": str(AUDIOBOOKS_DIR),
         "files_dir": str(FILES_DIR),
-        "workspace_dir": str(WORKSPACE_DIR),
+        "manga_dir": str(MANGA_DIR),
         "books_bytes": books_bytes,
         "covers_bytes": covers_bytes,
         "links_bytes": links_bytes,
         "audiobooks_bytes": audiobooks_bytes,
         "files_bytes": files_bytes,
-        "workspace_bytes": workspace_bytes,
+        "manga_bytes": manga_bytes,
         "content_bytes": content_bytes,
         "disk_total": disk.total,
         "disk_used": disk.used,
@@ -458,17 +458,6 @@ def _purge_user_data(uid: int, db: Session):
     # 9. series tiers (личный тир-лист)
     from app.models.series_tier import SeriesTier
     db.query(SeriesTier).filter_by(user_id=uid).delete(synchronize_session=False)
-
-    # 10. рабочее пространство: задачи (+ файлы картинок), заметки, тайм-отрезки
-    from app.models.workspace import Task, Note, TimeInterval
-    from app.services.book_service import delete_file as _del_ws
-    from app.config import WORKSPACE_DIR
-    for t in db.query(Task).filter_by(user_id=uid).all():
-        for img in t.images:
-            _del_ws(img.filename, WORKSPACE_DIR)
-        db.delete(t)
-    db.query(Note).filter_by(user_id=uid).delete(synchronize_session=False)
-    db.query(TimeInterval).filter_by(user_id=uid).delete(synchronize_session=False)
 
     # 11. файловая шара: файлы (+ файлы на диске) и папки
     from app.models.stored_file import StoredFile, FileFolder

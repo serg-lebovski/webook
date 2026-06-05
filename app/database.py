@@ -17,7 +17,7 @@ def init_db():
     from app.models import (  # noqa: F401
         user, shelf, author, series, book, link, site_settings, share,
         read_progress, login_attempt, tag, highlight, feed, audiobook, series_tier,
-        workspace, stored_file, manga,
+        stored_file, manga,
     )
     Base.metadata.create_all(bind=engine)
     _migrate_db()
