@@ -1,7 +1,6 @@
 """Public share pages — no auth required."""
 import hashlib
 import hmac
-from datetime import datetime
 from urllib.parse import quote
 from fastapi import APIRouter, Depends, Request, HTTPException, Form
 from fastapi.responses import HTMLResponse, FileResponse, RedirectResponse

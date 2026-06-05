@@ -15,14 +15,9 @@ from starlette.background import BackgroundTask
 from app.dependencies import get_db, get_current_user
 from app.models.user import User
 from app.models.book import Book
-from app.models.author import Author
 from app.models.shelf import Shelf
-from app.models.series import Series
-from app.models.share import Share
 from app.models.link import Link
-from app.models.audiobook import Audiobook
 from app.services.auth_service import hash_password, verify_password, create_access_token
-from app.config import BOOKS_DIR, COVERS_DIR, LINKS_CONTENT_DIR, AUDIOBOOKS_DIR
 
 router = APIRouter(prefix="/settings")
 templates = Jinja2Templates(directory="app/templates")

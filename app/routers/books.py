@@ -671,7 +671,7 @@ def share_book_with_user(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    book = _own_book(book_id, user, db)
+    _own_book(book_id, user, db)  # проверка владельца
     target = db.query(User).filter_by(username=username.strip()).first()
     if not target:
         return RedirectResponse(f"/books/{book_id}/share-user?error=not_found", status_code=302)

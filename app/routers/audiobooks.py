@@ -16,7 +16,7 @@ from app.services.audiobook_service import (
     probe_audio, delete_audiobook_folder,
 )
 from app.services.book_service import save_cover_file, delete_file
-from app.config import AUDIOBOOKS_DIR, COVERS_DIR, ALLOWED_AUDIO_FORMATS, MAX_AUDIO_SIZE
+from app.config import COVERS_DIR, ALLOWED_AUDIO_FORMATS, MAX_AUDIO_SIZE
 
 router = APIRouter(prefix="/audiobooks")
 templates = Jinja2Templates(directory="app/templates")

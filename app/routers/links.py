@@ -577,7 +577,7 @@ def share_folder_with_user(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    folder = _get_folder_or_404(folder_id, user.id, db)
+    _get_folder_or_404(folder_id, user.id, db)  # проверка владельца
     from app.models.user import User as UserModel
     target = db.query(UserModel).filter_by(username=username.strip()).first()
     if not target:

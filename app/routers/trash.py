@@ -1,6 +1,4 @@
 """Корзина: просмотр удалённого, восстановление и окончательное удаление."""
-from datetime import datetime, timedelta
-
 from fastapi import APIRouter, Depends, Form, Request, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
