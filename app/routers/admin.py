@@ -478,4 +478,14 @@ def _purge_user_data(uid: int, db: Session):
         db.delete(f)
     db.query(FileFolder).filter_by(user_id=uid).delete(synchronize_session=False)
 
+    # 12. манга: каталоги на диске + строки (главы каскадом)
+    from app.models.manga import Manga
+    from app.services.manga_service import delete_manga_dir
+    from app.services.book_service import delete_file as _del_cover
+    from app.config import COVERS_DIR as _COVERS
+    for mg in db.query(Manga).filter_by(user_id=uid).all():
+        delete_manga_dir(mg.folder)
+        _del_cover(mg.cover_path, _COVERS)
+        db.delete(mg)
+
     db.flush()

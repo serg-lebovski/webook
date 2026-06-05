@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Загрузить мангу — WeBook{% endblock %}
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/manga">Манга</a></li>
+    <li class="breadcrumb-item active">Загрузить</li>
+  </ol>
+</nav>
+
+<h2 class="mb-4"><i class="bi bi-cloud-upload me-2"></i>Загрузить мангу</h2>
+
+<form method="post" action="/manga/upload" enctype="multipart/form-data" class="card card-body" style="max-width:680px">
+  <div class="row g-3">
+    <div class="col-md-8">
+      <label class="form-label small fw-semibold">Название *</label>
+      <input name="title" class="form-control" required>
+    </div>
+    <div class="col-md-4">
+      <label class="form-label small fw-semibold">Автор</label>
+      <input name="author" class="form-control">
+    </div>
+    <div class="col-12">
+      <label class="form-label small">Описание</label>
+      <textarea name="description" class="form-control" rows="2"></textarea>
+    </div>
+    <div class="col-md-6">
+      <label class="form-label small">Название первой главы</label>
+      <input name="chapter_title" class="form-control" placeholder="Глава 1 (необязательно)">
+    </div>
+    <div class="col-md-6">
+      <label class="form-label small">Обложка (необязательно)</label>
+      <input type="file" name="cover" class="form-control" accept="image/*">
+      <div class="form-text">Если не выбрать — возьмём первую страницу.</div>
+    </div>
+    <div class="col-12">
+      <label class="form-label small fw-semibold">Страницы главы</label>
+      <input type="file" name="files" class="form-control" multiple
+             accept=".cbz,.zip,.jpg,.jpeg,.png,.webp,.gif,.avif">
+      <div class="form-text">
+        Выберите либо архив <strong>CBZ/ZIP</strong> с изображениями, либо несколько картинок-страниц.
+        Порядок — по именам файлов (естественная сортировка).
+      </div>
+    </div>
+  </div>
+  <div class="mt-3">
+    <button class="btn btn-success"><i class="bi bi-upload me-1"></i>Создать</button>
+    <a href="/manga" class="btn btn-outline-secondary">Отмена</a>
+  </div>
+</form>
+{% endblock %}

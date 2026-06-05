@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Манга — WeBook{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+  <h2 class="mb-0"><i class="bi bi-images me-2"></i>Манга</h2>
+  <a href="/manga/upload" class="btn btn-primary btn-sm"><i class="bi bi-cloud-upload me-1"></i>Загрузить</a>
+</div>
+
+{% if items %}
+<div class="row g-3">
+  {% for m in items %}
+  <div class="col-6 col-sm-4 col-md-3 col-lg-2">
+    <div class="card h-100">
+      <a href="/manga/{{ m.id }}" class="text-decoration-none text-body">
+        {% if m.cover_path %}
+        <img src="/manga/{{ m.id }}/cover" class="card-img-top" style="aspect-ratio:2/3;object-fit:cover" alt="{{ m.title }}">
+        {% else %}
+        <div class="card-img-top d-flex align-items-center justify-content-center text-white"
+             style="aspect-ratio:2/3;background:linear-gradient(135deg,#f093fb,#f5576c)"><i class="bi bi-images fs-1"></i></div>
+        {% endif %}
+        <div class="card-body p-2">
+          <div class="small fw-semibold text-truncate">{{ m.title }}</div>
+          <div class="text-muted text-truncate" style="font-size:.72rem">{{ m.author or '—' }}</div>
+          <div class="text-muted" style="font-size:.68rem">
+            {{ m.chapter_count }} гл. · {{ m.page_total }} стр.
+            {% if m.is_favorite %}<i class="bi bi-heart-fill text-danger ms-1"></i>{% endif %}
+          </div>
+        </div>
+      </a>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="text-center text-muted py-5">
+  <i class="bi bi-images fs-1 d-block mb-2"></i>
+  Манги пока нет. Нажмите «Загрузить».
+</div>
+{% endif %}
+{% endblock %}

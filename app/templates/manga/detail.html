@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}{{ manga.title }} — Манга{% endblock %}
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/manga">Манга</a></li>
+    <li class="breadcrumb-item active">{{ manga.title }}</li>
+  </ol>
+</nav>
+
+<div class="row g-4">
+  <div class="col-sm-4 col-md-3 col-lg-2">
+    {% if manga.cover_path %}
+    <img src="/manga/{{ manga.id }}/cover" class="w-100 rounded shadow-sm" style="aspect-ratio:2/3;object-fit:cover" alt="">
+    {% else %}
+    <div class="w-100 rounded d-flex align-items-center justify-content-center text-white"
+         style="aspect-ratio:2/3;background:linear-gradient(135deg,#f093fb,#f5576c)"><i class="bi bi-images fs-1"></i></div>
+    {% endif %}
+  </div>
+  <div class="col-sm-8 col-md-9 col-lg-10">
+    <h2 class="mb-1">{{ manga.title }}</h2>
+    <p class="text-muted mb-2">{{ manga.author or 'Автор неизвестен' }}</p>
+    <div class="d-flex flex-wrap gap-2 mb-3">
+      <span class="badge bg-secondary">{{ manga.chapter_count }} глав</span>
+      <span class="badge bg-light text-dark border">{{ manga.page_total }} страниц</span>
+    </div>
+    <div class="d-flex gap-2 mb-3 flex-wrap">
+      {% if manga.chapters %}
+      <a href="/manga/{{ manga.id }}/read" class="btn btn-primary">
+        <i class="bi bi-book-open me-1"></i>{% if manga.current_chapter_id %}Продолжить{% else %}Читать{% endif %}
+      </a>
+      {% endif %}
+      <form method="post" action="/manga/{{ manga.id }}/favorite">
+        <button class="btn btn-outline-danger"><i class="bi bi-heart{% if manga.is_favorite %}-fill{% endif %} me-1"></i>В избранное</button>
+      </form>
+      <form method="post" action="/manga/{{ manga.id }}/delete" onsubmit="return confirm('Удалить мангу со всеми главами?')">
+        <button class="btn btn-outline-secondary"><i class="bi bi-trash me-1"></i>Удалить</button>
+      </form>
+    </div>
+    {% if manga.description %}<p class="text-body" style="white-space:pre-line">{{ manga.description }}</p>{% endif %}
+  </div>
+</div>
+
+<hr class="my-4">
+
+<div class="d-flex align-items-center justify-content-between mb-2">
+  <h5 class="mb-0"><i class="bi bi-list-ol me-2"></i>Главы</h5>
+  <button class="btn btn-sm btn-outline-primary" data-bs-toggle="collapse" data-bs-target="#addCh">
+    <i class="bi bi-plus-lg me-1"></i>Добавить главу
+  </button>
+</div>
+
+<div class="collapse mb-3" id="addCh">
+  <form method="post" action="/manga/{{ manga.id }}/chapters" enctype="multipart/form-data" class="card card-body">
+    <div class="row g-2 align-items-end">
+      <div class="col-md-4">
+        <label class="form-label small">Название главы</label>
+        <input name="chapter_title" class="form-control form-control-sm" placeholder="Глава {{ manga.chapter_count + 1 }}">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label small">Страницы (CBZ/ZIP или изображения)</label>
+        <input type="file" name="files" class="form-control form-control-sm" multiple
+               accept=".cbz,.zip,.jpg,.jpeg,.png,.webp,.gif,.avif" required>
+      </div>
+      <div class="col-md-2 d-grid">
+        <button class="btn btn-sm btn-success"><i class="bi bi-upload me-1"></i>Добавить</button>
+      </div>
+    </div>
+  </form>
+</div>
+
+{% if manga.chapters %}
+<div class="list-group">
+  {% for c in manga.chapters %}
+  <div class="list-group-item d-flex align-items-center gap-3 py-2">
+    <span class="badge bg-light text-dark border">{{ c.order }}</span>
+    <a href="/manga/{{ manga.id }}/read/{{ c.id }}" class="flex-grow-1 text-decoration-none text-body">
+      {{ c.label }} <span class="text-muted small">· {{ c.page_count }} стр.</span>
+    </a>
+    <a href="/manga/{{ manga.id }}/read/{{ c.id }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-book-open"></i></a>
+    <form method="post" action="/manga/{{ manga.id }}/chapters/{{ c.id }}/delete" onsubmit="return confirm('Удалить главу?')">
+      <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+    </form>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="text-muted small py-3">Глав пока нет — добавьте первую.</div>
+{% endif %}
+{% endblock %}
