@@ -236,7 +236,8 @@ def checklist_delete(task_id: int, item_id: int, user: User = Depends(get_curren
 def calendar_page(request: Request, month: str = "", user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     import calendar as _cal
     from datetime import timedelta
-    now = datetime.utcnow()
+    from app.config import local_now
+    now = local_now()  # «настенное» время: сроки/напоминания вводятся локально
     try:
         y, m = (int(x) for x in month.split("-"))
         first = datetime(y, m, 1)

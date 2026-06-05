@@ -23,11 +23,17 @@ SHARE_WINDOW = timedelta(hours=24)
 
 def _messages_for(db, user, token, last, now):
     msgs = []
+    # due_at/remind_at — «настенное» местное время; окно сдвигаем на смещение,
+    # а created_at/expires_at хранятся в UTC и сравниваются с UTC-now напрямую.
+    from app.config import APP_TZ_OFFSET
+    from datetime import timedelta
+    off = timedelta(hours=APP_TZ_OFFSET)
+    last_local, now_local = last + off, now + off
 
     # задачи с наступившим сроком (и ещё не выполненные)
     tasks = (db.query(Task)
              .filter(Task.user_id == user.id, Task.status != "done",
-                     Task.due_at.isnot(None), Task.due_at > last, Task.due_at <= now)
+                     Task.due_at.isnot(None), Task.due_at > last_local, Task.due_at <= now_local)
              .all())
     for t in tasks:
         msgs.append(f"📌 <b>Срок задачи</b>: {t.title}")
@@ -35,7 +41,7 @@ def _messages_for(db, user, token, last, now):
     # заметки с напоминанием
     notes = (db.query(Note)
              .filter(Note.user_id == user.id,
-                     Note.remind_at.isnot(None), Note.remind_at > last, Note.remind_at <= now)
+                     Note.remind_at.isnot(None), Note.remind_at > last_local, Note.remind_at <= now_local)
              .all())
     for n in notes:
         msgs.append(f"📝 <b>Напоминание</b>: {n.title}")

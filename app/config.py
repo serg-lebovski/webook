@@ -31,3 +31,15 @@ MAX_AUDIO_SIZE = 1024 * 1024 * 1024          # 1 GB на файл
 MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024        # 2 GB на файл (файловая шара)
 
 APP_TITLE = os.getenv("APP_TITLE", "WeBook")
+
+# Смещение местного времени относительно UTC (часы). Сроки задач и напоминания
+# заметок пользователь вводит по «настенным» часам; в БД они naive. Сервер живёт
+# в UTC, поэтому для корректного сравнения добавляем смещение. МСК = UTC+3
+# (без перехода на летнее время), поэтому фиксированного значения достаточно.
+APP_TZ_OFFSET = int(os.getenv("APP_TZ_OFFSET", "3"))
+
+
+def local_now():
+    """Текущее местное время (naive) — для сравнения с «настенными» полями."""
+    from datetime import datetime, timedelta
+    return datetime.utcnow() + timedelta(hours=APP_TZ_OFFSET)
