@@ -208,6 +208,32 @@
     </div>
     {% endif %}
 
+    {% if inc.manga_shares %}
+    <h5 class="text-muted text-uppercase fw-semibold mb-3 small"><i class="bi bi-images me-1"></i>Манга</h5>
+    <div class="row g-3 mb-5">
+      {% for s in inc.manga_shares %}
+      {% set m = inc.manga.get(s.resource_id) %}
+      {% if m %}
+      <div class="col-6 col-sm-4 col-md-3 col-lg-2">
+        <a href="/shared/manga/{{ s.id }}" class="text-decoration-none">
+          <div class="card h-100">
+            {% if m.cover_path %}
+            <img src="/shared/manga/{{ s.id }}/cover" class="card-img-top" style="aspect-ratio:2/3;object-fit:cover" alt="">
+            {% else %}
+            <div class="card-img-top d-flex align-items-center justify-content-center text-white" style="aspect-ratio:2/3;background:linear-gradient(135deg,#f093fb,#f5576c)"><i class="bi bi-images fs-1"></i></div>
+            {% endif %}
+            <div class="card-body p-2">
+              <div class="small fw-semibold text-truncate text-body">{{ m.title }}</div>
+              <div class="text-muted" style="font-size:.7rem">от {{ s.owner.username }} · <span class="cd" data-exp="{{ s.expires_at.isoformat() }}Z"></span></div>
+            </div>
+          </div>
+        </a>
+      </div>
+      {% endif %}
+      {% endfor %}
+    </div>
+    {% endif %}
+
   </div>
 
   {# ───────────────────── Поделился я ───────────────────── #}
@@ -376,6 +402,30 @@
           </div>
         </div>
         <form method="post" action="/files/share/{{ s.id }}/revoke">
+          <button type="submit" class="btn btn-sm btn-outline-danger" title="Отозвать доступ"><i class="bi bi-x-lg"></i></button>
+        </form>
+      </div>
+      {% endif %}
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if out.manga_shares %}
+    <h5 class="text-muted text-uppercase fw-semibold mb-3 small"><i class="bi bi-images me-1"></i>Манга</h5>
+    <div class="list-group mb-5">
+      {% for s in out.manga_shares %}
+      {% set m = out.manga.get(s.resource_id) %}
+      {% if m %}
+      <div class="list-group-item d-flex align-items-center gap-3 py-2">
+        <i class="bi bi-images fs-5 text-secondary"></i>
+        <div class="flex-grow-1 min-width-0">
+          <a href="/manga/{{ m.id }}" class="fw-semibold text-decoration-none text-body text-truncate d-block">{{ m.title }}</a>
+          <div class="text-muted small">
+            <i class="bi bi-person me-1"></i>{{ s.shared_with.username }}
+            <span class="ms-2">осталось <span class="cd" data-exp="{{ s.expires_at.isoformat() }}Z"></span></span>
+          </div>
+        </div>
+        <form method="post" action="/manga/share/{{ s.id }}/revoke">
           <button type="submit" class="btn btn-sm btn-outline-danger" title="Отозвать доступ"><i class="bi bi-x-lg"></i></button>
         </form>
       </div>

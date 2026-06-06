@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Поделиться мангой — WeBook{% endblock %}
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/manga">Манга</a></li>
+    <li class="breadcrumb-item"><a href="/manga/{{ manga.id }}">{{ manga.title }}</a></li>
+    <li class="breadcrumb-item active">Поделиться с пользователем</li>
+  </ol>
+</nav>
+
+<div class="row justify-content-center">
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header fw-semibold"><i class="bi bi-person-plus me-1"></i>Доступ к «{{ manga.title }}»</div>
+      <div class="card-body">
+        {% if error == 'not_found' %}<div class="alert alert-danger">Пользователь не найден.</div>
+        {% elif error == 'self' %}<div class="alert alert-warning">Нельзя поделиться с самим собой.</div>{% endif %}
+
+        <form method="post" action="/manga/{{ manga.id }}/share-with-user" class="row g-2 mb-3">
+          <div class="col-12 col-sm">
+            <input type="text" name="username" class="form-control" placeholder="Имя пользователя" required autofocus>
+          </div>
+          <div class="col-auto">
+            <select name="hours" class="form-select">
+              {% for label, h in durations %}
+              <option value="{{ h }}" {% if h == 168 %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-auto">
+            <button type="submit" class="btn btn-primary text-nowrap"><i class="bi bi-send me-1"></i>Поделиться</button>
+          </div>
+        </form>
+
+        <p class="text-muted small mb-2">Доступ появится у пользователя во вкладке «Общий доступ» с обратным отсчётом.</p>
+
+        {% if shares %}
+        <h6 class="text-muted text-uppercase small fw-semibold mb-2">Уже есть доступ:</h6>
+        <ul class="list-group list-group-flush">
+          {% for s in shares %}
+          <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+            <span><i class="bi bi-person me-1"></i>{{ s.shared_with.username }}
+              <span class="text-muted small ms-2">до {{ s.expires_at.strftime('%d.%m.%Y %H:%M') }}</span></span>
+            <form method="post" action="/manga/share/{{ s.id }}/revoke">
+              <button type="submit" class="btn btn-sm btn-outline-danger" title="Отозвать"><i class="bi bi-x"></i></button>
+            </form>
+          </li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+      </div>
+    </div>
+    <a href="/manga/{{ manga.id }}" class="btn btn-outline-secondary mt-3"><i class="bi bi-arrow-left me-1"></i>Назад</a>
+  </div>
+</div>
+{% endblock %}

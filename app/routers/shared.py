@@ -26,6 +26,7 @@ def _group_shares(shares, db: Session) -> dict:
     folder_shares = [s for s in shares if s.resource_type == "link_folder"]
     file_shares = [s for s in shares if s.resource_type == "file"]
     file_folder_shares = [s for s in shares if s.resource_type == "file_folder"]
+    manga_shares = [s for s in shares if s.resource_type == "manga"]
 
     books: dict = {}
     if book_shares:
@@ -60,6 +61,13 @@ def _group_shares(shares, db: Session) -> dict:
         ids = [s.resource_id for s in file_folder_shares]
         file_folders = {f.id: f for f in db.query(FileFolder).filter(FileFolder.id.in_(ids)).all()}
 
+    manga: dict = {}
+    if manga_shares:
+        from app.models.manga import Manga
+        ids = [s.resource_id for s in manga_shares]
+        manga = {m.id: m for m in db.query(Manga).filter(
+            Manga.id.in_(ids), Manga.deleted_at.is_(None)).all()}
+
     return {
         "book_shares": book_shares,
         "link_shares": link_shares,
@@ -67,14 +75,16 @@ def _group_shares(shares, db: Session) -> dict:
         "folder_shares": folder_shares,
         "file_shares": file_shares,
         "file_folder_shares": file_folder_shares,
+        "manga_shares": manga_shares,
         "books": books,
         "links": links,
         "shelves": shelves,
         "folders": folders,
         "files": files,
         "file_folders": file_folders,
+        "manga": manga,
         "empty": not (book_shares or link_shares or shelf_shares or folder_shares
-                      or file_shares or file_folder_shares),
+                      or file_shares or file_folder_shares or manga_shares),
     }
 
 
@@ -258,6 +268,66 @@ def shared_folder_file_view(share_id: int, file_id: int,
 def shared_folder_file_download(share_id: int, file_id: int,
                                 user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     return _serve_stored(_file_in_folder(share_id, file_id, user, db), attachment=True)
+
+
+@router.get("/manga/{share_id}")
+def shared_manga_entry(share_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    from app.models.manga import Manga
+    share = _incoming_share(share_id, "manga", user, db)
+    m = db.query(Manga).filter_by(id=share.resource_id).first()
+    if not m or not m.chapters:
+        raise HTTPException(status_code=404, detail="Манга недоступна")
+    first = sorted(m.chapters, key=lambda c: c.order)[0]
+    return RedirectResponse(f"/shared/manga/{share_id}/read/{first.id}", status_code=302)
+
+
+@router.get("/manga/{share_id}/cover")
+def shared_manga_cover(share_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    from fastapi.responses import FileResponse
+    from app.models.manga import Manga
+    from app.config import COVERS_DIR
+    share = _incoming_share(share_id, "manga", user, db)
+    m = db.query(Manga).filter_by(id=share.resource_id).first()
+    if not m or not m.cover_path:
+        raise HTTPException(status_code=404)
+    path = COVERS_DIR / m.cover_path
+    if not path.exists():
+        raise HTTPException(status_code=404)
+    return FileResponse(path)
+
+
+@router.get("/manga/{share_id}/read/{chapter_id}", response_class=HTMLResponse)
+def shared_manga_reader(share_id: int, chapter_id: int, request: Request,
+                        user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    from app.models.manga import Manga, MangaChapter
+    from app.routers.manga import reader_ctx
+    share = _incoming_share(share_id, "manga", user, db)
+    m = db.query(Manga).filter_by(id=share.resource_id).first()
+    chapter = db.query(MangaChapter).filter_by(id=chapter_id, manga_id=m.id).first() if m else None
+    if not chapter:
+        raise HTTPException(status_code=404)
+    ctx = reader_ctx(m, chapter)
+    return templates.TemplateResponse("manga/reader.html", {
+        "request": request, "user": user, "manga": m, "chapter": chapter, "title": m.title,
+        "start_page": 0, "progress_url": "",
+        "back_url": "/shared",
+        "read_base": f"/shared/manga/{share_id}/read/",
+        "page_prefix": f"/shared/manga/{share_id}/page/{chapter.id}/",
+        **ctx,
+    })
+
+
+@router.get("/manga/{share_id}/page/{chapter_id}/{n}")
+def shared_manga_page(share_id: int, chapter_id: int, n: int,
+                      user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    from app.models.manga import Manga, MangaChapter
+    from app.routers.manga import serve_page
+    share = _incoming_share(share_id, "manga", user, db)
+    m = db.query(Manga).filter_by(id=share.resource_id).first()
+    chapter = db.query(MangaChapter).filter_by(id=chapter_id, manga_id=m.id).first() if m else None
+    if not chapter:
+        raise HTTPException(status_code=404)
+    return serve_page(m, chapter, n)
 
 
 @router.get("/out")

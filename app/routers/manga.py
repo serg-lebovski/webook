@@ -1,5 +1,5 @@
 """Манга: загрузка глав (изображения или CBZ/ZIP) и веб-читалка."""
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Optional
 
@@ -11,12 +11,48 @@ from sqlalchemy.orm import Session
 from app.dependencies import get_db, get_current_user
 from app.models.user import User
 from app.models.manga import Manga, MangaChapter
+from app.models.share import Share
 from app.services import manga_service
 from app.services.book_service import save_cover_file, delete_file
 from app.config import COVERS_DIR, MAX_MANGA_ARCHIVE_SIZE
 
 router = APIRouter(prefix="/manga")
 templates = Jinja2Templates(directory="app/templates")
+
+SHARE_DURATIONS = [("1 день", 24), ("7 дней", 168), ("30 дней", 720)]
+_VALID_HOURS = {h for _, h in SHARE_DURATIONS}
+
+
+def _expires(hours_raw: str) -> datetime:
+    try:
+        h = int(hours_raw)
+    except (TypeError, ValueError):
+        h = 168
+    if h not in _VALID_HOURS:
+        h = 168
+    return datetime.utcnow() + timedelta(hours=h)
+
+
+def reader_ctx(m: Manga, chapter: MangaChapter) -> dict:
+    """Общий контекст читалки: упорядоченные главы, соседи, число страниц."""
+    ordered = sorted(m.chapters, key=lambda c: c.order)
+    idx = next((i for i, c in enumerate(ordered) if c.id == chapter.id), 0)
+    return {
+        "chapters": ordered,
+        "prev_id": ordered[idx - 1].id if idx > 0 else None,
+        "next_id": ordered[idx + 1].id if idx < len(ordered) - 1 else None,
+        "page_count": chapter.page_count,
+    }
+
+
+def serve_page(m: Manga, chapter: MangaChapter, n: int) -> FileResponse:
+    files = manga_service.page_files(m.folder, chapter.folder)
+    if n < 1 or n > len(files):
+        raise HTTPException(status_code=404)
+    path = manga_service.chapter_dir(m.folder, chapter.folder) / files[n - 1]
+    if not path.exists():
+        raise HTTPException(status_code=404)
+    return FileResponse(path, headers={"Cache-Control": "private, max-age=604800"})
 
 
 def _own_manga(manga_id: int, user: User, db: Session) -> Manga:
@@ -131,8 +167,12 @@ async def add_chapter(
 @router.get("/{manga_id}", response_class=HTMLResponse)
 def manga_detail(manga_id: int, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     m = _own_manga(manga_id, user, db)
+    pub = db.query(Share).filter_by(owner_id=user.id, resource_type="manga",
+                                    resource_id=m.id, is_public=True).first()
+    public_token = pub.token if pub and not pub.is_expired else None
     return templates.TemplateResponse("manga/detail.html", {
         "request": request, "user": user, "manga": m,
+        "public_token": public_token, "durations": SHARE_DURATIONS,
     })
 
 
@@ -164,15 +204,11 @@ def manga_reader(manga_id: int, chapter_id: int, request: Request,
                  user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     m = _own_manga(manga_id, user, db)
     chapter = _own_chapter(m, chapter_id, db)
-    ordered = sorted(m.chapters, key=lambda c: c.order)
-    idx = next((i for i, c in enumerate(ordered) if c.id == chapter.id), 0)
-    prev_id = ordered[idx - 1].id if idx > 0 else None
-    next_id = ordered[idx + 1].id if idx < len(ordered) - 1 else None
+    ctx = reader_ctx(m, chapter)
     start_page = m.current_page if m.current_chapter_id == chapter.id else 0
     return templates.TemplateResponse("manga/reader.html", {
         "request": request, "user": user, "manga": m, "chapter": chapter,
-        "chapters": ordered, "page_count": chapter.page_count,
-        "prev_id": prev_id, "next_id": next_id, "start_page": start_page,
+        "title": m.title, "start_page": start_page, **ctx,
     })
 
 
@@ -181,14 +217,7 @@ def manga_page(manga_id: int, chapter_id: int, n: int,
                user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     m = _own_manga(manga_id, user, db)
     chapter = _own_chapter(m, chapter_id, db)
-    files = manga_service.page_files(m.folder, chapter.folder)
-    if n < 1 or n > len(files):
-        raise HTTPException(status_code=404)
-    path = manga_service.chapter_dir(m.folder, chapter.folder) / files[n - 1]
-    if not path.exists():
-        raise HTTPException(status_code=404)
-    # страницы неизменяемы → разрешаем долгое кэширование (меньше нагрузка на сервер)
-    return FileResponse(path, headers={"Cache-Control": "private, max-age=604800"})
+    return serve_page(m, chapter, n)
 
 
 # ─────────────────────────── состояние / действия ───────────────────────────
@@ -236,6 +265,83 @@ def delete_manga(manga_id: int, user: User = Depends(get_current_user), db: Sess
     m = _own_manga(manga_id, user, db)
     manga_service.delete_manga_dir(m.folder)
     delete_file(m.cover_path, COVERS_DIR)
+    db.query(Share).filter(Share.resource_type == "manga", Share.resource_id == m.id)\
+        .delete(synchronize_session=False)
     db.delete(m)
     db.commit()
     return RedirectResponse("/manga", status_code=302)
+
+
+# ─────────────────────────── общий доступ ───────────────────────────
+
+@router.post("/{manga_id}/share")
+def share_public(manga_id: int, hours: str = Form("168"),
+                 user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    m = _own_manga(manga_id, user, db)
+    share = db.query(Share).filter_by(owner_id=user.id, resource_type="manga",
+                                      resource_id=m.id, is_public=True).first()
+    if share:
+        share.expires_at = _expires(hours)
+    else:
+        db.add(Share(owner_id=user.id, resource_type="manga", resource_id=m.id,
+                     is_public=True, expires_at=_expires(hours)))
+    db.commit()
+    return RedirectResponse(f"/manga/{manga_id}", status_code=302)
+
+
+@router.post("/{manga_id}/unshare")
+def unshare_public(manga_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    m = _own_manga(manga_id, user, db)
+    db.query(Share).filter_by(owner_id=user.id, resource_type="manga",
+                              resource_id=m.id, is_public=True).delete(synchronize_session=False)
+    db.commit()
+    return RedirectResponse(f"/manga/{manga_id}", status_code=302)
+
+
+@router.get("/{manga_id}/share-user", response_class=HTMLResponse)
+def share_user_form(manga_id: int, request: Request, error: str = "",
+                    user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    m = _own_manga(manga_id, user, db)
+    shares = db.query(Share).filter(
+        Share.owner_id == user.id, Share.resource_type == "manga", Share.resource_id == m.id,
+        Share.is_public == False, Share.expires_at > datetime.utcnow(),
+    ).all()
+    return templates.TemplateResponse("manga/share_user.html", {
+        "request": request, "user": user, "manga": m, "shares": shares,
+        "error": error, "durations": SHARE_DURATIONS,
+    })
+
+
+@router.post("/{manga_id}/share-with-user")
+def share_with_user(manga_id: int, username: str = Form(...), hours: str = Form("168"),
+                    user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    m = _own_manga(manga_id, user, db)
+    target = db.query(User).filter_by(username=username.strip()).first()
+    if not target:
+        return RedirectResponse(f"/manga/{manga_id}/share-user?error=not_found", status_code=302)
+    if target.id == user.id:
+        return RedirectResponse(f"/manga/{manga_id}/share-user?error=self", status_code=302)
+    existing = db.query(Share).filter(
+        Share.owner_id == user.id, Share.resource_type == "manga", Share.resource_id == m.id,
+        Share.is_public == False, Share.shared_with_user_id == target.id,
+        Share.expires_at > datetime.utcnow(),
+    ).first()
+    if existing:
+        existing.expires_at = _expires(hours)
+    else:
+        db.add(Share(owner_id=user.id, resource_type="manga", resource_id=m.id,
+                     is_public=False, shared_with_user_id=target.id, expires_at=_expires(hours)))
+    db.commit()
+    return RedirectResponse(f"/manga/{manga_id}/share-user", status_code=302)
+
+
+@router.post("/share/{share_id}/revoke")
+def revoke_user_share(share_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    share = db.query(Share).filter_by(id=share_id, owner_id=user.id,
+                                      resource_type="manga", is_public=False).first()
+    back = "/manga"
+    if share:
+        back = f"/manga/{share.resource_id}/share-user"
+        db.delete(share)
+        db.commit()
+    return RedirectResponse(back, status_code=302)

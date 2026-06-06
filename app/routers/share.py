@@ -94,8 +94,57 @@ def shared_view(token: str, request: Request, bad: int = 0, db: Session = Depend
         return _shared_file(share, request, db)
     elif share.resource_type == "file_folder":
         return _shared_folder(share, request, db)
+    elif share.resource_type == "manga":
+        return _shared_manga(share, request, db)
 
     raise HTTPException(status_code=404, detail="Неизвестный тип ресурса")
+
+
+def _get_manga_or_404(share: Share, db: Session):
+    from app.models.manga import Manga
+    m = db.query(Manga).filter_by(id=share.resource_id).first()
+    if not m:
+        raise HTTPException(status_code=404, detail="Манга не найдена")
+    return m
+
+
+def _shared_manga(share: Share, request: Request, db: Session):
+    m = _get_manga_or_404(share, db)
+    return templates.TemplateResponse("share/manga.html", {
+        "request": request, "user": None, "manga": m, "share": share,
+    })
+
+
+@router.get("/{token}/read/{chapter_id}", response_class=HTMLResponse)
+def shared_manga_reader(token: str, chapter_id: int, request: Request, db: Session = Depends(get_db)):
+    from app.routers.manga import reader_ctx
+    from app.models.manga import MangaChapter
+    share = _get_share_or_404(token, db)
+    m = _get_manga_or_404(share, db)
+    chapter = db.query(MangaChapter).filter_by(id=chapter_id, manga_id=m.id).first()
+    if not chapter:
+        raise HTTPException(status_code=404)
+    ctx = reader_ctx(m, chapter)
+    return templates.TemplateResponse("manga/reader.html", {
+        "request": request, "user": None, "manga": m, "chapter": chapter, "title": m.title,
+        "start_page": 0, "progress_url": "",
+        "back_url": f"/share/{token}",
+        "read_base": f"/share/{token}/read/",
+        "page_prefix": f"/share/{token}/page/{chapter.id}/",
+        **ctx,
+    })
+
+
+@router.get("/{token}/page/{chapter_id}/{n}")
+def shared_manga_page(token: str, chapter_id: int, n: int, db: Session = Depends(get_db)):
+    from app.routers.manga import serve_page
+    from app.models.manga import MangaChapter
+    share = _get_share_or_404(token, db)
+    m = _get_manga_or_404(share, db)
+    chapter = db.query(MangaChapter).filter_by(id=chapter_id, manga_id=m.id).first()
+    if not chapter:
+        raise HTTPException(status_code=404)
+    return serve_page(m, chapter, n)
 
 
 def _get_file_or_404(share: Share, db: Session) -> StoredFile:
@@ -173,10 +222,14 @@ def shared_folder_file_download(token: str, file_id: int, request: Request, db: 
 @router.get("/{token}/cover")
 def shared_book_cover(token: str, db: Session = Depends(get_db)):
     share = _get_share_or_404(token, db)
-    book = _get_book_or_404(share, db)
-    if not book.cover_path:
+    cover_path = None
+    if share.resource_type == "manga":
+        cover_path = _get_manga_or_404(share, db).cover_path
+    else:
+        cover_path = _get_book_or_404(share, db).cover_path
+    if not cover_path:
         raise HTTPException(status_code=404)
-    path = COVERS_DIR / book.cover_path
+    path = COVERS_DIR / cover_path
     if not path.exists():
         raise HTTPException(status_code=404)
     return FileResponse(path, media_type="image/jpeg")

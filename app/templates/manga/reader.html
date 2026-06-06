@@ -18,19 +18,24 @@
   </style>
 </head>
 <body>
+{% set title = title if title is defined else manga.title %}
+{% set read_base = read_base if read_base is defined else '/manga/' ~ manga.id ~ '/read/' %}
+{% set page_prefix = page_prefix if page_prefix is defined else '/manga/' ~ manga.id ~ '/read/' ~ chapter.id ~ '/page/' %}
+{% set back_url = back_url if back_url is defined else '/manga/' ~ manga.id %}
+{% set progress_url = progress_url if progress_url is defined else '/manga/' ~ manga.id ~ '/progress' %}
 <div class="reader-bar border-bottom border-secondary py-2 px-2 px-md-3 d-flex align-items-center gap-2 flex-wrap">
-  <a href="/manga/{{ manga.id }}" class="btn btn-sm btn-outline-light" title="К деталям"><i class="bi bi-arrow-left"></i></a>
-  <span class="text-light text-truncate d-none d-sm-inline" style="max-width:240px">{{ manga.title }}</span>
+  <a href="{{ back_url }}" class="btn btn-sm btn-outline-light" title="К деталям"><i class="bi bi-arrow-left"></i></a>
+  <span class="text-light text-truncate d-none d-sm-inline" style="max-width:240px">{{ title }}</span>
   <select class="form-select form-select-sm" style="max-width:240px" id="chapterSelect">
     {% for c in chapters %}
-    <option value="{{ c.id }}" {% if c.id == chapter.id %}selected{% endif %}>{{ c.order }}. {{ c.label }}</option>
+    <option value="{{ read_base }}{{ c.id }}" {% if c.id == chapter.id %}selected{% endif %}>{{ c.order }}. {{ c.label }}</option>
     {% endfor %}
   </select>
   <span class="text-secondary small" id="pageIndicator">1 / {{ page_count }}</span>
   <div class="ms-auto d-flex gap-1">
     <button class="btn btn-sm btn-outline-light" id="fitBtn" title="Во всю ширину"><i class="bi bi-arrows-fullscreen"></i></button>
-    {% if prev_id %}<a href="/manga/{{ manga.id }}/read/{{ prev_id }}" class="btn btn-sm btn-outline-light" title="Пред. глава"><i class="bi bi-chevron-left"></i></a>{% endif %}
-    {% if next_id %}<a href="/manga/{{ manga.id }}/read/{{ next_id }}" class="btn btn-sm btn-primary" title="След. глава"><i class="bi bi-chevron-right"></i></a>{% endif %}
+    {% if prev_id %}<a href="{{ read_base }}{{ prev_id }}" class="btn btn-sm btn-outline-light" title="Пред. глава"><i class="bi bi-chevron-left"></i></a>{% endif %}
+    {% if next_id %}<a href="{{ read_base }}{{ next_id }}" class="btn btn-sm btn-primary" title="След. глава"><i class="bi bi-chevron-right"></i></a>{% endif %}
   </div>
 </div>
 
@@ -38,7 +43,7 @@
   {% if page_count %}
   {% for n in range(1, page_count + 1) %}
   <div class="page-wrap" data-page="{{ n }}">
-    <img src="/manga/{{ manga.id }}/read/{{ chapter.id }}/page/{{ n }}" loading="lazy" alt="Стр. {{ n }}">
+    <img src="{{ page_prefix }}{{ n }}" loading="lazy" alt="Стр. {{ n }}">
     <span class="page-num">{{ n }} / {{ page_count }}</span>
   </div>
   {% endfor %}
@@ -49,20 +54,20 @@
 
 {% if next_id %}
 <div class="text-center py-4">
-  <a href="/manga/{{ manga.id }}/read/{{ next_id }}" class="btn btn-primary"><i class="bi bi-chevron-right me-1"></i>Следующая глава</a>
+  <a href="{{ read_base }}{{ next_id }}" class="btn btn-primary"><i class="bi bi-chevron-right me-1"></i>Следующая глава</a>
 </div>
 {% else %}
-<div class="text-center py-4 text-secondary">Это последняя глава. <a href="/manga/{{ manga.id }}" class="link-light">К списку глав</a></div>
+<div class="text-center py-4 text-secondary">Это последняя глава. <a href="{{ back_url }}" class="link-light">К списку глав</a></div>
 {% endif %}
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-  const MANGA_ID = {{ manga.id }}, CHAPTER_ID = {{ chapter.id }}, PAGE_COUNT = {{ page_count }};
-  const START_PAGE = {{ start_page }};
+  const PAGE_COUNT = {{ page_count }}, START_PAGE = {{ start_page }};
+  const CHAPTER_ID = {{ chapter.id }}, PROGRESS_URL = {{ progress_url | tojson }};
 
-  // переход между главами
+  // переход между главами (значение опции — готовый URL)
   document.getElementById('chapterSelect').addEventListener('change', function () {
-    location.href = '/manga/' + MANGA_ID + '/read/' + this.value;
+    location.href = this.value;
   });
 
   // во всю ширину
@@ -73,11 +78,12 @@
     localStorage.setItem('manga_fit', pagesEl.classList.contains('fit-width') ? '1' : '0');
   });
 
-  // индикатор + сохранение позиции
+  // индикатор + сохранение позиции (только если задан progress_url)
   const indicator = document.getElementById('pageIndicator');
   let current = START_PAGE || 1, saveTimer = null;
   function save() {
-    fetch('/manga/' + MANGA_ID + '/progress', {
+    if (!PROGRESS_URL) return;
+    fetch(PROGRESS_URL, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ chapter_id: CHAPTER_ID, page: current }), keepalive: true,
     }).catch(() => {});
