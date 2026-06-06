@@ -1,0 +1,7 @@
+.git/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+# Android-проект собирается отдельно; в образ нужен только static/webook.apk
+android/

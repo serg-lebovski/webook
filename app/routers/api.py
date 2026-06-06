@@ -1,6 +1,7 @@
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Header, Request
+from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from jose import JWTError, jwt
@@ -8,12 +9,17 @@ from jose import JWTError, jwt
 from app.dependencies import get_db
 from app.models.user import User
 from app.models.link import Link, LinkFolder
+from app.models.book import Book
 from app.services.auth_service import verify_password, create_access_token
 from app.services.security_service import client_ip, banned_until, record_failure, record_success
+from app.services import book_service
 from app.logging_config import auth_log
-from app.config import SECRET_KEY, ALGORITHM
+from app.config import SECRET_KEY, ALGORITHM, BOOKS_DIR, COVERS_DIR
 
 router = APIRouter(prefix="/api")
+
+# Форматы книг, которые приложение умеет озвучивать (извлекаем plain text)
+TTS_FORMATS = {"epub", "fb2", "pdf"}
 
 
 def _get_api_user(
@@ -117,3 +123,136 @@ def save_link(
     db.commit()
     db.refresh(link)
     return {"id": link.id, "title": link.title}
+
+
+# ---------------------------------------------------------------------------
+# Мобильное приложение (Android): список книг/статей + извлечение текста для TTS
+# ---------------------------------------------------------------------------
+
+@router.get("/me")
+def api_me(user: User = Depends(_get_api_user)):
+    return {"id": user.id, "username": user.username, "is_admin": user.is_admin}
+
+
+@router.get("/books")
+def api_books(
+    q: str = "",
+    user: User = Depends(_get_api_user),
+    db: Session = Depends(get_db),
+):
+    """Список книг пользователя, доступных для озвучки (epub/fb2/pdf)."""
+    query = (
+        db.query(Book)
+        .filter(Book.user_id == user.id, Book.deleted_at.is_(None))
+        .filter(Book.file_format.in_(TTS_FORMATS))
+    )
+    term = q.strip()
+    if term:
+        query = query.filter(Book.title.ilike(f"%{term}%"))
+    books = query.order_by(Book.added_at.desc()).all()
+    return [
+        {
+            "id": b.id,
+            "title": b.title,
+            "author": b.author.name if b.author else "",
+            "format": b.file_format,
+            "has_cover": bool(b.cover_path),
+            "is_read": b.is_read,
+        }
+        for b in books
+    ]
+
+
+@router.get("/books/{book_id}/cover")
+def api_book_cover(
+    book_id: int,
+    user: User = Depends(_get_api_user),
+    db: Session = Depends(get_db),
+):
+    book = db.query(Book).filter(
+        Book.id == book_id, Book.user_id == user.id, Book.deleted_at.is_(None)
+    ).first()
+    if not book or not book.cover_path:
+        raise HTTPException(status_code=404, detail="No cover")
+    path = COVERS_DIR / book.cover_path
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="No cover")
+    return Response(content=path.read_bytes(), media_type="image/jpeg")
+
+
+@router.get("/books/{book_id}/text")
+def api_book_text(
+    book_id: int,
+    user: User = Depends(_get_api_user),
+    db: Session = Depends(get_db),
+):
+    """Книга как список абзацев plain text — для озвучки на устройстве."""
+    book = db.query(Book).filter(
+        Book.id == book_id, Book.user_id == user.id, Book.deleted_at.is_(None)
+    ).first()
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+    if not book.file_path:
+        raise HTTPException(status_code=400, detail="Book has no file")
+    path = BOOKS_DIR / book.file_path
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="File missing")
+    paragraphs = book_service.extract_book_text(path.read_bytes(), book.file_format)
+    if not paragraphs:
+        raise HTTPException(status_code=422, detail="Не удалось извлечь текст книги")
+    return {
+        "id": book.id,
+        "title": book.title,
+        "author": book.author.name if book.author else "",
+        "format": book.file_format,
+        "paragraphs": paragraphs,
+    }
+
+
+@router.get("/articles")
+def api_articles(
+    q: str = "",
+    user: User = Depends(_get_api_user),
+    db: Session = Depends(get_db),
+):
+    """Статьи (сохранённые ссылки) с извлечённым текстом — для озвучки."""
+    query = db.query(Link).filter(Link.user_id == user.id, Link.deleted_at.is_(None))
+    term = q.strip()
+    if term:
+        query = query.filter(Link.title.ilike(f"%{term}%"))
+    links = query.order_by(Link.created_at.desc()).all()
+    out = []
+    for l in links:
+        if not l.content:
+            continue  # без текста озвучивать нечего
+        out.append({
+            "id": l.id,
+            "title": l.title,
+            "url": l.url,
+            "minutes": l.reading_minutes,
+        })
+    return out
+
+
+@router.get("/articles/{link_id}/text")
+def api_article_text(
+    link_id: int,
+    user: User = Depends(_get_api_user),
+    db: Session = Depends(get_db),
+):
+    link = db.query(Link).filter(
+        Link.id == link_id, Link.user_id == user.id, Link.deleted_at.is_(None)
+    ).first()
+    if not link:
+        raise HTTPException(status_code=404, detail="Article not found")
+    content = link.content or ""
+    paragraphs = [" ".join(p.split()) for p in content.split("\n") if p.strip()]
+    if not paragraphs:
+        raise HTTPException(status_code=422, detail="У статьи нет текста")
+    return {
+        "id": link.id,
+        "title": link.title,
+        "author": "",
+        "format": "article",
+        "paragraphs": paragraphs,
+    }

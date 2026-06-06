@@ -159,6 +159,92 @@ def delete_file(rel_path: Optional[str], base_dir: Path):
             p.unlink(missing_ok=True)
 
 
+def _html_to_paragraphs(html_bytes) -> list:
+    """Извлечь абзацы текста из HTML-фрагмента (для озвучки/TTS)."""
+    try:
+        from lxml import html as lhtml
+
+        if isinstance(html_bytes, bytes):
+            doc = lhtml.fromstring(html_bytes)
+        else:
+            doc = lhtml.fromstring(html_bytes.encode("utf-8"))
+        for bad in doc.xpath("//script | //style"):
+            bad.drop_tree()
+        parts = []
+        for el in doc.iter("p", "h1", "h2", "h3", "h4", "h5", "h6", "li", "blockquote", "div"):
+            # для div берём только прямой текст, чтобы не дублировать вложенные блоки
+            if el.tag == "div":
+                t = (el.text or "").strip()
+            else:
+                t = el.text_content().strip()
+            if t:
+                parts.append(" ".join(t.split()))
+        if not parts:
+            t = doc.text_content().strip()
+            if t:
+                parts = [" ".join(line.split()) for line in t.split("\n") if line.strip()]
+        return parts
+    except Exception:
+        return []
+
+
+def extract_epub_text(data: bytes) -> list:
+    try:
+        import ebooklib
+        from ebooklib import epub
+
+        book = epub.read_epub(io.BytesIO(data))
+        docs = {it.get_id(): it for it in book.get_items_of_type(ebooklib.ITEM_DOCUMENT)}
+        ordered = []
+        for idref, _ in (book.spine or []):
+            it = docs.pop(idref, None)
+            if it is not None:
+                ordered.append(it)
+        ordered.extend(docs.values())  # то, чего не было в spine
+        paragraphs = []
+        for it in ordered:
+            paragraphs.extend(_html_to_paragraphs(it.get_content()))
+        return paragraphs
+    except Exception:
+        return []
+
+
+def extract_fb2_text(data: bytes) -> list:
+    html = convert_fb2_to_html(data)
+    return _html_to_paragraphs(html)
+
+
+def extract_pdf_text(data: bytes) -> list:
+    try:
+        from pypdf import PdfReader
+
+        reader = PdfReader(io.BytesIO(data))
+        paragraphs = []
+        for page in reader.pages:
+            text = (page.extract_text() or "").strip()
+            for block in text.split("\n\n"):
+                block = " ".join(block.split())
+                if block:
+                    paragraphs.append(block)
+        return paragraphs
+    except Exception:
+        return []
+
+
+def extract_book_text(data: bytes, suffix: str) -> list:
+    """Список абзацев книги (plain text) для озвучки. Пустой список — формат не поддержан."""
+    suffix = (suffix or "").lower()
+    if not suffix.startswith("."):
+        suffix = "." + suffix
+    if suffix == ".epub":
+        return extract_epub_text(data)
+    if suffix == ".fb2":
+        return extract_fb2_text(data)
+    if suffix == ".pdf":
+        return extract_pdf_text(data)
+    return []
+
+
 def convert_fb2_to_html(data: bytes) -> str:
     """Convert FB2 book bytes to safe HTML for in-browser reading."""
     try:

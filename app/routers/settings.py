@@ -317,3 +317,21 @@ def extension_download(user: User = Depends(get_current_user)):
         media_type="application/zip",
         headers={"Content-Disposition": 'attachment; filename="webook-extension.zip"'},
     )
+
+
+@router.get("/app/download")
+def app_download(user: User = Depends(get_current_user)):
+    """Скачать установщик Android-приложения (APK), собранный заранее."""
+    from pathlib import Path as _Path
+    apk = _Path("static") / "webook.apk"
+    if not apk.is_file():
+        return Response(
+            content="Android-приложение ещё не собрано. Обратитесь к администратору.",
+            media_type="text/plain; charset=utf-8",
+            status_code=404,
+        )
+    return FileResponse(
+        str(apk),
+        media_type="application/vnd.android.package-archive",
+        filename="webook.apk",
+    )
