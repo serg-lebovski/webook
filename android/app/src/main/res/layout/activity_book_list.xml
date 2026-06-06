@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical">
@@ -9,40 +10,9 @@
         android:layout_width="match_parent"
         android:layout_height="?attr/actionBarSize"
         android:background="@color/brand"
-        app:title="Библиотека"
+        app:navigationIcon="@android:drawable/ic_menu_revert"
         app:titleTextColor="@color/white"
-        xmlns:app="http://schemas.android.com/apk/res-auto" />
-
-    <com.google.android.material.tabs.TabLayout
-        android:id="@+id/tabs"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:background="@color/brand"
-        app:tabTextColor="#CCD8FF"
-        app:tabSelectedTextColor="@color/white"
-        app:tabIndicatorColor="@color/white"
-        xmlns:app="http://schemas.android.com/apk/res-auto">
-
-        <com.google.android.material.tabs.TabItem
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Полки" />
-
-        <com.google.android.material.tabs.TabItem
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Авторы" />
-
-        <com.google.android.material.tabs.TabItem
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Все" />
-
-        <com.google.android.material.tabs.TabItem
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Статьи" />
-    </com.google.android.material.tabs.TabLayout>
+        app:title="" />
 
     <FrameLayout
         android:layout_width="match_parent"

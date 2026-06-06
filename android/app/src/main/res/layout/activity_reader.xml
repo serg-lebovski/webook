@@ -104,12 +104,28 @@
                 android:text="1.0×" />
         </LinearLayout>
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/voiceBtn"
-            style="@style/Widget.Material3.Button.TextButton"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            app:icon="@android:drawable/ic_btn_speak_now"
-            android:text="Выбрать голос" />
+            android:orientation="horizontal">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/voiceBtn"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="wrap_content"
+                app:icon="@android:drawable/ic_btn_speak_now"
+                android:text="Голос" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/sleepBtn"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="wrap_content"
+                app:icon="@android:drawable/ic_lock_idle_alarm"
+                android:text="Таймер сна" />
+        </LinearLayout>
     </LinearLayout>
 </LinearLayout>

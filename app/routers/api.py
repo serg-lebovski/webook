@@ -3,6 +3,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Header, Request
 from fastapi.responses import Response
 from pydantic import BaseModel
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from jose import JWTError, jwt
 
@@ -10,6 +11,8 @@ from app.dependencies import get_db
 from app.models.user import User
 from app.models.link import Link, LinkFolder
 from app.models.book import Book
+from app.models.shelf import Shelf
+from app.models.author import Author
 from app.services.auth_service import verify_password, create_access_token
 from app.services.security_service import client_ip, banned_until, record_failure, record_success
 from app.services import book_service
@@ -134,22 +137,71 @@ def api_me(user: User = Depends(_get_api_user)):
     return {"id": user.id, "username": user.username, "is_admin": user.is_admin}
 
 
-@router.get("/books")
-def api_books(
-    q: str = "",
+@router.get("/shelves")
+def api_shelves(
     user: User = Depends(_get_api_user),
     db: Session = Depends(get_db),
 ):
-    """Список книг пользователя, доступных для озвучки (epub/fb2/pdf)."""
+    """Полки пользователя, в которых есть озвучиваемые книги (как на сайте)."""
+    rows = (
+        db.query(Shelf.id, Shelf.name, func.count(Book.id))
+        .join(Book, Book.shelf_id == Shelf.id)
+        .filter(
+            Book.user_id == user.id,
+            Book.deleted_at.is_(None),
+            Book.file_format.in_(TTS_FORMATS),
+        )
+        .group_by(Shelf.id, Shelf.name)
+        .order_by(Shelf.name)
+        .all()
+    )
+    return [{"id": r[0], "name": r[1], "count": r[2]} for r in rows]
+
+
+@router.get("/authors")
+def api_authors(
+    user: User = Depends(_get_api_user),
+    db: Session = Depends(get_db),
+):
+    """Авторы пользователя, у которых есть озвучиваемые книги."""
+    rows = (
+        db.query(Author.id, Author.name, func.count(Book.id))
+        .join(Book, Book.author_id == Author.id)
+        .filter(
+            Book.user_id == user.id,
+            Book.deleted_at.is_(None),
+            Book.file_format.in_(TTS_FORMATS),
+        )
+        .group_by(Author.id, Author.name)
+        .order_by(Author.name)
+        .all()
+    )
+    return [{"id": r[0], "name": r[1], "count": r[2]} for r in rows]
+
+
+@router.get("/books")
+def api_books(
+    q: str = "",
+    shelf_id: Optional[int] = None,
+    author_id: Optional[int] = None,
+    user: User = Depends(_get_api_user),
+    db: Session = Depends(get_db),
+):
+    """Список книг пользователя, доступных для озвучки (epub/fb2/pdf).
+    Поддерживает фильтры по полке/автору — для браузинга как на сайте."""
     query = (
         db.query(Book)
         .filter(Book.user_id == user.id, Book.deleted_at.is_(None))
         .filter(Book.file_format.in_(TTS_FORMATS))
     )
+    if shelf_id is not None:
+        query = query.filter(Book.shelf_id == shelf_id)
+    if author_id is not None:
+        query = query.filter(Book.author_id == author_id)
     term = q.strip()
     if term:
         query = query.filter(Book.title.ilike(f"%{term}%"))
-    books = query.order_by(Book.added_at.desc()).all()
+    books = query.order_by(Book.title).all()
     return [
         {
             "id": b.id,

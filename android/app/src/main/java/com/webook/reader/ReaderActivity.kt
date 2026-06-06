@@ -36,6 +36,7 @@ class ReaderActivity : AppCompatActivity(), TtsService.Listener {
     private var resourceKey: String = ""
     private var pendingPath: String = ""
     private var loadedIntoService = false
+    private val uiHandler = android.os.Handler(android.os.Looper.getMainLooper())
 
     private val requestNotif =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
@@ -69,6 +70,7 @@ class ReaderActivity : AppCompatActivity(), TtsService.Listener {
         b.prevBtn.setOnClickListener { service?.prev() }
         b.nextBtn.setOnClickListener { service?.next() }
         b.voiceBtn.setOnClickListener { showVoiceDialog() }
+        b.sleepBtn.setOnClickListener { showSleepDialog() }
 
         b.speed.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
@@ -95,10 +97,12 @@ class ReaderActivity : AppCompatActivity(), TtsService.Listener {
     override fun onStart() {
         super.onStart()
         bindService(Intent(this, TtsService::class.java), connection, Context.BIND_AUTO_CREATE)
+        uiHandler.post(sleepTick)
     }
 
     override fun onStop() {
         super.onStop()
+        uiHandler.removeCallbacks(sleepTick)
         savePosition()
         service?.listener = null
         if (bound) {
@@ -206,6 +210,36 @@ class ReaderActivity : AppCompatActivity(), TtsService.Listener {
         svc.availableVoices().firstOrNull { it.name == name }?.let { svc.setVoice(it) }
     }
 
+    private fun showSleepDialog() {
+        val svc = service ?: return
+        val labels = arrayOf("Выключить", "5 минут", "10 минут", "15 минут",
+            "30 минут", "45 минут", "60 минут")
+        val minutes = intArrayOf(0, 5, 10, 15, 30, 45, 60)
+        AlertDialog.Builder(this)
+            .setTitle("Таймер сна")
+            .setItems(labels) { _, which ->
+                svc.setSleepTimer(minutes[which])
+            }
+            .show()
+    }
+
+    private val sleepTick = object : Runnable {
+        override fun run() {
+            updateSleepLabel()
+            uiHandler.postDelayed(this, 20_000)
+        }
+    }
+
+    private fun updateSleepLabel() {
+        val end = service?.sleepEndAt ?: 0L
+        if (end > 0L) {
+            val left = ((end - System.currentTimeMillis()) / 60000L).toInt() + 1
+            b.sleepBtn.text = "Сон: $left мин"
+        } else {
+            b.sleepBtn.text = "Таймер сна"
+        }
+    }
+
     // --- TtsService.Listener ---------------------------------------------
 
     override fun onIndex(index: Int) = highlight(index)
@@ -215,6 +249,7 @@ class ReaderActivity : AppCompatActivity(), TtsService.Listener {
         highlight(svc.index)
         updatePlayIcon(svc.playing)
     }
+    override fun onSleep(endAtMs: Long) = updateSleepLabel()
 
     private fun highlight(index: Int) {
         adapter.setHighlight(index)

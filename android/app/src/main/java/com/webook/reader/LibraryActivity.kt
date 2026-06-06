@@ -62,22 +62,29 @@ class LibraryActivity : AppCompatActivity() {
         adapter.submit(emptyList())
         lifecycleScope.launch {
             try {
-                val rows: List<Row> = if (currentTab == 0) {
-                    Api.books(base, token).map {
+                val rows: List<Row> = when (currentTab) {
+                    0 -> Api.shelves(base, token).map {
+                        Row("shelf", it.id, it.name, plural(it.count), it.count.toString())
+                    }
+                    1 -> Api.authors(base, token).map {
+                        Row("author", it.id, it.name, plural(it.count), it.count.toString())
+                    }
+                    2 -> Api.books(base, token).map {
                         Row("book", it.id, it.title, it.author.ifBlank { "—" }, it.format.uppercase())
                     }
-                } else {
-                    Api.articles(base, token).map {
+                    else -> Api.articles(base, token).map {
                         val sub = if (it.minutes > 0) "${it.minutes} мин чтения" else "статья"
                         Row("article", it.id, it.title, sub, "TXT")
                     }
                 }
                 adapter.submit(rows)
                 if (rows.isEmpty()) {
-                    b.empty.text = if (currentTab == 0)
-                        "Книг для озвучки нет.\nЗагрузите EPUB / FB2 / PDF на сайте."
-                    else
-                        "Сохранённых статей с текстом нет."
+                    b.empty.text = when (currentTab) {
+                        0 -> "Полок с озвучиваемыми книгами нет."
+                        1 -> "Авторов с озвучиваемыми книгами нет."
+                        2 -> "Книг для озвучки нет.\nЗагрузите EPUB / FB2 / PDF на сайте."
+                        else -> "Сохранённых статей с текстом нет."
+                    }
                     b.empty.visibility = View.VISIBLE
                 }
             } catch (e: ApiException) {
@@ -94,13 +101,39 @@ class LibraryActivity : AppCompatActivity() {
         }
     }
 
+    private fun plural(n: Int): String {
+        val mod10 = n % 10
+        val mod100 = n % 100
+        val word = when {
+            mod10 == 1 && mod100 != 11 -> "книга"
+            mod10 in 2..4 && mod100 !in 12..14 -> "книги"
+            else -> "книг"
+        }
+        return "$n $word"
+    }
+
     private fun openReader(row: Row) {
-        val path = if (row.type == "book") "/api/books/${row.id}/text"
-        else "/api/articles/${row.id}/text"
-        val intent = Intent(this, ReaderActivity::class.java)
-            .putExtra("path", path)
-            .putExtra("resourceKey", "${row.type}:${row.id}")
-        startActivity(intent)
+        when (row.type) {
+            "shelf" -> startActivity(
+                Intent(this, BookListActivity::class.java)
+                    .putExtra("title", row.title)
+                    .putExtra("shelf_id", row.id)
+            )
+            "author" -> startActivity(
+                Intent(this, BookListActivity::class.java)
+                    .putExtra("title", row.title)
+                    .putExtra("author_id", row.id)
+            )
+            else -> {
+                val path = if (row.type == "book") "/api/books/${row.id}/text"
+                else "/api/articles/${row.id}/text"
+                startActivity(
+                    Intent(this, ReaderActivity::class.java)
+                        .putExtra("path", path)
+                        .putExtra("resourceKey", "${row.type}:${row.id}")
+                )
+            }
+        }
     }
 
     private fun showEmpty(msg: String) {

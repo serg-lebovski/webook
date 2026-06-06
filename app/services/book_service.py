@@ -162,12 +162,14 @@ def delete_file(rel_path: Optional[str], base_dir: Path):
 def _html_to_paragraphs(html_bytes) -> list:
     """Извлечь абзацы текста из HTML-фрагмента (для озвучки/TTS)."""
     try:
-        from lxml import html as lhtml
+        from lxml import html as lhtml, etree
 
-        if isinstance(html_bytes, bytes):
-            doc = lhtml.fromstring(html_bytes)
-        else:
-            doc = lhtml.fromstring(html_bytes.encode("utf-8"))
+        # ВАЖНО: без объявления кодировки libxml2 трактует HTML как latin-1 и
+        # портит кириллицу. Принудительно декодируем как UTF-8.
+        if isinstance(html_bytes, str):
+            html_bytes = html_bytes.encode("utf-8")
+        parser = etree.HTMLParser(encoding="utf-8")
+        doc = lhtml.fromstring(html_bytes, parser=parser)
         for bad in doc.xpath("//script | //style"):
             bad.drop_tree()
         parts = []

@@ -39,6 +39,7 @@ class TtsService : Service(), TextToSpeech.OnInitListener {
         fun onIndex(index: Int)
         fun onState(playing: Boolean)
         fun onReady()
+        fun onSleep(endAtMs: Long)
     }
 
     inner class LocalBinder : Binder() {
@@ -62,6 +63,10 @@ class TtsService : Service(), TextToSpeech.OnInitListener {
     var listener: Listener? = null
     private lateinit var mediaSession: MediaSessionCompat
     private val handler = Handler(Looper.getMainLooper())
+
+    private var sleepRunnable: Runnable? = null
+    var sleepEndAt: Long = 0L
+        private set
 
     val size: Int get() = paragraphs.size
     fun paragraphsList(): List<String> = paragraphs
@@ -138,6 +143,7 @@ class TtsService : Service(), TextToSpeech.OnInitListener {
     fun pause() {
         playing = false
         tts?.stop()
+        persistPosition()
         updateNotification()
         listener?.onState(false)
     }
@@ -147,6 +153,7 @@ class TtsService : Service(), TextToSpeech.OnInitListener {
     fun next() {
         if (index < paragraphs.size - 1) {
             index++
+            persistPosition()
             listener?.onIndex(index)
             if (playing) speakCurrent() else updateNotification()
         }
@@ -155,6 +162,7 @@ class TtsService : Service(), TextToSpeech.OnInitListener {
     fun prev() {
         if (index > 0) {
             index--
+            persistPosition()
             listener?.onIndex(index)
             if (playing) speakCurrent() else updateNotification()
         }
@@ -162,8 +170,37 @@ class TtsService : Service(), TextToSpeech.OnInitListener {
 
     fun seekTo(i: Int) {
         index = i.coerceIn(0, (paragraphs.size - 1).coerceAtLeast(0))
+        persistPosition()
         listener?.onIndex(index)
         if (playing) speakCurrent() else updateNotification()
+    }
+
+    /** Таймер сна: пауза через [minutes] минут (0 — выключить). Работает в фоне. */
+    fun setSleepTimer(minutes: Int) {
+        sleepRunnable?.let { handler.removeCallbacks(it) }
+        sleepRunnable = null
+        if (minutes <= 0) {
+            sleepEndAt = 0L
+            listener?.onSleep(0L)
+            return
+        }
+        val ms = minutes * 60_000L
+        sleepEndAt = System.currentTimeMillis() + ms
+        sleepRunnable = Runnable {
+            pause()
+            sleepEndAt = 0L
+            sleepRunnable = null
+            listener?.onSleep(0L)
+        }
+        handler.postDelayed(sleepRunnable!!, ms)
+        listener?.onSleep(sleepEndAt)
+    }
+
+    private fun persistPosition() {
+        if (resourceKey.isEmpty()) return
+        getSharedPreferences("webook", MODE_PRIVATE).edit()
+            .putInt("pos_$resourceKey", index)
+            .apply()
     }
 
     fun setRate(r: Float) {
@@ -194,11 +231,13 @@ class TtsService : Service(), TextToSpeech.OnInitListener {
     private fun advanceAuto() {
         if (index < paragraphs.size - 1) {
             index++
+            persistPosition()
             listener?.onIndex(index)
             speakCurrent()
             updateNotification()
         } else {
             playing = false
+            persistPosition()
             listener?.onState(false)
             updateNotification()
         }
@@ -298,6 +337,7 @@ class TtsService : Service(), TextToSpeech.OnInitListener {
     }
 
     override fun onDestroy() {
+        sleepRunnable?.let { handler.removeCallbacks(it) }
         tts?.stop()
         tts?.shutdown()
         mediaSession.release()

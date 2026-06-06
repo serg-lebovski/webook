@@ -59,6 +59,13 @@ data class ArticleItem(
     val minutes: Int,
 )
 
+/** Полка или автор — узел для браузинга «как на сайте». */
+data class GroupItem(
+    val id: Int,
+    val name: String,
+    val count: Int,
+)
+
 data class TextResult(
     val id: Int,
     val title: String,
@@ -89,11 +96,15 @@ object Api {
                 .post(payload.toRequestBody(JSON))
                 .build()
             client.newCall(req).execute().use { resp ->
-                val text = resp.body?.string() ?: ""
+                val text = bodyUtf8(resp)
                 if (!resp.isSuccessful) throw ApiException(resp.code, detail(text, resp.code))
                 JSONObject(text).getString("access_token")
             }
         }
+
+    /** Всегда декодируем ответ как UTF-8, не доверяя заголовку (иначе кириллица бьётся). */
+    private fun bodyUtf8(resp: okhttp3.Response): String =
+        resp.body?.bytes()?.toString(Charsets.UTF_8) ?: ""
 
     private suspend fun getBody(base: String, token: String, path: String): String =
         withContext(Dispatchers.IO) {
@@ -103,15 +114,22 @@ object Api {
                 .get()
                 .build()
             client.newCall(req).execute().use { resp ->
-                val text = resp.body?.string() ?: ""
+                val text = bodyUtf8(resp)
                 if (!resp.isSuccessful) throw ApiException(resp.code, detail(text, resp.code))
                 text
             }
         }
 
-    suspend fun books(base: String, token: String, q: String = ""): List<BookItem> {
-        val body = getBody(base, token, "/api/books" + query(q))
-        val arr = JSONArray(body)
+    suspend fun books(
+        base: String, token: String,
+        q: String = "", shelfId: Int? = null, authorId: Int? = null,
+    ): List<BookItem> {
+        val params = StringBuilder()
+        if (q.isNotBlank()) params.append("&q=").append(java.net.URLEncoder.encode(q, "UTF-8"))
+        if (shelfId != null) params.append("&shelf_id=").append(shelfId)
+        if (authorId != null) params.append("&author_id=").append(authorId)
+        val qs = if (params.isEmpty()) "" else "?" + params.substring(1)
+        val arr = JSONArray(getBody(base, token, "/api/books$qs"))
         return (0 until arr.length()).map { i ->
             val o = arr.getJSONObject(i)
             BookItem(
@@ -121,6 +139,20 @@ object Api {
                 format = o.optString("format"),
                 isRead = o.optBoolean("is_read", false),
             )
+        }
+    }
+
+    suspend fun shelves(base: String, token: String): List<GroupItem> =
+        groups(getBody(base, token, "/api/shelves"))
+
+    suspend fun authors(base: String, token: String): List<GroupItem> =
+        groups(getBody(base, token, "/api/authors"))
+
+    private fun groups(body: String): List<GroupItem> {
+        val arr = JSONArray(body)
+        return (0 until arr.length()).map { i ->
+            val o = arr.getJSONObject(i)
+            GroupItem(o.getInt("id"), o.optString("name"), o.optInt("count", 0))
         }
     }
 
