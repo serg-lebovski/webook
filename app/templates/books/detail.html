@@ -142,6 +142,9 @@
         </button>
       </form>
 
+      {% set add_rtype = 'book' %}{% set add_rid = book.id %}
+      {% include "collections/_add.html" %}
+
       <!-- Поделиться (публичная ссылка + с пользователем) -->
       <div class="dropdown d-inline">
         <button class="btn btn-outline-primary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">

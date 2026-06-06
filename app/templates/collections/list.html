@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Подборки — WeBook{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+  <h2 class="mb-0"><i class="bi bi-collection-play me-2"></i>Подборки</h2>
+  <form method="post" action="/collections" class="d-flex gap-2">
+    <input name="name" class="form-control form-control-sm" placeholder="Новая подборка" required style="max-width:220px">
+    <button class="btn btn-primary btn-sm text-nowrap"><i class="bi bi-plus-lg me-1"></i>Создать</button>
+  </form>
+</div>
+
+{% if collections %}
+<div class="row g-3">
+  {% for d in collections %}
+  <div class="col-6 col-sm-4 col-md-3">
+    <a href="/collections/{{ d.c.id }}" class="text-decoration-none text-body">
+      <div class="card h-100">
+        <div class="row g-0" style="height:120px;overflow:hidden;border-radius:.375rem .375rem 0 0;background:#e9ecef">
+          {% if d.covers %}
+          {% for cov in d.covers %}
+          <div class="col-6 p-0"><img src="{{ cov }}" style="width:100%;height:60px;object-fit:cover" alt=""></div>
+          {% endfor %}
+          {% else %}
+          <div class="col-12 d-flex align-items-center justify-content-center text-secondary" style="height:120px"><i class="bi bi-collection fs-1"></i></div>
+          {% endif %}
+        </div>
+        <div class="card-body p-2">
+          <div class="fw-semibold text-truncate">{{ d.c.name }}</div>
+          <div class="text-muted small">{{ d.count }} элемент(ов)</div>
+        </div>
+      </div>
+    </a>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="text-center text-muted py-5">
+  <i class="bi bi-collection fs-1 d-block mb-2"></i>
+  Подборок пока нет. Создайте первую и добавляйте в неё книги, аудиокниги, мангу и статьи кнопкой «В подборку».
+</div>
+{% endif %}
+{% endblock %}

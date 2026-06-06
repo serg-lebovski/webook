@@ -34,6 +34,9 @@
         <button class="btn btn-outline-danger"><i class="bi bi-heart{% if manga.is_favorite %}-fill{% endif %} me-1"></i>В избранное</button>
       </form>
 
+      {% set add_rtype = 'manga' %}{% set add_rid = manga.id %}
+      {% include "collections/_add.html" %}
+
       <div class="dropdown">
         <button class="btn btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside">
           <i class="bi bi-share me-1"></i>Поделиться

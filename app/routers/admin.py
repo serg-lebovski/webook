@@ -485,4 +485,8 @@ def _purge_user_data(uid: int, db: Session):
         _del_cover(ab.cover_path, _COVERS)
         db.delete(ab)
 
+    # 14. подборки (элементы каскадом)
+    from app.models.collection import Collection
+    db.query(Collection).filter_by(user_id=uid).delete(synchronize_session=False)
+
     db.flush()

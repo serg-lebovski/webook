@@ -22,6 +22,8 @@
           <i class="bi bi-check2-circle me-1"></i>{% if ab.is_finished %}Прослушано{% else %}Отметить прослушанным{% endif %}
         </button>
       </form>
+      {% set add_rtype = 'audiobook' %}{% set add_rid = ab.id %}
+      {% include "collections/_add.html" %}
       <form method="post" action="/audiobooks/{{ ab.id }}/delete"
             onsubmit="return confirm('Удалить аудиокнигу «{{ ab.title }}» со всеми файлами?')">
         <button class="btn btn-sm btn-outline-danger" title="Удалить"><i class="bi bi-trash"></i></button>

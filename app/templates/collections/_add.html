@@ -1,0 +1,77 @@
+{# Кнопка «В подборку». Перед include задайте add_rtype и add_rid. #}
+<div class="dropdown d-inline-block" data-col-add data-rtype="{{ add_rtype }}" data-rid="{{ add_rid }}">
+  <button class="btn btn-outline-primary dropdown-toggle" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside">
+    <i class="bi bi-collection-play me-1"></i>В подборку
+  </button>
+  <ul class="dropdown-menu p-2" style="min-width:250px;max-height:340px;overflow:auto">
+    <li class="col-list small text-muted px-1 py-1">Загрузка…</li>
+    <li><hr class="dropdown-divider"></li>
+    <li class="px-1">
+      <form class="col-new input-group input-group-sm">
+        <input class="form-control" placeholder="Новая подборка" required>
+        <button class="btn btn-primary" type="submit"><i class="bi bi-plus-lg"></i></button>
+      </form>
+    </li>
+  </ul>
+</div>
+
+{% if not col_add_script %}
+{% set col_add_script = true %}
+<script>
+(function () {
+  if (window.__colAddInit) return;
+  window.__colAddInit = true;
+
+  async function load(box) {
+    var rtype = box.dataset.rtype, rid = box.dataset.rid;
+    var list = box.querySelector(".col-list");
+    list.textContent = "Загрузка…";
+    try {
+      var r = await fetch("/collections/list.json?resource_type=" + encodeURIComponent(rtype) + "&resource_id=" + rid);
+      var cols = await r.json();
+      list.innerHTML = "";
+      if (!cols.length) { list.textContent = "Пока нет подборок — создайте ниже."; return; }
+      cols.forEach(function (c) {
+        var a = document.createElement("button");
+        a.type = "button";
+        a.className = "dropdown-item d-flex align-items-center gap-2";
+        a.innerHTML = '<i class="bi bi-' + (c.has ? "check-square-fill text-success" : "square") + '"></i>' +
+                      '<span class="text-truncate">' + c.name.replace(/</g, "&lt;") + "</span>";
+        a.addEventListener("click", function () {
+          if (c.has) return;
+          fetch("/collections/" + c.id + "/add", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ resource_type: rtype, resource_id: parseInt(rid) })
+          }).then(function () {
+            c.has = true;
+            a.querySelector("i").className = "bi bi-check-square-fill text-success";
+          });
+        });
+        list.appendChild(a);
+      });
+    } catch (e) { list.textContent = "Ошибка загрузки"; }
+  }
+
+  document.addEventListener("show.bs.dropdown", function (e) {
+    var box = e.target.closest("[data-col-add]");
+    if (box) load(box);
+  });
+
+  document.addEventListener("submit", function (e) {
+    var form = e.target.closest(".col-new");
+    if (!form) return;
+    e.preventDefault();
+    var box = form.closest("[data-col-add]");
+    var name = form.querySelector("input").value.trim();
+    if (!name) return;
+    fetch("/collections/create-with", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: name, resource_type: box.dataset.rtype, resource_id: parseInt(box.dataset.rid) })
+    }).then(function (r) { return r.json(); }).then(function () {
+      form.querySelector("input").value = "";
+      load(box);
+    });
+  });
+})();
+</script>
+{% endif %}
