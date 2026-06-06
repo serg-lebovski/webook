@@ -51,8 +51,8 @@
       font-family: Georgia, "Times New Roman", serif;
     }
     #fb2-content p {
-      text-indent: 1.5em; margin-bottom: .3rem; line-height: 1.85;
-      font-size: 1.05rem; color: #1a1a1a;
+      text-indent: 1.5em; margin-bottom: .3rem; line-height: var(--fb2-lh, 1.85);
+      font-size: 1.05em; color: #1a1a1a;
     }
     .fb2-section { margin-bottom: 2.5rem; }
     .fb2-title {
@@ -78,6 +78,33 @@
       box-shadow: 0 2px 12px rgba(0,0,0,.15);
     }
     mark.wb-hl { background: #fff3b0; color: inherit; padding: 0; border-radius: 2px; }
+
+    /* ── настройки читалки ───────────────────────────────────── */
+    .set-panel {
+      position: absolute; top: 52px; right: 8px; z-index: 1050; width: 260px;
+      background: #fff; color: #212529; border-radius: 8px; padding: .85rem 1rem;
+      box-shadow: 0 6px 24px rgba(0,0,0,.25); font-family: system-ui, sans-serif; display: none;
+    }
+    .set-panel.open { display: block; }
+    .set-row { margin-bottom: .8rem; }
+    .set-row > label { font-size: .78rem; color: #666; display: block; margin-bottom: .3rem; }
+    .set-steps { display: flex; align-items: center; gap: .4rem; }
+    .set-steps button, .set-theme button {
+      border: 1px solid #ccc; background: #f6f6f6; border-radius: 6px; cursor: pointer;
+      padding: .25rem .55rem; font-size: .9rem; color: #222;
+    }
+    .set-steps .val { flex: 1; text-align: center; font-size: .85rem; }
+    .set-theme { display: flex; gap: .4rem; }
+    .set-theme button { flex: 1; }
+    .set-theme button.active { border-color: #2563eb; box-shadow: 0 0 0 2px rgba(37,99,235,.25); }
+
+    /* FB2 темы */
+    #fb2-scroll.theme-sepia { background: #f4ecd8; }
+    #fb2-scroll.theme-sepia #fb2-content, #fb2-scroll.theme-sepia #fb2-content p { color: #5b4636; }
+    #fb2-scroll.theme-dark { background: #1a1a1a; }
+    #fb2-scroll.theme-dark #fb2-content, #fb2-scroll.theme-dark #fb2-content p { color: #cfcfcf; }
+    #fb2-scroll.theme-dark .fb2-title { color: #eee; }
+    #fb2-scroll.theme-dark .fb2-subtitle { color: #bbb; }
   </style>
 </head>
 <body>
@@ -86,8 +113,42 @@
   <a href="/books/{{ book.id }}" title="К карточке книги"><i class="bi bi-arrow-left fs-5"></i></a>
   <span class="r-title">{{ book.title }}</span>
   <span class="badge bg-secondary font-monospace">{{ book.file_format | upper }}</span>
+  {% if book.file_format in ("epub", "fb2") %}
+  <a href="#" id="setBtn" title="Настройки чтения"><i class="bi bi-fonts fs-5"></i></a>
+  {% endif %}
   <a href="/books/{{ book.id }}/download" title="Скачать файл"><i class="bi bi-download fs-5"></i></a>
 </div>
+
+{% if book.file_format in ("epub", "fb2") %}
+<div class="set-panel" id="setPanel">
+  <div class="set-row">
+    <label>Размер шрифта</label>
+    <div class="set-steps">
+      <button data-act="font-">A−</button><span class="val" id="vFont">100%</span><button data-act="font+">A+</button>
+    </div>
+  </div>
+  <div class="set-row">
+    <label>Межстрочный интервал</label>
+    <div class="set-steps">
+      <button data-act="lh-">−</button><span class="val" id="vLh">1.6</span><button data-act="lh+">+</button>
+    </div>
+  </div>
+  <div class="set-row">
+    <label>Ширина текста</label>
+    <div class="set-steps">
+      <button data-act="w-">−</button><span class="val" id="vW">680</span><button data-act="w+">+</button>
+    </div>
+  </div>
+  <div class="set-row mb-0">
+    <label>Тема</label>
+    <div class="set-theme">
+      <button data-theme="light">Светлая</button>
+      <button data-theme="sepia">Сепия</button>
+      <button data-theme="dark">Тёмная</button>
+    </div>
+  </div>
+</div>
+{% endif %}
 
 <div class="reader-body">
 
@@ -113,6 +174,49 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
+{% if book.file_format in ("epub", "fb2") %}
+<script>
+window.RS = (function () {
+  var DEF = { font: 100, lh: 1.6, width: 680, theme: "light" };
+  var s;
+  try { s = Object.assign({}, DEF, JSON.parse(localStorage.getItem("reader_settings")) || {}); }
+  catch (e) { s = Object.assign({}, DEF); }
+  function save() { localStorage.setItem("reader_settings", JSON.stringify(s)); }
+  function refresh() {
+    document.getElementById("vFont").textContent = s.font + "%";
+    document.getElementById("vLh").textContent = s.lh.toFixed(2).replace(/0$/, "");
+    document.getElementById("vW").textContent = s.width;
+    document.querySelectorAll(".set-theme button").forEach(function (b) {
+      b.classList.toggle("active", b.dataset.theme === s.theme);
+    });
+  }
+  function apply() { refresh(); if (window._applyReader) window._applyReader(s); }
+
+  var btn = document.getElementById("setBtn"), panel = document.getElementById("setPanel");
+  btn.addEventListener("click", function (e) { e.preventDefault(); panel.classList.toggle("open"); });
+  document.addEventListener("click", function (e) {
+    if (!panel.contains(e.target) && e.target !== btn && !btn.contains(e.target)) panel.classList.remove("open");
+  });
+  panel.querySelectorAll(".set-steps button").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var a = b.dataset.act;
+      if (a === "font+") s.font = Math.min(220, s.font + 10);
+      else if (a === "font-") s.font = Math.max(60, s.font - 10);
+      else if (a === "lh+") s.lh = Math.min(2.6, Math.round((s.lh + 0.1) * 10) / 10);
+      else if (a === "lh-") s.lh = Math.max(1.0, Math.round((s.lh - 0.1) * 10) / 10);
+      else if (a === "w+") s.width = Math.min(1100, s.width + 60);
+      else if (a === "w-") s.width = Math.max(440, s.width - 60);
+      save(); apply();
+    });
+  });
+  panel.querySelectorAll(".set-theme button").forEach(function (b) {
+    b.addEventListener("click", function () { s.theme = b.dataset.theme; save(); apply(); });
+  });
+  return { get: function () { return s; }, apply: apply };
+})();
+</script>
+{% endif %}
+
 {% if book.file_format == "epub" %}
 <script src="https://cdn.jsdelivr.net/npm/epubjs@0.3/dist/epub.min.js"></script>
 <script>
@@ -129,8 +233,27 @@
     spread: "none"
   });
 
+  // темы и применение пользовательских настроек чтения
+  rendition.themes.register("light", { "body": { "background": "#ffffff", "color": "#111" } });
+  rendition.themes.register("sepia", { "body": { "background": "#f4ecd8", "color": "#5b4636" } });
+  rendition.themes.register("dark",  { "body": { "background": "#1a1a1a", "color": "#cfcfcf" } });
+  var BG = { light: "#ffffff", sepia: "#f4ecd8", dark: "#1a1a1a" };
+  window._applyReader = function (s) {
+    try {
+      rendition.themes.select(s.theme);
+      rendition.themes.fontSize(s.font + "%");
+      rendition.themes.override("line-height", String(s.lh));
+      document.body.style.background = BG[s.theme] || "#fff";
+      var v = document.getElementById("epub-viewer");
+      v.style.maxWidth = s.width + "px"; v.style.margin = "0 auto";
+      rendition.resize(v.clientWidth, v.offsetHeight);
+    } catch (e) {}
+  };
+
   var saved = serverProgress || localStorage.getItem(KEY);
-  rendition.display(saved || undefined);
+  rendition.display(saved || undefined).then(function () {
+    if (window.RS) window.RS.apply();
+  });
 
   var saveTimer;
   rendition.on("relocated", function (loc) {
@@ -203,6 +326,19 @@
   var serverProgress = {{ server_progress | tojson }};
 
   var el = document.getElementById("fb2-scroll");
+
+  // применение пользовательских настроек чтения
+  window._applyReader = function (s) {
+    var c = document.getElementById("fb2-content");
+    c.style.fontSize = s.font + "%";
+    c.style.maxWidth = s.width + "px";
+    c.style.setProperty("--fb2-lh", String(s.lh));
+    el.classList.remove("theme-sepia", "theme-dark");
+    if (s.theme === "sepia") el.classList.add("theme-sepia");
+    else if (s.theme === "dark") el.classList.add("theme-dark");
+  };
+  if (window.RS) window.RS.apply();
+
   var saved = serverProgress || localStorage.getItem(KEY);
   if (saved) el.scrollTop = parseInt(saved, 10);
 
