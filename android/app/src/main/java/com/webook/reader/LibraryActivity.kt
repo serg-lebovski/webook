@@ -55,6 +55,10 @@ class LibraryActivity : AppCompatActivity() {
         b.bottomNav.setOnItemSelectedListener { item ->
             when (item.itemId) {
                 R.id.nav_books -> { setMode("books"); true }
+                R.id.nav_audio -> {
+                    startActivity(Intent(this, AudioListActivity::class.java))
+                    false   // аудио — отдельный экран
+                }
                 R.id.nav_notes -> { setMode("notes"); true }
                 R.id.nav_profile -> {
                     startActivity(Intent(this, ProfileActivity::class.java))

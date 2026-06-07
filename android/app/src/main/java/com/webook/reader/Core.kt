@@ -47,6 +47,16 @@ object Prefs {
 
 class ApiException(val code: Int, message: String) : Exception(message)
 
+/** Форматирование времени: m:ss или h:mm:ss. */
+fun fmtTime(seconds: Double): String {
+    if (seconds.isNaN() || seconds < 0) return "0:00"
+    val s = seconds.toInt()
+    val h = s / 3600
+    val m = (s % 3600) / 60
+    val sec = s % 60
+    return if (h > 0) "%d:%02d:%02d".format(h, m, sec) else "%d:%02d".format(m, sec)
+}
+
 data class BookItem(
     val id: Int,
     val title: String,
@@ -66,6 +76,33 @@ data class GroupItem(
     val id: Int,
     val name: String,
     val count: Int,
+)
+
+data class AudiobookItem(
+    val id: Int,
+    val title: String,
+    val author: String,
+    val narrator: String,
+    val trackCount: Int,
+    val duration: Double,
+    val currentTrackId: Int,
+    val position: Double,
+)
+
+data class AudioTrack(
+    val id: Int,
+    val title: String,
+    val order: Int,
+    val durationSec: Double,
+)
+
+data class AudiobookDetail(
+    val id: Int,
+    val title: String,
+    val author: String,
+    val currentTrackId: Int,
+    val position: Double,
+    val tracks: List<AudioTrack>,
 )
 
 data class TextResult(
@@ -245,6 +282,54 @@ object Api {
     suspend fun postProgress(base: String, token: String, path: String, percentage: Double) {
         postJson(base, token, path, JSONObject().put("percentage", percentage).toString())
     }
+
+    // --- Аудиокниги ---
+
+    suspend fun audiobooks(base: String, token: String): List<AudiobookItem> {
+        val arr = JSONArray(getBody(base, token, "/api/audiobooks"))
+        return (0 until arr.length()).map { i ->
+            val o = arr.getJSONObject(i)
+            AudiobookItem(
+                id = o.getInt("id"),
+                title = o.optString("title"),
+                author = o.optString("author"),
+                narrator = o.optString("narrator"),
+                trackCount = o.optInt("track_count", 0),
+                duration = o.optDouble("duration", 0.0),
+                currentTrackId = o.optInt("current_track_id", 0),
+                position = o.optDouble("position", 0.0),
+            )
+        }
+    }
+
+    suspend fun audiobookDetail(base: String, token: String, id: Int): AudiobookDetail {
+        val o = JSONObject(getBody(base, token, "/api/audiobooks/$id"))
+        val tArr = o.getJSONArray("tracks")
+        val tracks = (0 until tArr.length()).map { i ->
+            val t = tArr.getJSONObject(i)
+            AudioTrack(t.getInt("id"), t.optString("title"), t.optInt("order"), t.optDouble("duration", 0.0))
+        }
+        return AudiobookDetail(
+            id = o.getInt("id"),
+            title = o.optString("title"),
+            author = o.optString("author"),
+            currentTrackId = o.optInt("current_track_id", 0),
+            position = o.optDouble("position", 0.0),
+            tracks = tracks,
+        )
+    }
+
+    suspend fun postAudioProgress(
+        base: String, token: String, id: Int,
+        trackId: Int, position: Double, finished: Boolean,
+    ) {
+        val body = JSONObject()
+            .put("track_id", trackId).put("position", position).put("finished", finished)
+        postJson(base, token, "/api/audiobooks/$id/progress", body.toString())
+    }
+
+    fun trackUrl(base: String, audiobookId: Int, trackId: Int): String =
+        "$base/api/audiobooks/$audiobookId/tracks/$trackId/serve"
 
     /** Сохранить ссылку/статью (share из браузера). */
     suspend fun saveLink(base: String, token: String, url: String, title: String): String {

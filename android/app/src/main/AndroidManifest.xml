@@ -54,8 +54,21 @@
             android:name=".ReaderActivity"
             android:exported="false" />
 
+        <activity
+            android:name=".AudioListActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".AudioPlayerActivity"
+            android:exported="false" />
+
         <service
             android:name=".TtsService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+
+        <service
+            android:name=".AudioService"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
     </application>

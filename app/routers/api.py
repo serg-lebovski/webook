@@ -4,7 +4,7 @@ from datetime import datetime
 import os
 
 from fastapi import APIRouter, Depends, HTTPException, Header, Request, UploadFile, File
-from fastapi.responses import Response
+from fastapi.responses import Response, FileResponse
 from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -17,6 +17,7 @@ from app.models.book import Book
 from app.models.shelf import Shelf
 from app.models.author import Author
 from app.models.read_progress import ReadProgress
+from app.models.audiobook import Audiobook
 from app.services.auth_service import verify_password, create_access_token
 from app.services.security_service import client_ip, banned_until, record_failure, record_success
 from app.services import book_service
@@ -434,3 +435,132 @@ def api_set_article_progress(
     link.read_progress = _clamp01(body.percentage)
     db.commit()
     return {"ok": True, "percentage": link.read_progress}
+
+
+# ---------------------------------------------------------------------------
+# Аудиокниги (реальные аудиофайлы) — список, треки, стриминг, прогресс
+# ---------------------------------------------------------------------------
+
+_AUDIO_MIME = {
+    "mp3": "audio/mpeg", "m4a": "audio/mp4", "m4b": "audio/mp4",
+    "ogg": "audio/ogg", "oga": "audio/ogg", "opus": "audio/ogg",
+    "aac": "audio/aac", "flac": "audio/flac", "wav": "audio/wav", "webm": "audio/webm",
+}
+
+
+def _own_audiobook(ab_id: int, user: User, db: Session) -> Audiobook:
+    ab = db.query(Audiobook).filter(
+        Audiobook.id == ab_id, Audiobook.user_id == user.id, Audiobook.deleted_at.is_(None)
+    ).first()
+    if not ab:
+        raise HTTPException(status_code=404, detail="Audiobook not found")
+    return ab
+
+
+@router.get("/audiobooks")
+def api_audiobooks(
+    user: User = Depends(_get_api_user),
+    db: Session = Depends(get_db),
+):
+    items = (
+        db.query(Audiobook)
+        .filter(Audiobook.user_id == user.id, Audiobook.deleted_at.is_(None))
+        .order_by(Audiobook.title)
+        .all()
+    )
+    return [
+        {
+            "id": ab.id,
+            "title": ab.title,
+            "author": ab.author or "",
+            "narrator": ab.narrator or "",
+            "track_count": len(ab.tracks),
+            "has_cover": bool(ab.cover_path),
+            "is_finished": ab.is_finished,
+            "current_track_id": ab.current_track_id,
+            "position": ab.position or 0,
+            "duration": ab.total_duration,
+        }
+        for ab in items
+    ]
+
+
+@router.get("/audiobooks/{ab_id}")
+def api_audiobook(
+    ab_id: int,
+    user: User = Depends(_get_api_user),
+    db: Session = Depends(get_db),
+):
+    ab = _own_audiobook(ab_id, user, db)
+    return {
+        "id": ab.id,
+        "title": ab.title,
+        "author": ab.author or "",
+        "narrator": ab.narrator or "",
+        "current_track_id": ab.current_track_id,
+        "position": ab.position or 0,
+        "is_finished": ab.is_finished,
+        "tracks": [
+            {
+                "id": t.id,
+                "title": t.title or f"Глава {t.order + 1}",
+                "order": t.order,
+                "duration": t.duration or 0,
+            }
+            for t in ab.tracks
+        ],
+    }
+
+
+@router.get("/audiobooks/{ab_id}/cover")
+def api_audiobook_cover(
+    ab_id: int,
+    user: User = Depends(_get_api_user),
+    db: Session = Depends(get_db),
+):
+    ab = _own_audiobook(ab_id, user, db)
+    if not ab.cover_path:
+        raise HTTPException(status_code=404, detail="No cover")
+    path = COVERS_DIR / ab.cover_path
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="No cover")
+    return Response(content=path.read_bytes(), media_type="image/jpeg")
+
+
+@router.get("/audiobooks/{ab_id}/tracks/{track_id}/serve")
+def api_audiobook_track(
+    ab_id: int,
+    track_id: int,
+    user: User = Depends(_get_api_user),
+    db: Session = Depends(get_db),
+):
+    from app.services import audiobook_service
+    ab = _own_audiobook(ab_id, user, db)
+    track = next((t for t in ab.tracks if t.id == track_id), None)
+    if not track:
+        raise HTTPException(status_code=404, detail="Track not found")
+    path = audiobook_service.book_dir(ab.folder) / track.filename
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="File missing")
+    # FileResponse поддерживает Range — нужно для перемотки/докачки
+    return FileResponse(path, media_type=_AUDIO_MIME.get(track.file_format, "application/octet-stream"))
+
+
+@router.post("/audiobooks/{ab_id}/progress")
+async def api_audiobook_progress(
+    ab_id: int,
+    request: Request,
+    user: User = Depends(_get_api_user),
+    db: Session = Depends(get_db),
+):
+    ab = _own_audiobook(ab_id, user, db)
+    body = await request.json()
+    if body.get("track_id") is not None:
+        ab.current_track_id = int(body["track_id"])
+    if body.get("position") is not None:
+        ab.position = max(0.0, float(body["position"]))
+    if body.get("finished") is not None:
+        ab.is_finished = bool(body["finished"])
+    ab.last_played_at = datetime.utcnow()
+    db.commit()
+    return {"ok": True}
