@@ -215,6 +215,7 @@ def api_books(
             "format": b.file_format,
             "has_cover": bool(b.cover_path),
             "is_read": b.is_read,
+            "rating": b.rating or 0,
         }
         for b in books
     ]

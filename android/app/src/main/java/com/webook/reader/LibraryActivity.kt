@@ -5,6 +5,8 @@ import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
 import android.view.LayoutInflater
+import android.view.Menu
+import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
@@ -12,7 +14,6 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
-import androidx.recyclerview.widget.DividerItemDecoration
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.tabs.TabLayout
@@ -23,9 +24,11 @@ class LibraryActivity : AppCompatActivity() {
 
     private lateinit var b: ActivityLibraryBinding
     private val adapter = RowAdapter { row -> onRowClick(row) }
+    private lateinit var coverAdapter: CoverAdapter
 
     private var mode = "books"          // "books" | "notes"
     private var currentTab = 0          // 0=Полки, 1=Авторы, 2=Все
+    private var gridView = true         // сетка обложек / список
 
     private val pickBook =
         registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
@@ -39,9 +42,12 @@ class LibraryActivity : AppCompatActivity() {
 
         setSupportActionBar(b.toolbar)
 
+        gridView = Prefs.prefs(this).getBoolean("books_grid", true)
+        coverAdapter = CoverAdapter(Prefs.baseUrl(this), Prefs.token(this)) { item ->
+            openBookReader(item.id)
+        }
         b.list.layoutManager = LinearLayoutManager(this)
         b.list.adapter = adapter
-        b.list.addItemDecoration(DividerItemDecoration(this, DividerItemDecoration.VERTICAL))
 
         b.tabs.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
             override fun onTabSelected(tab: TabLayout.Tab) {
@@ -93,33 +99,37 @@ class LibraryActivity : AppCompatActivity() {
         setLoading(true)
         b.empty.visibility = View.GONE
         adapter.submit(emptyList())
+        coverAdapter.submit(emptyList())
+        val booksTab = (mode == "books" && currentTab == 2)
         lifecycleScope.launch {
             try {
-                val rows: List<Row> = if (mode == "notes") {
-                    Api.articles(base, token).map {
-                        val sub = if (it.minutes > 0) "${it.minutes} мин чтения" else "заметка"
-                        Row("article", it.id, it.title, sub, "TXT")
+                if (booksTab) {
+                    val books = Api.books(base, token)
+                    showBooks(books)
+                    if (books.isEmpty()) showEmpty("Книг для озвучки нет.\nНажмите + чтобы загрузить EPUB / FB2 / PDF.")
+                } else {
+                    val rows: List<Row> = if (mode == "notes") {
+                        Api.articles(base, token).map {
+                            val sub = if (it.minutes > 0) "${it.minutes} мин чтения" else "заметка"
+                            Row("article", it.id, it.title, sub, "TXT")
+                        }
+                    } else if (currentTab == 0) {
+                        Api.shelves(base, token).map {
+                            Row("shelf", it.id, it.name, plural(it.count), it.count.toString())
+                        }
+                    } else {
+                        Api.authors(base, token).map {
+                            Row("author", it.id, it.name, plural(it.count), it.count.toString())
+                        }
                     }
-                } else when (currentTab) {
-                    0 -> Api.shelves(base, token).map {
-                        Row("shelf", it.id, it.name, plural(it.count), it.count.toString())
+                    showRows(rows)
+                    if (rows.isEmpty()) {
+                        showEmpty(when {
+                            mode == "notes" -> "Сохранённых заметок с текстом нет."
+                            currentTab == 0 -> "Полок с озвучиваемыми книгами нет."
+                            else -> "Авторов с озвучиваемыми книгами нет."
+                        })
                     }
-                    1 -> Api.authors(base, token).map {
-                        Row("author", it.id, it.name, plural(it.count), it.count.toString())
-                    }
-                    else -> Api.books(base, token).map {
-                        Row("book", it.id, it.title, it.author.ifBlank { "—" }, it.format.uppercase())
-                    }
-                }
-                adapter.submit(rows)
-                if (rows.isEmpty()) {
-                    b.empty.text = when {
-                        mode == "notes" -> "Сохранённых заметок с текстом нет."
-                        currentTab == 0 -> "Полок с озвучиваемыми книгами нет."
-                        currentTab == 1 -> "Авторов с озвучиваемыми книгами нет."
-                        else -> "Книг для озвучки нет.\nНажмите + чтобы загрузить EPUB / FB2 / PDF."
-                    }
-                    b.empty.visibility = View.VISIBLE
                 }
             } catch (e: ApiException) {
                 if (e.code == 401) logout() else showEmpty("Ошибка: ${e.message}")
@@ -129,6 +139,50 @@ class LibraryActivity : AppCompatActivity() {
                 setLoading(false)
             }
         }
+    }
+
+    private fun showBooks(books: List<BookItem>) {
+        if (gridView) {
+            b.list.layoutManager = androidx.recyclerview.widget.GridLayoutManager(this, 3)
+            b.list.adapter = coverAdapter
+            coverAdapter.submit(books)
+        } else {
+            b.list.layoutManager = LinearLayoutManager(this)
+            b.list.adapter = adapter
+            adapter.submit(books.map {
+                Row("book", it.id, it.title, it.author.ifBlank { "—" }, it.format.uppercase())
+            })
+        }
+    }
+
+    private fun showRows(rows: List<Row>) {
+        b.list.layoutManager = LinearLayoutManager(this)
+        b.list.adapter = adapter
+        adapter.submit(rows)
+    }
+
+    private fun openBookReader(id: Int) {
+        startActivity(
+            Intent(this, ReaderActivity::class.java)
+                .putExtra("path", "/api/books/$id/text")
+                .putExtra("resourceKey", "book:$id")
+        )
+    }
+
+    override fun onCreateOptionsMenu(menu: Menu): Boolean {
+        menu.add(0, 1, 0, "Вид: сетка/список").setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
+        return true
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        if (item.itemId == 1) {
+            gridView = !gridView
+            Prefs.prefs(this).edit().putBoolean("books_grid", gridView).apply()
+            if (mode == "books" && currentTab == 2) load()
+            Toast.makeText(this, if (gridView) "Сетка обложек" else "Список", Toast.LENGTH_SHORT).show()
+            return true
+        }
+        return super.onOptionsItemSelected(item)
     }
 
     private fun uploadBook(uri: Uri) {

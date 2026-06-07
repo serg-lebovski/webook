@@ -63,6 +63,8 @@ data class BookItem(
     val author: String,
     val format: String,
     val isRead: Boolean,
+    val hasCover: Boolean = false,
+    val rating: Int = 0,
 )
 
 data class ArticleItem(
@@ -210,6 +212,8 @@ object Api {
                 author = o.optString("author"),
                 format = o.optString("format"),
                 isRead = o.optBoolean("is_read", false),
+                hasCover = o.optBoolean("has_cover", false),
+                rating = o.optInt("rating", 0),
             )
         }
     }
@@ -330,6 +334,8 @@ object Api {
 
     fun trackUrl(base: String, audiobookId: Int, trackId: Int): String =
         "$base/api/audiobooks/$audiobookId/tracks/$trackId/serve"
+
+    fun bookCoverUrl(base: String, id: Int): String = "$base/api/books/$id/cover"
 
     /** Сохранить ссылку/статью (share из браузера). */
     suspend fun saveLink(base: String, token: String, url: String, title: String): String {

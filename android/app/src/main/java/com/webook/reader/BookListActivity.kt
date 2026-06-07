@@ -5,16 +5,15 @@ import android.os.Bundle
 import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
-import androidx.recyclerview.widget.DividerItemDecoration
-import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.GridLayoutManager
 import com.webook.reader.databinding.ActivityBookListBinding
 import kotlinx.coroutines.launch
 
-/** Список книг конкретной полки или автора (браузинг как на сайте). */
+/** Список книг конкретной полки или автора — сеткой обложек. */
 class BookListActivity : AppCompatActivity() {
 
     private lateinit var b: ActivityBookListBinding
-    private val adapter = RowAdapter { row -> openReader(row) }
+    private lateinit var coverAdapter: CoverAdapter
 
     private var shelfId: Int = -1
     private var authorId: Int = -1
@@ -29,9 +28,15 @@ class BookListActivity : AppCompatActivity() {
         b.toolbar.title = intent.getStringExtra("title") ?: "Книги"
         b.toolbar.setNavigationOnClickListener { finish() }
 
-        b.list.layoutManager = LinearLayoutManager(this)
-        b.list.adapter = adapter
-        b.list.addItemDecoration(DividerItemDecoration(this, DividerItemDecoration.VERTICAL))
+        coverAdapter = CoverAdapter(Prefs.baseUrl(this), Prefs.token(this)) { item ->
+            startActivity(
+                Intent(this, ReaderActivity::class.java)
+                    .putExtra("path", "/api/books/${item.id}/text")
+                    .putExtra("resourceKey", "book:${item.id}")
+            )
+        }
+        b.list.layoutManager = GridLayoutManager(this, 3)
+        b.list.adapter = coverAdapter
 
         load()
     }
@@ -47,9 +52,7 @@ class BookListActivity : AppCompatActivity() {
                     shelfId = if (shelfId >= 0) shelfId else null,
                     authorId = if (authorId >= 0) authorId else null,
                 )
-                adapter.submit(books.map {
-                    Row("book", it.id, it.title, it.author.ifBlank { "—" }, it.format.uppercase())
-                })
+                coverAdapter.submit(books)
                 if (books.isEmpty()) {
                     b.empty.text = "Книг нет"
                     b.empty.visibility = View.VISIBLE
@@ -61,13 +64,5 @@ class BookListActivity : AppCompatActivity() {
                 b.progress.visibility = View.GONE
             }
         }
-    }
-
-    private fun openReader(row: Row) {
-        startActivity(
-            Intent(this, ReaderActivity::class.java)
-                .putExtra("path", "/api/books/${row.id}/text")
-                .putExtra("resourceKey", "book:${row.id}")
-        )
     }
 }
