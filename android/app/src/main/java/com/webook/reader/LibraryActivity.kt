@@ -1,17 +1,16 @@
 package com.webook.reader
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
+import android.provider.OpenableColumns
 import android.view.LayoutInflater
-import android.view.Menu
-import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
-import androidx.appcompat.app.ActionBarDrawerToggle
+import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.view.GravityCompat
-import androidx.drawerlayout.widget.DrawerLayout
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.DividerItemDecoration
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -26,7 +25,12 @@ class LibraryActivity : AppCompatActivity() {
     private val adapter = RowAdapter { row -> onRowClick(row) }
 
     private var mode = "books"          // "books" | "notes"
-    private var currentTab = 0          // 0=Полки, 1=Авторы, 2=Все (для режима books)
+    private var currentTab = 0          // 0=Полки, 1=Авторы, 2=Все
+
+    private val pickBook =
+        registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+            if (uri != null) uploadBook(uri)
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -34,26 +38,6 @@ class LibraryActivity : AppCompatActivity() {
         setContentView(b.root)
 
         setSupportActionBar(b.toolbar)
-
-        val toggle = ActionBarDrawerToggle(
-            this, b.drawer, b.toolbar,
-            android.R.string.ok, android.R.string.cancel
-        )
-        b.drawer.addDrawerListener(toggle)
-        toggle.syncState()
-
-        b.navView.setCheckedItem(R.id.nav_books)
-        b.navView.setNavigationItemSelectedListener { item ->
-            when (item.itemId) {
-                R.id.nav_books -> { setMode("books"); b.drawer.closeDrawer(GravityCompat.START) }
-                R.id.nav_notes -> { setMode("notes"); b.drawer.closeDrawer(GravityCompat.START) }
-                R.id.nav_profile -> {
-                    b.drawer.closeDrawer(GravityCompat.START)
-                    startActivity(Intent(this, ProfileActivity::class.java))
-                }
-            }
-            true
-        }
 
         b.list.layoutManager = LinearLayoutManager(this)
         b.list.adapter = adapter
@@ -68,15 +52,21 @@ class LibraryActivity : AppCompatActivity() {
             override fun onTabReselected(tab: TabLayout.Tab) {}
         })
 
-        setMode("books")
-    }
-
-    override fun onBackPressed() {
-        if (b.drawer.isDrawerOpen(GravityCompat.START)) {
-            b.drawer.closeDrawer(GravityCompat.START)
-        } else {
-            super.onBackPressed()
+        b.bottomNav.setOnItemSelectedListener { item ->
+            when (item.itemId) {
+                R.id.nav_books -> { setMode("books"); true }
+                R.id.nav_notes -> { setMode("notes"); true }
+                R.id.nav_profile -> {
+                    startActivity(Intent(this, ProfileActivity::class.java))
+                    false   // не «выбираем» профиль — это отдельный экран
+                }
+                else -> false
+            }
         }
+
+        b.fab.setOnClickListener { pickBook.launch("*/*") }
+
+        setMode("books")
     }
 
     private fun setMode(m: String) {
@@ -84,9 +74,11 @@ class LibraryActivity : AppCompatActivity() {
         if (m == "books") {
             b.toolbar.title = "Книги"
             b.tabs.visibility = View.VISIBLE
+            b.fab.show()
         } else {
             b.toolbar.title = "Заметки"
             b.tabs.visibility = View.GONE
+            b.fab.hide()
         }
         load()
     }
@@ -121,7 +113,7 @@ class LibraryActivity : AppCompatActivity() {
                         mode == "notes" -> "Сохранённых заметок с текстом нет."
                         currentTab == 0 -> "Полок с озвучиваемыми книгами нет."
                         currentTab == 1 -> "Авторов с озвучиваемыми книгами нет."
-                        else -> "Книг для озвучки нет.\nЗагрузите EPUB / FB2 / PDF на сайте."
+                        else -> "Книг для озвучки нет.\nНажмите + чтобы загрузить EPUB / FB2 / PDF."
                     }
                     b.empty.visibility = View.VISIBLE
                 }
@@ -133,6 +125,55 @@ class LibraryActivity : AppCompatActivity() {
                 setLoading(false)
             }
         }
+    }
+
+    private fun uploadBook(uri: Uri) {
+        val name = queryName(uri)
+        val ext = name.substringAfterLast('.', "").lowercase()
+        if (ext !in setOf("epub", "fb2", "pdf")) {
+            Toast.makeText(this, "Поддерживаются EPUB, FB2, PDF", Toast.LENGTH_LONG).show()
+            return
+        }
+        val bytes = try {
+            contentResolver.openInputStream(uri)?.use { it.readBytes() }
+        } catch (e: Exception) { null }
+        if (bytes == null || bytes.isEmpty()) {
+            Toast.makeText(this, "Не удалось прочитать файл", Toast.LENGTH_LONG).show()
+            return
+        }
+        val mime = contentResolver.getType(uri)
+        Toast.makeText(this, "Загрузка «$name»…", Toast.LENGTH_SHORT).show()
+        setLoading(true)
+        lifecycleScope.launch {
+            try {
+                val title = Api.uploadBook(
+                    Prefs.baseUrl(this@LibraryActivity),
+                    Prefs.token(this@LibraryActivity),
+                    name, bytes, mime,
+                )
+                Toast.makeText(this@LibraryActivity, "Загружено: $title", Toast.LENGTH_LONG).show()
+                if (mode == "books") { currentTab = 2; b.tabs.getTabAt(2)?.select(); load() }
+            } catch (e: ApiException) {
+                Toast.makeText(this@LibraryActivity, "Ошибка: ${e.message}", Toast.LENGTH_LONG).show()
+            } catch (e: Exception) {
+                Toast.makeText(this@LibraryActivity, "Не удалось загрузить", Toast.LENGTH_LONG).show()
+            } finally {
+                setLoading(false)
+            }
+        }
+    }
+
+    private fun queryName(uri: Uri): String {
+        var name = "book"
+        if (uri.scheme == "content") {
+            contentResolver.query(uri, null, null, null, null)?.use { c ->
+                val idx = c.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (idx >= 0 && c.moveToFirst()) name = c.getString(idx) ?: name
+            }
+        } else {
+            uri.lastPathSegment?.let { name = it }
+        }
+        return name
     }
 
     private fun plural(n: Int): String {
@@ -175,18 +216,6 @@ class LibraryActivity : AppCompatActivity() {
 
     private fun setLoading(loading: Boolean) {
         b.progress.visibility = if (loading) View.VISIBLE else View.GONE
-    }
-
-    override fun onCreateOptionsMenu(menu: Menu): Boolean {
-        menu.add(0, 1, 0, "Обновить").setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
-        return true
-    }
-
-    override fun onOptionsItemSelected(item: MenuItem): Boolean {
-        return when (item.itemId) {
-            1 -> { load(); true }
-            else -> super.onOptionsItemSelected(item)
-        }
     }
 
     private fun logout() {

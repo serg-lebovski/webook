@@ -4,6 +4,8 @@ import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -85,6 +87,7 @@ object Api {
     private val client = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS)
         .readTimeout(120, TimeUnit.SECONDS)
+        .writeTimeout(180, TimeUnit.SECONDS)
         .build()
     private val JSON = "application/json; charset=utf-8".toMediaType()
 
@@ -209,6 +212,28 @@ object Api {
 
     suspend fun postProgress(base: String, token: String, path: String, percentage: Double) {
         postJson(base, token, path, JSONObject().put("percentage", percentage).toString())
+    }
+
+    /** Загрузить книгу (epub/fb2/pdf). Возвращает название созданной книги. */
+    suspend fun uploadBook(
+        base: String, token: String,
+        filename: String, bytes: ByteArray, mime: String?,
+    ): String = withContext(Dispatchers.IO) {
+        val media = (mime ?: "application/octet-stream").toMediaTypeOrNull()
+        val body = MultipartBody.Builder()
+            .setType(MultipartBody.FORM)
+            .addFormDataPart("file", filename, bytes.toRequestBody(media, 0, bytes.size))
+            .build()
+        val req = Request.Builder()
+            .url("$base/api/books/upload")
+            .header("Authorization", "Bearer $token")
+            .post(body)
+            .build()
+        client.newCall(req).execute().use { resp ->
+            val text = bodyUtf8(resp)
+            if (!resp.isSuccessful) throw ApiException(resp.code, detail(text, resp.code))
+            JSONObject(text).optString("title")
+        }
     }
 
     private fun query(q: String) = if (q.isBlank()) "" else "?q=" + java.net.URLEncoder.encode(q, "UTF-8")

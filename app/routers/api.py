@@ -1,7 +1,9 @@
 from typing import Optional
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Header, Request
+import os
+
+from fastapi import APIRouter, Depends, HTTPException, Header, Request, UploadFile, File
 from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy import func
@@ -215,6 +217,51 @@ def api_books(
         }
         for b in books
     ]
+
+
+@router.post("/books/upload")
+async def api_upload_book(
+    file: UploadFile = File(...),
+    user: User = Depends(_get_api_user),
+    db: Session = Depends(get_db),
+):
+    """Загрузка книги (epub/fb2/pdf) с телефона. Автосоздаёт автора/полку."""
+    from app.config import ALLOWED_BOOK_FORMATS, MAX_BOOK_SIZE
+    from app.routers.books import _get_or_create_author, _get_or_create_shelf
+
+    name = file.filename or "book"
+    ext = os.path.splitext(name)[1].lower()
+    if ext not in ALLOWED_BOOK_FORMATS:
+        raise HTTPException(status_code=400, detail="Поддерживаются только EPUB, FB2, PDF")
+    data = await file.read()
+    if len(data) > MAX_BOOK_SIZE:
+        raise HTTPException(status_code=400, detail="Файл слишком большой")
+
+    meta = book_service.parse_book_file(data, ext)
+    title = (meta.get("title") or os.path.splitext(name)[0] or "Без названия").strip()[:500]
+    author = _get_or_create_author(meta.get("author") or "", db)
+    shelf = _get_or_create_shelf("", user, db)
+    file_path = book_service.save_book_file(data, ext)
+    cover_path = (
+        book_service.save_cover_file(meta.get("cover_data"), ".jpg")
+        if meta.get("cover_data") else None
+    )
+    book = Book(
+        title=title,
+        user_id=user.id,
+        author_id=author.id,
+        shelf_id=shelf.id,
+        file_path=file_path,
+        file_format=ext.lstrip("."),
+        file_size=len(data),
+        description=meta.get("description") or "",
+        language=meta.get("language") or "",
+        cover_path=cover_path,
+    )
+    db.add(book)
+    db.commit()
+    db.refresh(book)
+    return {"id": book.id, "title": book.title, "format": book.file_format}
 
 
 @router.get("/books/{book_id}/cover")

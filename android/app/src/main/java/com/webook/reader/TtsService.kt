@@ -214,6 +214,13 @@ class TtsService : Service(), TextToSpeech.OnInitListener {
         if (playing) speakCurrent() else updateNotification()
     }
 
+    /** Установить позицию без автоскролла/озвучки — для ручного листания (TTS выкл). */
+    fun setIndexSilent(i: Int) {
+        index = i.coerceIn(0, (paragraphs.size - 1).coerceAtLeast(0))
+        persistPosition()
+        updateNotification()
+    }
+
     /** Таймер сна: пауза через [minutes] минут (0 — выключить). Работает в фоне. */
     fun setSleepTimer(minutes: Int) {
         sleepRunnable?.let { handler.removeCallbacks(it) }

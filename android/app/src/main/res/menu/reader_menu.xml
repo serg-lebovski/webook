@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <item
+        android:id="@+id/action_search"
+        android:icon="@android:drawable/ic_menu_search"
+        android:title="Поиск по книге"
+        app:showAsAction="ifRoom" />
+    <item
+        android:id="@+id/action_tts"
+        android:checkable="true"
+        android:title="Озвучка"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_speed"
+        android:title="Скорость"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_voice"
+        android:title="Выбор голоса"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_sleep"
+        android:title="Таймер сна"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_about"
+        android:title="О книге"
+        app:showAsAction="never" />
+</menu>
