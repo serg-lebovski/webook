@@ -36,6 +36,7 @@ class ReaderActivity : AppCompatActivity(), TtsService.Listener {
     private var resourceKey: String = ""
     private var pendingPath: String = ""
     private var loadedIntoService = false
+    private var serverPercent: Double = 0.0
     private val uiHandler = android.os.Handler(android.os.Looper.getMainLooper())
 
     private val requestNotif =
@@ -63,6 +64,7 @@ class ReaderActivity : AppCompatActivity(), TtsService.Listener {
         pendingPath = intent.getStringExtra("path") ?: ""
 
         b.toolbar.setNavigationOnClickListener { finish() }
+        b.toolbar.setSubtitleTextColor(Color.WHITE)
         b.list.layoutManager = LinearLayoutManager(this)
         b.list.adapter = adapter
 
@@ -116,8 +118,13 @@ class ReaderActivity : AppCompatActivity(), TtsService.Listener {
         b.progress.visibility = View.VISIBLE
         lifecycleScope.launch {
             try {
-                val res = Api.text(Prefs.baseUrl(this@ReaderActivity), Prefs.token(this@ReaderActivity), path)
+                val base = Prefs.baseUrl(this@ReaderActivity)
+                val token = Prefs.token(this@ReaderActivity)
+                val res = Api.text(base, token, path)
                 text = res
+                // позиция с сервера (чтобы продолжить с ПК)
+                serverPercent = try { Api.getProgress(base, token, progressPath()) }
+                    catch (e: Exception) { 0.0 }
                 b.toolbar.title = res.title
                 adapter.submit(res.paragraphs)
                 tryInit()
@@ -156,7 +163,12 @@ class ReaderActivity : AppCompatActivity(), TtsService.Listener {
 
         // Первый запуск этого ресурса — отдаём абзацы сервису.
         val t = text ?: return
-        val start = restorePosition().coerceIn(0, (t.paragraphs.size - 1).coerceAtLeast(0))
+        val total = t.paragraphs.size
+        val last = (total - 1).coerceAtLeast(0)
+        // берём дальнюю из позиций: локальную (точную) и серверную (с ПК)
+        val localPara = restorePosition()
+        val serverPara = if (serverPercent > 0.0) Math.round(serverPercent * last).toInt() else 0
+        val start = maxOf(localPara, serverPara).coerceIn(0, last)
         svc.load(t.title, t.paragraphs, start, resourceKey)
         applySavedVoice(svc)
         val savedRate = Prefs.prefs(this).getFloat("rate", 1.0f)
@@ -255,6 +267,22 @@ class ReaderActivity : AppCompatActivity(), TtsService.Listener {
         adapter.setHighlight(index)
         (b.list.layoutManager as LinearLayoutManager)
             .scrollToPositionWithOffset(index, 120)
+        updateStatus(index)
+    }
+
+    /** Статус чтения в реальном времени: «Абзац X из N · Y%». */
+    private fun updateStatus(index: Int) {
+        val total = text?.paragraphs?.size ?: return
+        if (total <= 0) return
+        val pct = if (total > 1) (index * 100) / (total - 1) else 100
+        b.toolbar.subtitle = "Абзац ${index + 1} из $total · $pct%"
+    }
+
+    private fun progressPath(): String {
+        val parts = resourceKey.split(":")
+        if (parts.size != 2) return ""
+        return if (parts[0] == "book") "/api/books/${parts[1]}/progress"
+        else "/api/articles/${parts[1]}/progress"
     }
 
     private fun updatePlayIcon(playing: Boolean) {

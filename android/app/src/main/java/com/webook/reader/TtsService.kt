@@ -21,6 +21,11 @@ import android.support.v4.media.session.PlaybackStateCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.media.app.NotificationCompat.MediaStyle
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import java.util.Locale
 
 class TtsService : Service(), TextToSpeech.OnInitListener {
@@ -67,6 +72,9 @@ class TtsService : Service(), TextToSpeech.OnInitListener {
     private var sleepRunnable: Runnable? = null
     var sleepEndAt: Long = 0L
         private set
+
+    private val io = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var syncRunnable: Runnable? = null
 
     val size: Int get() = paragraphs.size
     fun paragraphsList(): List<String> = paragraphs
@@ -127,7 +135,37 @@ class TtsService : Service(), TextToSpeech.OnInitListener {
         this.index = startIndex.coerceIn(0, (paragraphs.size - 1).coerceAtLeast(0))
         this.playing = false
         tts?.stop()
+        startSyncLoop()
         listener?.onReady()
+    }
+
+    /** Текущая доля прочитанного (0..1) — для статуса и синхронизации. */
+    fun fraction(): Double =
+        if (paragraphs.size > 1) index.toDouble() / (paragraphs.size - 1) else if (paragraphs.isEmpty()) 0.0 else 1.0
+
+    private fun startSyncLoop() {
+        if (syncRunnable != null) return
+        syncRunnable = object : Runnable {
+            override fun run() {
+                syncNow()
+                handler.postDelayed(this, 5 * 60_000L)
+            }
+        }
+        handler.postDelayed(syncRunnable!!, 5 * 60_000L)
+    }
+
+    /** Отправить текущую позицию на сервер (раз в 5 мин и на паузе). */
+    fun syncNow() {
+        if (resourceKey.isEmpty() || paragraphs.isEmpty()) return
+        val parts = resourceKey.split(":")
+        if (parts.size != 2) return
+        val path = if (parts[0] == "book") "/api/books/${parts[1]}/progress"
+        else "/api/articles/${parts[1]}/progress"
+        val base = Prefs.baseUrl(this)
+        val token = Prefs.token(this)
+        if (base.isEmpty() || token.isEmpty()) return
+        val pct = fraction()
+        io.launch { try { Api.postProgress(base, token, path, pct) } catch (e: Exception) {} }
     }
 
     fun isReady() = ready
@@ -144,6 +182,7 @@ class TtsService : Service(), TextToSpeech.OnInitListener {
         playing = false
         tts?.stop()
         persistPosition()
+        syncNow()
         updateNotification()
         listener?.onState(false)
     }
@@ -338,6 +377,8 @@ class TtsService : Service(), TextToSpeech.OnInitListener {
 
     override fun onDestroy() {
         sleepRunnable?.let { handler.removeCallbacks(it) }
+        syncRunnable?.let { handler.removeCallbacks(it) }
+        io.cancel()
         tts?.stop()
         tts?.shutdown()
         mediaSession.release()

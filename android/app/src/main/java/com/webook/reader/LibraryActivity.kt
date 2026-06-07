@@ -7,9 +7,11 @@ import android.view.Menu
 import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
-import android.widget.ImageView
 import android.widget.TextView
+import androidx.appcompat.app.ActionBarDrawerToggle
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.GravityCompat
+import androidx.drawerlayout.widget.DrawerLayout
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.DividerItemDecoration
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -21,10 +23,10 @@ import kotlinx.coroutines.launch
 class LibraryActivity : AppCompatActivity() {
 
     private lateinit var b: ActivityLibraryBinding
-    private val adapter = RowAdapter { row -> openReader(row) }
+    private val adapter = RowAdapter { row -> onRowClick(row) }
 
-    // tab 0 — книги, tab 1 — статьи
-    private var currentTab = 0
+    private var mode = "books"          // "books" | "notes"
+    private var currentTab = 0          // 0=Полки, 1=Авторы, 2=Все (для режима books)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -32,6 +34,27 @@ class LibraryActivity : AppCompatActivity() {
         setContentView(b.root)
 
         setSupportActionBar(b.toolbar)
+
+        val toggle = ActionBarDrawerToggle(
+            this, b.drawer, b.toolbar,
+            android.R.string.ok, android.R.string.cancel
+        )
+        b.drawer.addDrawerListener(toggle)
+        toggle.syncState()
+
+        b.navView.setCheckedItem(R.id.nav_books)
+        b.navView.setNavigationItemSelectedListener { item ->
+            when (item.itemId) {
+                R.id.nav_books -> { setMode("books"); b.drawer.closeDrawer(GravityCompat.START) }
+                R.id.nav_notes -> { setMode("notes"); b.drawer.closeDrawer(GravityCompat.START) }
+                R.id.nav_profile -> {
+                    b.drawer.closeDrawer(GravityCompat.START)
+                    startActivity(Intent(this, ProfileActivity::class.java))
+                }
+            }
+            true
+        }
+
         b.list.layoutManager = LinearLayoutManager(this)
         b.list.adapter = adapter
         b.list.addItemDecoration(DividerItemDecoration(this, DividerItemDecoration.VERTICAL))
@@ -39,19 +62,33 @@ class LibraryActivity : AppCompatActivity() {
         b.tabs.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
             override fun onTabSelected(tab: TabLayout.Tab) {
                 currentTab = tab.position
-                load()
+                if (mode == "books") load()
             }
             override fun onTabUnselected(tab: TabLayout.Tab) {}
             override fun onTabReselected(tab: TabLayout.Tab) {}
         })
 
-        load()
+        setMode("books")
     }
 
-    override fun onResume() {
-        super.onResume()
-        // Обновляем при возврате (вдруг что-то добавили на сайте).
-        if (adapter.itemCount == 0) load()
+    override fun onBackPressed() {
+        if (b.drawer.isDrawerOpen(GravityCompat.START)) {
+            b.drawer.closeDrawer(GravityCompat.START)
+        } else {
+            super.onBackPressed()
+        }
+    }
+
+    private fun setMode(m: String) {
+        mode = m
+        if (m == "books") {
+            b.toolbar.title = "Книги"
+            b.tabs.visibility = View.VISIBLE
+        } else {
+            b.toolbar.title = "Заметки"
+            b.tabs.visibility = View.GONE
+        }
+        load()
     }
 
     private fun load() {
@@ -62,37 +99,34 @@ class LibraryActivity : AppCompatActivity() {
         adapter.submit(emptyList())
         lifecycleScope.launch {
             try {
-                val rows: List<Row> = when (currentTab) {
+                val rows: List<Row> = if (mode == "notes") {
+                    Api.articles(base, token).map {
+                        val sub = if (it.minutes > 0) "${it.minutes} мин чтения" else "заметка"
+                        Row("article", it.id, it.title, sub, "TXT")
+                    }
+                } else when (currentTab) {
                     0 -> Api.shelves(base, token).map {
                         Row("shelf", it.id, it.name, plural(it.count), it.count.toString())
                     }
                     1 -> Api.authors(base, token).map {
                         Row("author", it.id, it.name, plural(it.count), it.count.toString())
                     }
-                    2 -> Api.books(base, token).map {
+                    else -> Api.books(base, token).map {
                         Row("book", it.id, it.title, it.author.ifBlank { "—" }, it.format.uppercase())
-                    }
-                    else -> Api.articles(base, token).map {
-                        val sub = if (it.minutes > 0) "${it.minutes} мин чтения" else "статья"
-                        Row("article", it.id, it.title, sub, "TXT")
                     }
                 }
                 adapter.submit(rows)
                 if (rows.isEmpty()) {
-                    b.empty.text = when (currentTab) {
-                        0 -> "Полок с озвучиваемыми книгами нет."
-                        1 -> "Авторов с озвучиваемыми книгами нет."
-                        2 -> "Книг для озвучки нет.\nЗагрузите EPUB / FB2 / PDF на сайте."
-                        else -> "Сохранённых статей с текстом нет."
+                    b.empty.text = when {
+                        mode == "notes" -> "Сохранённых заметок с текстом нет."
+                        currentTab == 0 -> "Полок с озвучиваемыми книгами нет."
+                        currentTab == 1 -> "Авторов с озвучиваемыми книгами нет."
+                        else -> "Книг для озвучки нет.\nЗагрузите EPUB / FB2 / PDF на сайте."
                     }
                     b.empty.visibility = View.VISIBLE
                 }
             } catch (e: ApiException) {
-                if (e.code == 401) {
-                    logout()
-                } else {
-                    showEmpty("Ошибка: ${e.message}")
-                }
+                if (e.code == 401) logout() else showEmpty("Ошибка: ${e.message}")
             } catch (e: Exception) {
                 showEmpty("Нет связи с сервером")
             } finally {
@@ -112,17 +146,15 @@ class LibraryActivity : AppCompatActivity() {
         return "$n $word"
     }
 
-    private fun openReader(row: Row) {
+    private fun onRowClick(row: Row) {
         when (row.type) {
             "shelf" -> startActivity(
                 Intent(this, BookListActivity::class.java)
-                    .putExtra("title", row.title)
-                    .putExtra("shelf_id", row.id)
+                    .putExtra("title", row.title).putExtra("shelf_id", row.id)
             )
             "author" -> startActivity(
                 Intent(this, BookListActivity::class.java)
-                    .putExtra("title", row.title)
-                    .putExtra("author_id", row.id)
+                    .putExtra("title", row.title).putExtra("author_id", row.id)
             )
             else -> {
                 val path = if (row.type == "book") "/api/books/${row.id}/text"
@@ -147,14 +179,12 @@ class LibraryActivity : AppCompatActivity() {
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         menu.add(0, 1, 0, "Обновить").setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
-        menu.add(0, 2, 1, "Выйти").setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
         return true
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
             1 -> { load(); true }
-            2 -> { logout(); true }
             else -> super.onOptionsItemSelected(item)
         }
     }

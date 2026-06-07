@@ -186,6 +186,31 @@ object Api {
         )
     }
 
+    // --- Синхронизация позиции (доля 0..1) ---
+
+    private suspend fun postJson(base: String, token: String, path: String, json: String): String =
+        withContext(Dispatchers.IO) {
+            val req = Request.Builder()
+                .url("$base$path")
+                .header("Authorization", "Bearer $token")
+                .post(json.toRequestBody(JSON))
+                .build()
+            client.newCall(req).execute().use { resp ->
+                val text = bodyUtf8(resp)
+                if (!resp.isSuccessful) throw ApiException(resp.code, detail(text, resp.code))
+                text
+            }
+        }
+
+    suspend fun getProgress(base: String, token: String, path: String): Double {
+        val o = JSONObject(getBody(base, token, path))
+        return o.optDouble("percentage", 0.0)
+    }
+
+    suspend fun postProgress(base: String, token: String, path: String, percentage: Double) {
+        postJson(base, token, path, JSONObject().put("percentage", percentage).toString())
+    }
+
     private fun query(q: String) = if (q.isBlank()) "" else "?q=" + java.net.URLEncoder.encode(q, "UTF-8")
 
     private fun detail(text: String, code: Int): String {

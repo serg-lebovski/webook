@@ -1,4 +1,5 @@
 from typing import Optional
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Header, Request
 from fastapi.responses import Response
@@ -13,6 +14,7 @@ from app.models.link import Link, LinkFolder
 from app.models.book import Book
 from app.models.shelf import Shelf
 from app.models.author import Author
+from app.models.read_progress import ReadProgress
 from app.services.auth_service import verify_password, create_access_token
 from app.services.security_service import client_ip, banned_until, record_failure, record_success
 from app.services import book_service
@@ -308,3 +310,80 @@ def api_article_text(
         "format": "article",
         "paragraphs": paragraphs,
     }
+
+
+# ---------------------------------------------------------------------------
+# Синхронизация позиции чтения/прослушки (доля 0..1) — чтобы продолжить с ПК
+# ---------------------------------------------------------------------------
+
+class ProgressBody(BaseModel):
+    percentage: float = 0.0
+
+
+def _clamp01(x: float) -> float:
+    return max(0.0, min(1.0, x))
+
+
+@router.get("/books/{book_id}/progress")
+def api_get_book_progress(
+    book_id: int,
+    user: User = Depends(_get_api_user),
+    db: Session = Depends(get_db),
+):
+    rp = db.query(ReadProgress).filter_by(user_id=user.id, book_id=book_id).first()
+    return {"percentage": (rp.percentage or 0.0) if rp else 0.0}
+
+
+@router.post("/books/{book_id}/progress")
+def api_set_book_progress(
+    book_id: int,
+    body: ProgressBody,
+    user: User = Depends(_get_api_user),
+    db: Session = Depends(get_db),
+):
+    book = db.query(Book).filter(
+        Book.id == book_id, Book.user_id == user.id, Book.deleted_at.is_(None)
+    ).first()
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+    pct = _clamp01(body.percentage)
+    rp = db.query(ReadProgress).filter_by(user_id=user.id, book_id=book_id).first()
+    if rp:
+        rp.percentage = pct
+        rp.updated_at = datetime.utcnow()
+    else:
+        # progress (CFI/scrollTop) не трогаем — это поле веб-ридера
+        db.add(ReadProgress(user_id=user.id, book_id=book_id, percentage=pct))
+    db.commit()
+    return {"ok": True, "percentage": pct}
+
+
+@router.get("/articles/{link_id}/progress")
+def api_get_article_progress(
+    link_id: int,
+    user: User = Depends(_get_api_user),
+    db: Session = Depends(get_db),
+):
+    link = db.query(Link).filter(
+        Link.id == link_id, Link.user_id == user.id, Link.deleted_at.is_(None)
+    ).first()
+    if not link:
+        raise HTTPException(status_code=404, detail="Article not found")
+    return {"percentage": link.read_progress or 0.0}
+
+
+@router.post("/articles/{link_id}/progress")
+def api_set_article_progress(
+    link_id: int,
+    body: ProgressBody,
+    user: User = Depends(_get_api_user),
+    db: Session = Depends(get_db),
+):
+    link = db.query(Link).filter(
+        Link.id == link_id, Link.user_id == user.id, Link.deleted_at.is_(None)
+    ).first()
+    if not link:
+        raise HTTPException(status_code=404, detail="Article not found")
+    link.read_progress = _clamp01(body.percentage)
+    db.commit()
+    return {"ok": True, "percentage": link.read_progress}
