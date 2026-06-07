@@ -93,6 +93,7 @@ class ReaderActivity : AppCompatActivity(), TtsService.Listener {
             }
             override fun onStartTrackingTouch(sb: SeekBar?) {}
             override fun onStopTrackingTouch(sb: SeekBar?) {
+                persistLocal(currentIndex)
                 if (service?.playing == true) service?.seekTo(currentIndex)
                 else service?.setIndexSilent(currentIndex)
             }
@@ -111,6 +112,11 @@ class ReaderActivity : AppCompatActivity(), TtsService.Listener {
     override fun onStart() {
         super.onStart()
         bindService(Intent(this, TtsService::class.java), connection, Context.BIND_AUTO_CREATE)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        savePosition()   // onPause вызывается надёжнее, чем onStop
     }
 
     override fun onStop() {
@@ -134,15 +140,27 @@ class ReaderActivity : AppCompatActivity(), TtsService.Listener {
                 val token = Prefs.token(this@ReaderActivity)
                 val res = Api.text(base, token, path)
                 text = res
+                Offline.save(this@ReaderActivity, resourceKey, res)  // авто-кэш для офлайна
                 serverPercent = try { Api.getProgress(base, token, progressPath()) }
                     catch (e: Exception) { 0.0 }
                 b.toolbar.title = res.title
                 adapter.submit(res.paragraphs)
                 tryInit()
-            } catch (e: ApiException) {
-                toastFinish("Не удалось загрузить текст: ${e.message}")
             } catch (e: Exception) {
-                toastFinish("Нет связи с сервером")
+                // нет сети — пробуем офлайн-копию
+                val cached = Offline.load(this@ReaderActivity, resourceKey)
+                if (cached != null) {
+                    text = cached
+                    serverPercent = 0.0
+                    b.toolbar.title = cached.title
+                    adapter.submit(cached.paragraphs)
+                    Toast.makeText(this@ReaderActivity, "Офлайн-режим", Toast.LENGTH_SHORT).show()
+                    tryInit()
+                } else {
+                    val msg = if (e is ApiException) "Не удалось загрузить: ${e.message}"
+                    else "Нет связи и нет офлайн-копии"
+                    toastFinish(msg)
+                }
             } finally {
                 b.progress.visibility = View.GONE
             }
@@ -191,6 +209,9 @@ class ReaderActivity : AppCompatActivity(), TtsService.Listener {
         adapter.setHighlight(-1)
         (b.list.layoutManager as LinearLayoutManager).scrollToPositionWithOffset(start, 0)
         setStatusText(start)
+        if (start > 0) {
+            Toast.makeText(this, "Продолжаем с абзаца ${start + 1}", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun configureSeekMax() {
@@ -207,6 +228,7 @@ class ReaderActivity : AppCompatActivity(), TtsService.Listener {
             } else if (newState == RecyclerView.SCROLL_STATE_IDLE && userTouching) {
                 val top = firstVisible()
                 currentIndex = top
+                persistLocal(top)
                 // озвучка должна продолжиться с верхней видимой строки
                 if (service?.playing == true) service?.seekTo(top)
                 else service?.setIndexSilent(top)
@@ -245,6 +267,7 @@ class ReaderActivity : AppCompatActivity(), TtsService.Listener {
             R.id.action_voice -> { showVoiceDialog(); true }
             R.id.action_search -> { showSearchDialog(); true }
             R.id.action_sleep -> { showSleepDialog(); true }
+            R.id.action_offline -> { downloadOffline(); true }
             R.id.action_about -> { showAboutDialog(); true }
             else -> super.onOptionsItemSelected(item)
         }
@@ -335,6 +358,12 @@ class ReaderActivity : AppCompatActivity(), TtsService.Listener {
             .show()
     }
 
+    private fun downloadOffline() {
+        val t = text ?: return
+        Offline.save(this, resourceKey, t)
+        Toast.makeText(this, "Сохранено для офлайна (${t.paragraphs.size} абз.)", Toast.LENGTH_SHORT).show()
+    }
+
     private fun showAboutDialog() {
         val t = text ?: return
         val total = t.paragraphs.size
@@ -393,6 +422,7 @@ class ReaderActivity : AppCompatActivity(), TtsService.Listener {
             .scrollToPositionWithOffset(currentIndex, 0)
         setStatusText(currentIndex)
         if (ttsEnabled) adapter.setHighlight(currentIndex)
+        persistLocal(currentIndex)
         if (service?.playing == true) service?.seekTo(currentIndex)
         else service?.setIndexSilent(currentIndex)
     }
@@ -438,12 +468,18 @@ class ReaderActivity : AppCompatActivity(), TtsService.Listener {
 
     // --- Сохранение / прочее ---------------------------------------------
 
+    /** Сохраняем текущую позицию чтения напрямую (не зависит от состояния сервиса). */
     private fun savePosition() {
-        val svc = service ?: return
+        if (resourceKey.isEmpty()) return
         Prefs.prefs(this).edit()
-            .putInt("pos_$resourceKey", svc.index)
-            .putFloat("rate", svc.getRate())
+            .putInt("pos_$resourceKey", currentIndex)
+            .putFloat("rate", service?.getRate() ?: 1.0f)
             .apply()
+    }
+
+    private fun persistLocal(i: Int) {
+        if (resourceKey.isEmpty()) return
+        Prefs.prefs(this).edit().putInt("pos_$resourceKey", i).apply()
     }
 
     private fun restorePosition(): Int = Prefs.prefs(this).getInt("pos_$resourceKey", 0)

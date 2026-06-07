@@ -75,6 +75,38 @@ data class TextResult(
     val paragraphs: List<String>,
 )
 
+/** Офлайн-кэш текста книг/статей (для озвучки и чтения без сети). */
+object Offline {
+    private fun dir(c: Context) = java.io.File(c.filesDir, "offline").apply { mkdirs() }
+    private fun fileFor(c: Context, key: String) =
+        java.io.File(dir(c), key.replace(Regex("[^A-Za-z0-9]"), "_") + ".json")
+
+    fun save(c: Context, key: String, r: TextResult) {
+        if (key.isEmpty()) return
+        try {
+            val arr = JSONArray()
+            r.paragraphs.forEach { arr.put(it) }
+            val o = JSONObject()
+                .put("title", r.title).put("author", r.author).put("paragraphs", arr)
+            fileFor(c, key).writeText(o.toString())
+        } catch (e: Exception) { /* офлайн-кэш необязателен */ }
+    }
+
+    fun load(c: Context, key: String): TextResult? {
+        return try {
+            val f = fileFor(c, key)
+            if (!f.exists()) return null
+            val o = JSONObject(f.readText())
+            val arr = o.getJSONArray("paragraphs")
+            val list = ArrayList<String>(arr.length())
+            for (i in 0 until arr.length()) list.add(arr.getString(i))
+            TextResult(0, o.optString("title"), o.optString("author"), list)
+        } catch (e: Exception) { null }
+    }
+
+    fun has(c: Context, key: String) = fileFor(c, key).exists()
+}
+
 /** Передаём абзацы между активити и сервисом без ограничения размера Intent. */
 object BookHolder {
     var title: String = ""
@@ -212,6 +244,13 @@ object Api {
 
     suspend fun postProgress(base: String, token: String, path: String, percentage: Double) {
         postJson(base, token, path, JSONObject().put("percentage", percentage).toString())
+    }
+
+    /** Сохранить ссылку/статью (share из браузера). */
+    suspend fun saveLink(base: String, token: String, url: String, title: String): String {
+        val body = JSONObject().put("url", url).put("title", title).toString()
+        val text = postJson(base, token, "/api/links", body)
+        return JSONObject(text).optString("title", title)
     }
 
     /** Загрузить книгу (epub/fb2/pdf). Возвращает название созданной книги. */

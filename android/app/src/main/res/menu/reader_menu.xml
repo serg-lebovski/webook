@@ -24,6 +24,10 @@
         android:title="Таймер сна"
         app:showAsAction="never" />
     <item
+        android:id="@+id/action_offline"
+        android:title="Скачать для офлайна"
+        app:showAsAction="never" />
+    <item
         android:id="@+id/action_about"
         android:title="О книге"
         app:showAsAction="never" />
