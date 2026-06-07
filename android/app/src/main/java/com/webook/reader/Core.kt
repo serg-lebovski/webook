@@ -47,6 +47,24 @@ object Prefs {
 
 class ApiException(val code: Int, message: String) : Exception(message)
 
+/** Натуральная сортировка строк: «Том 9» < «Том 10» < «Том 11». */
+val naturalOrder: Comparator<String> = Comparator { a, b ->
+    val re = Regex("\\d+|\\D+")
+    val ax = re.findAll(a.lowercase()).map { it.value }.toList()
+    val bx = re.findAll(b.lowercase()).map { it.value }.toList()
+    var i = 0
+    var result = 0
+    while (i < ax.size && i < bx.size) {
+        val x = ax[i]; val y = bx[i]
+        val cmp = if (x[0].isDigit() && y[0].isDigit())
+            (x.toLongOrNull() ?: 0L).compareTo(y.toLongOrNull() ?: 0L)
+        else x.compareTo(y)
+        if (cmp != 0) { result = cmp; break }
+        i++
+    }
+    if (result != 0) result else ax.size - bx.size
+}
+
 /** Форматирование времени: m:ss или h:mm:ss. */
 fun fmtTime(seconds: Double): String {
     if (seconds.isNaN() || seconds < 0) return "0:00"
@@ -215,7 +233,7 @@ object Api {
                 hasCover = o.optBoolean("has_cover", false),
                 rating = o.optInt("rating", 0),
             )
-        }
+        }.sortedWith(compareBy(naturalOrder) { it.title })
     }
 
     suspend fun shelves(base: String, token: String): List<GroupItem> =
@@ -229,7 +247,7 @@ object Api {
         return (0 until arr.length()).map { i ->
             val o = arr.getJSONObject(i)
             GroupItem(o.getInt("id"), o.optString("name"), o.optInt("count", 0))
-        }
+        }.sortedWith(compareBy(naturalOrder) { it.name })
     }
 
     suspend fun articles(base: String, token: String, q: String = ""): List<ArticleItem> {
@@ -303,7 +321,7 @@ object Api {
                 currentTrackId = o.optInt("current_track_id", 0),
                 position = o.optDouble("position", 0.0),
             )
-        }
+        }.sortedWith(compareBy(naturalOrder) { it.title })
     }
 
     suspend fun audiobookDetail(base: String, token: String, id: Int): AudiobookDetail {

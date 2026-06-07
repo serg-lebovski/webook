@@ -2,6 +2,7 @@ from typing import Optional
 from datetime import datetime
 
 import os
+import re
 
 from fastapi import APIRouter, Depends, HTTPException, Header, Request, UploadFile, File
 from fastapi.responses import Response, FileResponse
@@ -28,6 +29,11 @@ router = APIRouter(prefix="/api")
 
 # Форматы книг, которые приложение умеет озвучивать (извлекаем plain text)
 TTS_FORMATS = {"epub", "fb2", "pdf"}
+
+
+def _natural_key(s: str):
+    """Ключ натуральной сортировки: «Том 9» < «Том 10» < «Том 11»."""
+    return [int(t) if t.isdigit() else t.lower() for t in re.split(r"(\d+)", s or "")]
 
 
 def _get_api_user(
@@ -157,9 +163,9 @@ def api_shelves(
             Book.file_format.in_(TTS_FORMATS),
         )
         .group_by(Shelf.id, Shelf.name)
-        .order_by(Shelf.name)
         .all()
     )
+    rows = sorted(rows, key=lambda r: _natural_key(r[1]))
     return [{"id": r[0], "name": r[1], "count": r[2]} for r in rows]
 
 
@@ -178,9 +184,9 @@ def api_authors(
             Book.file_format.in_(TTS_FORMATS),
         )
         .group_by(Author.id, Author.name)
-        .order_by(Author.name)
         .all()
     )
+    rows = sorted(rows, key=lambda r: _natural_key(r[1]))
     return [{"id": r[0], "name": r[1], "count": r[2]} for r in rows]
 
 
@@ -206,7 +212,7 @@ def api_books(
     term = q.strip()
     if term:
         query = query.filter(Book.title.ilike(f"%{term}%"))
-    books = query.order_by(Book.title).all()
+    books = sorted(query.all(), key=lambda b: _natural_key(b.title))
     return [
         {
             "id": b.id,
@@ -466,9 +472,9 @@ def api_audiobooks(
     items = (
         db.query(Audiobook)
         .filter(Audiobook.user_id == user.id, Audiobook.deleted_at.is_(None))
-        .order_by(Audiobook.title)
         .all()
     )
+    items = sorted(items, key=lambda ab: _natural_key(ab.title))
     return [
         {
             "id": ab.id,
