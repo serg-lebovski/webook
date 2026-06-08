@@ -9,6 +9,10 @@
         android:icon="@android:drawable/ic_media_play"
         android:title="Аудио" />
     <item
+        android:id="@+id/nav_manga"
+        android:icon="@android:drawable/ic_menu_gallery"
+        android:title="Манга" />
+    <item
         android:id="@+id/nav_notes"
         android:icon="@android:drawable/ic_menu_agenda"
         android:title="Заметки" />

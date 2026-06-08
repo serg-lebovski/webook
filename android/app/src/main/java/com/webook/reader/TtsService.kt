@@ -61,6 +61,7 @@ class TtsService : Service(), TextToSpeech.OnInitListener {
     var playing = false
         private set
     private var rate = 1.0f
+    private var pitch = 1.0f
     private var title = ""
     var resourceKey: String = ""
         private set
@@ -257,6 +258,14 @@ class TtsService : Service(), TextToSpeech.OnInitListener {
 
     fun getRate() = rate
 
+    fun setPitch(p: Float) {
+        pitch = p.coerceIn(0.5f, 2.0f)
+        tts?.setPitch(pitch)
+        if (playing) speakCurrent()
+    }
+
+    fun getPitch() = pitch
+
     fun availableVoices(): List<Voice> {
         return try {
             tts?.voices?.filter { !it.isNetworkConnectionRequired }
@@ -292,6 +301,7 @@ class TtsService : Service(), TextToSpeech.OnInitListener {
     private fun speakCurrent() {
         val text = paragraphs.getOrNull(index) ?: return
         tts?.setSpeechRate(rate)
+        tts?.setPitch(pitch)
         tts?.speak(text, TextToSpeech.QUEUE_FLUSH, Bundle(), index.toString())
         updateNotification()
     }

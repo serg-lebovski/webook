@@ -137,13 +137,29 @@ class AudioPlayerActivity : AppCompatActivity(), AudioService.Listener {
 
     private fun showSpeedDialog() {
         val svc = service ?: return
-        val labels = arrayOf("0.75×", "1.0×", "1.25×", "1.5×", "1.75×", "2.0×", "2.5×", "3.0×")
-        val rates = floatArrayOf(0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f, 2.5f, 3.0f)
-        val checked = rates.indexOfFirst { kotlin.math.abs(it - svc.getSpeed()) < 0.01f }.coerceAtLeast(0)
+        val pad = (20 * resources.displayMetrics.density).toInt()
+        val root = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(pad, pad, pad, 0)
+        }
+        val label = android.widget.TextView(this)
+        val bar = SeekBar(this).apply { max = 45 }          // 0.5×..3.0× шаг 0.05
+        fun fromBar(p: Int) = 0.5f + p * 0.05f
+        bar.progress = (((svc.getSpeed() - 0.5f) / 0.05f).toInt()).coerceIn(0, 45)
+        label.text = "Скорость: %.2f×".format(fromBar(bar.progress))
+        bar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(s: SeekBar?, p: Int, u: Boolean) {
+                val v = fromBar(p); label.text = "Скорость: %.2f×".format(v); svc.setSpeed(v)
+            }
+            override fun onStartTrackingTouch(s: SeekBar?) {}
+            override fun onStopTrackingTouch(s: SeekBar?) {}
+        })
+        root.addView(label); root.addView(bar)
         AlertDialog.Builder(this)
-            .setTitle("Скорость")
-            .setSingleChoiceItems(labels, checked) { dlg, w -> svc.setSpeed(rates[w]); dlg.dismiss() }
-            .setNegativeButton("Отмена", null)
+            .setTitle("Скорость воспроизведения")
+            .setView(root)
+            .setPositiveButton("Готово", null)
+            .setNeutralButton("1.0×") { _, _ -> svc.setSpeed(1.0f) }
             .show()
     }
 
@@ -155,6 +171,43 @@ class AudioPlayerActivity : AppCompatActivity(), AudioService.Listener {
             .setTitle("Таймер сна")
             .setItems(labels) { _, w -> svc.setSleepTimer(minutes[w]) }
             .show()
+    }
+
+    override fun onCreateOptionsMenu(menu: android.view.Menu): Boolean {
+        menu.add(0, 1, 0, "Скачать офлайн").setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_NEVER)
+        menu.add(0, 2, 1, "Удалить загрузку").setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_NEVER)
+        return true
+    }
+
+    override fun onOptionsItemSelected(item: android.view.MenuItem): Boolean {
+        when (item.itemId) {
+            1 -> downloadOffline()
+            2 -> {
+                Downloads.deleteAudiobook(this, audiobookId)
+                android.widget.Toast.makeText(this, "Загрузка удалена", android.widget.Toast.LENGTH_SHORT).show()
+            }
+            else -> return super.onOptionsItemSelected(item)
+        }
+        return true
+    }
+
+    private fun downloadOffline() {
+        val d = detail ?: return
+        val base = Prefs.baseUrl(this); val token = Prefs.token(this)
+        android.widget.Toast.makeText(this, "Загрузка ${d.tracks.size} глав…", android.widget.Toast.LENGTH_SHORT).show()
+        lifecycleScope.launch {
+            var ok = 0
+            for (t in d.tracks) {
+                val dest = Downloads.audioFile(this@AudioPlayerActivity, d.id, t.id)
+                if (dest.exists() && dest.length() > 0) { ok++; continue }
+                val done = try {
+                    Api.downloadTo(base, token, "/api/audiobooks/${d.id}/tracks/${t.id}/serve", dest)
+                } catch (e: Exception) { false }
+                if (done) ok++
+            }
+            android.widget.Toast.makeText(this@AudioPlayerActivity,
+                "Скачано глав: $ok из ${d.tracks.size}", android.widget.Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun updateChapter(index: Int) {

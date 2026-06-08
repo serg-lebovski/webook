@@ -28,13 +28,13 @@ class BookListActivity : AppCompatActivity() {
         b.toolbar.title = intent.getStringExtra("title") ?: "Книги"
         b.toolbar.setNavigationOnClickListener { finish() }
 
-        coverAdapter = CoverAdapter(Prefs.baseUrl(this), Prefs.token(this)) { item ->
+        coverAdapter = CoverAdapter(Prefs.baseUrl(this), Prefs.token(this), onClick = { item ->
             startActivity(
                 Intent(this, ReaderActivity::class.java)
                     .putExtra("path", "/api/books/${item.id}/text")
                     .putExtra("resourceKey", "book:${item.id}")
             )
-        }
+        })
         b.list.layoutManager = GridLayoutManager(this, 3)
         b.list.adapter = coverAdapter
 

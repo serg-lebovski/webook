@@ -1,47 +1,57 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
     android:background="?attr/selectableItemBackground"
     android:padding="6dp">
 
-    <FrameLayout
+    <com.google.android.material.card.MaterialCardView
         android:layout_width="match_parent"
-        android:layout_height="170dp">
+        android:layout_height="170dp"
+        app:cardCornerRadius="12dp"
+        app:cardElevation="2dp">
 
-        <ImageView
-            android:id="@+id/cover"
+        <FrameLayout
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:scaleType="centerCrop"
-            android:background="#E0E0E0"
-            android:contentDescription="@null" />
+            android:layout_height="match_parent">
 
-        <TextView
-            android:id="@+id/badge"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="bottom|start"
-            android:background="#CC2563EB"
-            android:paddingHorizontal="6dp"
-            android:paddingVertical="2dp"
-            android:textColor="#FFFFFF"
-            android:textSize="10sp"
-            android:textStyle="bold"
-            tools:ignore="HardcodedText"
-            xmlns:tools="http://schemas.android.com/tools"
-            android:text="EPUB" />
-    </FrameLayout>
+            <ImageView
+                android:id="@+id/cover"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:scaleType="centerCrop"
+                android:background="#E2E8F0"
+                android:contentDescription="@null" />
+
+            <TextView
+                android:id="@+id/badge"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom|start"
+                android:layout_margin="6dp"
+                android:background="@drawable/badge_bg"
+                android:paddingHorizontal="7dp"
+                android:paddingVertical="2dp"
+                android:textColor="#FFFFFF"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                tools:ignore="HardcodedText"
+                android:text="EPUB" />
+        </FrameLayout>
+    </com.google.android.material.card.MaterialCardView>
 
     <TextView
         android:id="@+id/title"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
+        android:layout_marginTop="6dp"
         android:maxLines="2"
         android:ellipsize="end"
         android:textSize="13sp"
+        android:textStyle="bold"
         android:textColor="?android:attr/textColorPrimary" />
 
     <TextView
@@ -51,7 +61,7 @@
         android:maxLines="1"
         android:ellipsize="end"
         android:textSize="11sp"
-        android:textColor="#888888" />
+        android:textColor="?android:attr/textColorSecondary" />
 
     <TextView
         android:id="@+id/stars"

@@ -49,6 +49,31 @@ object ImageLoader {
         }
     }
 
+    /** Страница манги: во всю ширину, с приоритетом локальной офлайн-копии. */
+    fun loadPage(iv: ImageView, url: String, token: String, local: java.io.File?) {
+        iv.setTag(R.id.tag_cover_url, url)
+        cache.get(url)?.let { iv.setImageBitmap(it); return }
+        scope.launch {
+            try {
+                val bytes: ByteArray = if (local != null && local.exists() && local.length() > 0) {
+                    local.readBytes()
+                } else {
+                    val req = Request.Builder().url(url)
+                        .header("Authorization", "Bearer $token").get().build()
+                    client.newCall(req).execute().use { resp ->
+                        if (!resp.isSuccessful) return@launch
+                        resp.body?.bytes() ?: return@launch
+                    }
+                }
+                val bmp = decodeSampled(bytes, 1080, 1600) ?: return@launch
+                cache.put(url, bmp)
+                withContext(Dispatchers.Main) {
+                    if (iv.getTag(R.id.tag_cover_url) == url) iv.setImageBitmap(bmp)
+                }
+            } catch (e: Exception) { /* пропускаем */ }
+        }
+    }
+
     private fun decodeSampled(data: ByteArray, reqW: Int, reqH: Int): Bitmap? {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(data, 0, data.size, bounds)

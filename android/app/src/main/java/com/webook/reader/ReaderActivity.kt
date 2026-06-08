@@ -204,6 +204,7 @@ class ReaderActivity : AppCompatActivity(), TtsService.Listener {
         svc.load(t.title, t.paragraphs, start, resourceKey)
         applySavedVoice(svc)
         svc.setRate(Prefs.prefs(this).getFloat("rate", 1.0f))
+        svc.setPitch(Prefs.prefs(this).getFloat("pitch", 1.0f))
 
         loadedIntoService = true
         configureSeekMax()
@@ -309,18 +310,53 @@ class ReaderActivity : AppCompatActivity(), TtsService.Listener {
 
     private fun showSpeedDialog() {
         val svc = service ?: return
-        val labels = arrayOf("0.75×", "1.0×", "1.25×", "1.5×", "1.75×", "2.0×")
-        val rates = floatArrayOf(0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f)
-        val cur = svc.getRate()
-        val checked = rates.indexOfFirst { kotlin.math.abs(it - cur) < 0.01f }.coerceAtLeast(0)
-        AlertDialog.Builder(this)
-            .setTitle("Скорость воспроизведения")
-            .setSingleChoiceItems(labels, checked) { dialog, which ->
-                svc.setRate(rates[which])
-                Prefs.prefs(this).edit().putFloat("rate", rates[which]).apply()
-                dialog.dismiss()
+        val pad = (20 * resources.displayMetrics.density).toInt()
+        val root = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(pad, pad, pad, 0)
+        }
+
+        // --- Скорость 0.5×..2.0× (шаг 0.05) ---
+        val rateLabel = TextView(this)
+        val rateBar = SeekBar(this).apply { max = 30 }
+        fun rateFromBar(p: Int) = 0.5f + p * 0.05f
+        rateBar.progress = (((svc.getRate() - 0.5f) / 0.05f).toInt()).coerceIn(0, 30)
+        rateLabel.text = "Скорость: %.2f×".format(rateFromBar(rateBar.progress))
+        rateBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(s: SeekBar?, p: Int, u: Boolean) {
+                val v = rateFromBar(p); rateLabel.text = "Скорость: %.2f×".format(v)
+                svc.setRate(v); Prefs.prefs(this@ReaderActivity).edit().putFloat("rate", v).apply()
             }
-            .setNegativeButton("Отмена", null)
+            override fun onStartTrackingTouch(s: SeekBar?) {}
+            override fun onStopTrackingTouch(s: SeekBar?) {}
+        })
+
+        // --- Тембр 0.5..2.0 (шаг 0.05) ---
+        val pitchLabel = TextView(this).apply { setPadding(0, pad, 0, 0) }
+        val pitchBar = SeekBar(this).apply { max = 30 }
+        fun pitchFromBar(p: Int) = 0.5f + p * 0.05f
+        pitchBar.progress = (((svc.getPitch() - 0.5f) / 0.05f).toInt()).coerceIn(0, 30)
+        pitchLabel.text = "Тембр: %.2f".format(pitchFromBar(pitchBar.progress))
+        pitchBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(s: SeekBar?, p: Int, u: Boolean) {
+                val v = pitchFromBar(p); pitchLabel.text = "Тембр: %.2f".format(v)
+                svc.setPitch(v); Prefs.prefs(this@ReaderActivity).edit().putFloat("pitch", v).apply()
+            }
+            override fun onStartTrackingTouch(s: SeekBar?) {}
+            override fun onStopTrackingTouch(s: SeekBar?) {}
+        })
+
+        root.addView(rateLabel); root.addView(rateBar)
+        root.addView(pitchLabel); root.addView(pitchBar)
+
+        AlertDialog.Builder(this)
+            .setTitle("Озвучка")
+            .setView(root)
+            .setPositiveButton("Готово", null)
+            .setNeutralButton("Сброс") { _, _ ->
+                svc.setRate(1.0f); svc.setPitch(1.0f)
+                Prefs.prefs(this).edit().putFloat("rate", 1.0f).putFloat("pitch", 1.0f).apply()
+            }
             .show()
     }
 

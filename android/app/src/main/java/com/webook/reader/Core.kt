@@ -132,6 +132,33 @@ data class TextResult(
     val paragraphs: List<String>,
 )
 
+data class MangaItem(
+    val id: Int,
+    val title: String,
+    val author: String,
+    val chapterCount: Int,
+    val pageTotal: Int,
+    val hasCover: Boolean,
+    val currentChapterId: Int,
+    val currentPage: Int,
+)
+
+data class MangaChapterItem(
+    val id: Int,
+    val title: String,
+    val order: Int,
+    val pageCount: Int,
+)
+
+data class MangaDetail(
+    val id: Int,
+    val title: String,
+    val author: String,
+    val currentChapterId: Int,
+    val currentPage: Int,
+    val chapters: List<MangaChapterItem>,
+)
+
 /** Элемент офлайн-библиотеки. */
 data class OfflineItem(
     val key: String,        // напр. "book:12" / "article:5"
@@ -202,6 +229,43 @@ object Offline {
         if (parts.size != 2) return ""
         return if (parts[0] == "book") "/api/books/${parts[1]}/text"
         else "/api/articles/${parts[1]}/text"
+    }
+}
+
+/** Офлайн-загрузки бинарных файлов: треки аудиокниг и страницы манги. */
+object Downloads {
+    private fun root(c: Context) = java.io.File(c.filesDir, "dl").apply { mkdirs() }
+
+    // --- Аудиокниги ---
+    fun audioFile(c: Context, abId: Int, trackId: Int) =
+        java.io.File(root(c), "audio/$abId/$trackId.dat")
+
+    fun audioLocal(c: Context, abId: Int, trackId: Int): java.io.File? {
+        val f = audioFile(c, abId, trackId)
+        return if (f.exists() && f.length() > 0) f else null
+    }
+
+    fun audiobookDownloaded(c: Context, abId: Int, trackIds: List<Int>): Boolean =
+        trackIds.isNotEmpty() && trackIds.all { audioLocal(c, abId, it) != null }
+
+    fun deleteAudiobook(c: Context, abId: Int) {
+        try { java.io.File(root(c), "audio/$abId").deleteRecursively() } catch (e: Exception) {}
+    }
+
+    // --- Манга ---
+    fun mangaPageFile(c: Context, mangaId: Int, chapterId: Int, n: Int) =
+        java.io.File(root(c), "manga/$mangaId/$chapterId/$n.img")
+
+    fun mangaPageLocal(c: Context, mangaId: Int, chapterId: Int, n: Int): java.io.File? {
+        val f = mangaPageFile(c, mangaId, chapterId, n)
+        return if (f.exists() && f.length() > 0) f else null
+    }
+
+    fun mangaChapterDownloaded(c: Context, mangaId: Int, chapterId: Int, pageCount: Int): Boolean =
+        pageCount > 0 && (0 until pageCount).all { mangaPageLocal(c, mangaId, chapterId, it) != null }
+
+    fun deleteManga(c: Context, mangaId: Int) {
+        try { java.io.File(root(c), "manga/$mangaId").deleteRecursively() } catch (e: Exception) {}
     }
 }
 
@@ -395,6 +459,66 @@ object Api {
         "$base/api/audiobooks/$audiobookId/tracks/$trackId/serve"
 
     fun bookCoverUrl(base: String, id: Int): String = "$base/api/books/$id/cover"
+
+    // --- Манга ---
+
+    suspend fun mangaList(base: String, token: String): List<MangaItem> {
+        val arr = JSONArray(getBody(base, token, "/api/manga"))
+        return (0 until arr.length()).map { i ->
+            val o = arr.getJSONObject(i)
+            MangaItem(
+                id = o.getInt("id"),
+                title = o.optString("title"),
+                author = o.optString("author"),
+                chapterCount = o.optInt("chapter_count", 0),
+                pageTotal = o.optInt("page_total", 0),
+                hasCover = o.optBoolean("has_cover", false),
+                currentChapterId = o.optInt("current_chapter_id", 0),
+                currentPage = o.optInt("current_page", 0),
+            )
+        }.sortedWith(compareBy(naturalOrder) { it.title })
+    }
+
+    suspend fun mangaDetail(base: String, token: String, id: Int): MangaDetail {
+        val o = JSONObject(getBody(base, token, "/api/manga/$id"))
+        val cArr = o.getJSONArray("chapters")
+        val chapters = (0 until cArr.length()).map { i ->
+            val c = cArr.getJSONObject(i)
+            MangaChapterItem(c.getInt("id"), c.optString("title"), c.optInt("order"), c.optInt("page_count", 0))
+        }
+        return MangaDetail(
+            id = o.getInt("id"),
+            title = o.optString("title"),
+            author = o.optString("author"),
+            currentChapterId = o.optInt("current_chapter_id", 0),
+            currentPage = o.optInt("current_page", 0),
+            chapters = chapters,
+        )
+    }
+
+    fun mangaCoverUrl(base: String, id: Int) = "$base/api/manga/$id/cover"
+    fun mangaPageUrl(base: String, id: Int, chapterId: Int, n: Int) =
+        "$base/api/manga/$id/chapters/$chapterId/pages/$n"
+
+    suspend fun postMangaProgress(base: String, token: String, id: Int, chapterId: Int, page: Int) {
+        val body = JSONObject().put("chapter_id", chapterId).put("page", page).toString()
+        postJson(base, token, "/api/manga/$id/progress", body)
+    }
+
+    /** Скачать произвольный файл с Bearer-авторизацией в локальный путь. */
+    suspend fun downloadTo(base: String, token: String, path: String, dest: java.io.File): Boolean =
+        withContext(Dispatchers.IO) {
+            val req = Request.Builder()
+                .url("$base$path").header("Authorization", "Bearer $token").get().build()
+            client.newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) return@withContext false
+                dest.parentFile?.mkdirs()
+                resp.body?.byteStream()?.use { input ->
+                    dest.outputStream().use { out -> input.copyTo(out) }
+                } ?: return@withContext false
+                true
+            }
+        }
 
     /** Сохранить ссылку/статью (share из браузера). */
     suspend fun saveLink(base: String, token: String, url: String, title: String): String {

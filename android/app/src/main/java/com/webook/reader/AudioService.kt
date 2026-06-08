@@ -127,7 +127,12 @@ class AudioService : Service() {
                     .build()
             )
             try {
-                setDataSource(applicationContext, Uri.parse(url), mapOf("Authorization" to "Bearer $token"))
+                val local = Downloads.audioLocal(this@AudioService, audiobookId, tracks[trackIndex].id)
+                if (local != null) {
+                    setDataSource(local.absolutePath)   // офлайн-копия
+                } else {
+                    setDataSource(applicationContext, Uri.parse(url), mapOf("Authorization" to "Bearer $token"))
+                }
             } catch (e: Exception) {
                 return
             }

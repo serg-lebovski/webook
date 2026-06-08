@@ -67,6 +67,14 @@
             android:name=".OfflineActivity"
             android:exported="false" />
 
+        <activity
+            android:name=".MangaListActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".MangaReaderActivity"
+            android:exported="false" />
+
         <receiver
             android:name=".ReminderReceiver"
             android:exported="false" />

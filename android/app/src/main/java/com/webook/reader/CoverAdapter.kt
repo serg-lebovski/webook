@@ -12,6 +12,7 @@ class CoverAdapter(
     private val base: String,
     private val token: String,
     private val onClick: (BookItem) -> Unit,
+    private val onLongClick: ((BookItem) -> Unit)? = null,
 ) : RecyclerView.Adapter<CoverAdapter.VH>() {
 
     private val items = ArrayList<BookItem>()
@@ -48,6 +49,7 @@ class CoverAdapter(
             holder.cover.setImageResource(R.drawable.ic_launcher)
         }
         holder.itemView.setOnClickListener { onClick(b) }
+        holder.itemView.setOnLongClickListener { onLongClick?.invoke(b); onLongClick != null }
     }
 
     override fun getItemCount() = items.size

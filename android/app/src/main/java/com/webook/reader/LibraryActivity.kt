@@ -43,9 +43,9 @@ class LibraryActivity : AppCompatActivity() {
         setSupportActionBar(b.toolbar)
 
         gridView = Prefs.prefs(this).getBoolean("books_grid", true)
-        coverAdapter = CoverAdapter(Prefs.baseUrl(this), Prefs.token(this)) { item ->
-            openBookReader(item.id)
-        }
+        coverAdapter = CoverAdapter(Prefs.baseUrl(this), Prefs.token(this),
+            onClick = { item -> openBookReader(item.id) },
+            onLongClick = { item -> downloadBookOffline(item) })
         b.list.layoutManager = LinearLayoutManager(this)
         b.list.adapter = adapter
 
@@ -64,6 +64,10 @@ class LibraryActivity : AppCompatActivity() {
                 R.id.nav_audio -> {
                     startActivity(Intent(this, AudioListActivity::class.java))
                     false   // аудио — отдельный экран
+                }
+                R.id.nav_manga -> {
+                    startActivity(Intent(this, MangaListActivity::class.java))
+                    false   // манга — отдельный экран
                 }
                 R.id.nav_notes -> { setMode("notes"); true }
                 R.id.nav_profile -> {
@@ -159,6 +163,22 @@ class LibraryActivity : AppCompatActivity() {
         b.list.layoutManager = LinearLayoutManager(this)
         b.list.adapter = adapter
         adapter.submit(rows)
+    }
+
+    private fun downloadBookOffline(item: BookItem) {
+        val key = "book:${item.id}"
+        Toast.makeText(this, "Скачиваю «${item.title}»…", Toast.LENGTH_SHORT).show()
+        lifecycleScope.launch {
+            try {
+                val res = Api.text(Prefs.baseUrl(this@LibraryActivity),
+                    Prefs.token(this@LibraryActivity), "/api/books/${item.id}/text")
+                Offline.save(this@LibraryActivity, key, res)
+                Toast.makeText(this@LibraryActivity,
+                    "Доступно офлайн: ${res.paragraphs.size} абз.", Toast.LENGTH_LONG).show()
+            } catch (e: Exception) {
+                Toast.makeText(this@LibraryActivity, "Не удалось скачать", Toast.LENGTH_LONG).show()
+            }
+        }
     }
 
     private fun openBookReader(id: Int) {
