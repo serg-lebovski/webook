@@ -132,11 +132,56 @@
 {% include "_bulk_bar.html" %}
 {% include "_pagination.html" %}
 {% else %}
+{% if q %}
+<div class="text-center py-5">
+  <i class="bi bi-search display-1 text-muted"></i>
+  <h5 class="mt-3 text-muted">По запросу «{{ q }}» ничего не найдено</h5>
+</div>
+{% else %}
 <div class="text-center py-5">
   <i class="bi bi-collection display-1 text-muted"></i>
-  <h5 class="mt-3 text-muted">{% if q %}По запросу «{{ q }}» ничего не найдено{% else %}Здесь пока пусто{% endif %}</h5>
-  <a href="/books/upload" class="btn btn-primary mt-2"><i class="bi bi-cloud-upload me-1"></i>Загрузить</a>
+  <h4 class="mt-3">Добро пожаловать в вашу библиотеку</h4>
+  <p class="text-muted mb-4">Здесь пока пусто. Вот несколько способов наполнить её:</p>
+  <div class="row g-3 justify-content-center" style="max-width:760px;margin:0 auto;">
+    <div class="col-sm-6 col-lg-3">
+      <a href="/books/upload" class="card h-100 text-decoration-none text-body">
+        <div class="card-body text-center">
+          <i class="bi bi-cloud-upload fs-2 text-primary"></i>
+          <p class="fw-semibold mt-2 mb-1">Загрузить файлы</p>
+          <p class="small text-muted mb-0">EPUB, FB2, PDF или аудио</p>
+        </div>
+      </a>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+      <a href="/books/upload#isbn" class="card h-100 text-decoration-none text-body">
+        <div class="card-body text-center">
+          <i class="bi bi-upc-scan fs-2 text-primary"></i>
+          <p class="fw-semibold mt-2 mb-1">Добавить по ISBN</p>
+          <p class="small text-muted mb-0">В список «Хочу прочитать»</p>
+        </div>
+      </a>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+      <a href="/links" class="card h-100 text-decoration-none text-body">
+        <div class="card-body text-center">
+          <i class="bi bi-journal-text fs-2 text-primary"></i>
+          <p class="fw-semibold mt-2 mb-1">Сохранить статью</p>
+          <p class="small text-muted mb-0">Ссылка на чтение позже</p>
+        </div>
+      </a>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+      <a href="/settings" class="card h-100 text-decoration-none text-body">
+        <div class="card-body text-center">
+          <i class="bi bi-phone fs-2 text-primary"></i>
+          <p class="fw-semibold mt-2 mb-1">Приложение и плагин</p>
+          <p class="small text-muted mb-0">Android и браузер</p>
+        </div>
+      </a>
+    </div>
+  </div>
 </div>
+{% endif %}
 {% endif %}
 
 {% if shared_books %}

@@ -43,7 +43,8 @@
           <a href="/series/{{ series.id }}" class="text-decoration-none text-muted">{{ series.name }}</a>
         </h6>
         <div class="row g-3">
-          {% for book in shelf_books | sort(attribute='series_order') %}
+          {% set _ordered = (shelf_books | rejectattr('series_order', 'none') | sort(attribute='series_order') | list) + (shelf_books | selectattr('series_order', 'none') | list) %}
+          {% for book in _ordered %}
           <div class="col-6 col-sm-4 col-md-3 col-lg-2">
             <a href="/books/{{ book.id }}" class="text-decoration-none">
               <div class="card h-100">

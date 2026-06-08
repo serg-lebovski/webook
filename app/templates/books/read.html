@@ -4,6 +4,17 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ book.title }} — WeBook</title>
+  <script>
+    // Ранняя установка фона по теме ридера/сайта — чтобы не мелькал белый фон при тёмной теме
+    (function () {
+      try {
+        var rs = JSON.parse(localStorage.getItem("reader_settings") || "null");
+        var theme = (rs && rs.theme) || (localStorage.getItem("theme") === "dark" ? "dark" : "light");
+        var bg = { light: "#fafaf8", sepia: "#f4ecd8", dark: "#1a1a1a" }[theme] || "#fafaf8";
+        document.documentElement.style.background = bg;
+      } catch (e) {}
+    })();
+  </script>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
   <style>
@@ -177,7 +188,9 @@
 {% if book.file_format in ("epub", "fb2") %}
 <script>
 window.RS = (function () {
-  var DEF = { font: 100, lh: 1.6, width: 680, theme: "light" };
+  // По умолчанию тема ридера наследует тему сайта (тёмная → dark), чтобы не было белой вспышки
+  var siteTheme = (function () { try { return localStorage.getItem("theme"); } catch (e) { return null; } })();
+  var DEF = { font: 100, lh: 1.6, width: 680, theme: siteTheme === "dark" ? "dark" : "light" };
   var s;
   try { s = Object.assign({}, DEF, JSON.parse(localStorage.getItem("reader_settings")) || {}); }
   catch (e) { s = Object.assign({}, DEF); }

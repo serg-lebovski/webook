@@ -2,7 +2,8 @@ import time
 
 from fastapi import FastAPI, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from sqlalchemy import text
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from jose import JWTError, jwt
@@ -32,7 +33,7 @@ def _username_from_request(request: Request) -> str:
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     path = request.url.path
-    if path.startswith(("/static", "/storage")):
+    if path.startswith(("/static", "/storage")) or path == "/healthz":
         return await call_next(request)
     start = time.monotonic()
     response = await call_next(request)
@@ -102,6 +103,25 @@ def on_startup():
 @app.get("/", response_class=HTMLResponse)
 def root(request: Request, user=Depends(get_current_user)):
     return RedirectResponse("/dashboard", status_code=302)
+
+
+@app.get("/healthz")
+def healthz():
+    """Health-check для мониторинга: проверяет доступность БД. Без авторизации."""
+    from app.database import SessionLocal
+    db = SessionLocal()
+    try:
+        db.execute(text("SELECT 1"))
+        db_ok = True
+    except Exception:
+        db_ok = False
+    finally:
+        db.close()
+    status = "ok" if db_ok else "degraded"
+    return JSONResponse(
+        {"status": status, "db": db_ok},
+        status_code=200 if db_ok else 503,
+    )
 
 
 @app.exception_handler(302)
