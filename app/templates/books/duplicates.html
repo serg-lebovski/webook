@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Дубликаты книг — WeBook{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+  <div>
+    <h2 class="mb-0"><i class="bi bi-files me-2"></i>Дубликаты книг</h2>
+    <p class="text-muted small mb-0">Книги с одинаковым названием и автором</p>
+  </div>
+  <a href="/books" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>К библиотеке</a>
+</div>
+
+{% if groups %}
+<p class="text-muted small">
+  Найдено групп: <strong>{{ groups | length }}</strong>. В каждой группе рекомендуется оставить
+  отмеченную <span class="badge bg-success">оставить</span> книгу (с файлом / крупнее / прочитанную),
+  а остальные отправить в корзину. Удаление мягкое — книги можно восстановить из
+  <a href="/trash">корзины</a>.
+</p>
+
+{% for group in groups %}
+<div class="card mb-3">
+  <div class="card-header fw-semibold">
+    <i class="bi bi-collection me-1"></i>{{ group[0].title }}
+    <span class="text-muted fw-normal small">· {{ group[0].author.name if group[0].author else '—' }} · {{ group | length }} шт.</span>
+  </div>
+  <form method="post" action="/books/duplicates/resolve">
+    <div class="list-group list-group-flush">
+      {% for book in group %}
+      <label class="list-group-item d-flex align-items-center gap-3">
+        <input type="checkbox" class="form-check-input mt-0" name="ids" value="{{ book.id }}"
+               {% if not loop.first %}checked{% endif %}>
+        {% if book.cover_path %}
+        <img src="/books/{{ book.id }}/cover" alt="" style="width:36px;height:50px;object-fit:cover;border-radius:3px;flex:0 0 auto">
+        {% else %}
+        <span class="d-inline-flex align-items-center justify-content-center bg-body-secondary"
+              style="width:36px;height:50px;border-radius:3px;flex:0 0 auto"><i class="bi bi-book text-muted"></i></span>
+        {% endif %}
+        <span class="flex-grow-1 min-width-0">
+          <span class="d-block text-truncate">
+            <a href="/books/{{ book.id }}" target="_blank" class="text-decoration-none">{{ book.title }}</a>
+            {% if loop.first %}<span class="badge bg-success ms-1">оставить</span>{% endif %}
+          </span>
+          <span class="text-muted small">
+            {% if book.file_format %}{{ book.file_format | upper }}{% if book.file_size %} · {{ book.file_size | humanbytes }}{% endif %}{% else %}без файла{% endif %}
+            {% if book.is_read %} · <i class="bi bi-check-circle text-success"></i> прочитано{% endif %}
+            {% if book.added_at %} · добавлена {{ book.added_at.strftime('%d.%m.%Y') }}{% endif %}
+          </span>
+        </span>
+      </label>
+      {% endfor %}
+    </div>
+    <div class="card-footer d-flex justify-content-end">
+      <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Отправить отмеченные книги в корзину?')">
+        <i class="bi bi-trash me-1"></i>В корзину отмеченные
+      </button>
+    </div>
+  </form>
+</div>
+{% endfor %}
+
+{% else %}
+<div class="text-center text-muted py-5">
+  <i class="bi bi-check2-circle fs-1 d-block mb-2 text-success"></i>
+  Дубликатов не найдено — в библиотеке нет книг с одинаковыми названием и автором.
+</div>
+{% endif %}
+{% endblock %}

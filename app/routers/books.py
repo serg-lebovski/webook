@@ -29,6 +29,20 @@ from app.config import BOOKS_DIR, COVERS_DIR, ALLOWED_BOOK_FORMATS, MAX_BOOK_SIZ
 router = APIRouter(prefix="/books")
 templates = Jinja2Templates(directory="app/templates")
 
+
+def _humanbytes(n) -> str:
+    try:
+        n = float(n or 0)
+    except (TypeError, ValueError):
+        return "0 B"
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if n < 1024 or unit == "TB":
+            return f"{n:.0f} {unit}" if unit == "B" else f"{n:.1f} {unit}"
+        n /= 1024
+
+
+templates.env.filters["humanbytes"] = _humanbytes
+
 _READABLE_FORMATS = ("epub", "pdf", "fb2")
 _MIME = {"epub": "application/epub+zip", "fb2": "application/x-fictionbook+xml", "pdf": "application/pdf"}
 BOOKS_PER_PAGE = 24
@@ -414,6 +428,53 @@ def isbn_import(isbn: str = Form(...), shelf: str = Form(""),
     db.commit()
     db.refresh(book)
     return RedirectResponse(f"/books/{book.id}", status_code=302)
+
+
+def _dup_key(title: str) -> str:
+    return re.sub(r"\s+", " ", (title or "").strip().lower())
+
+
+@router.get("/duplicates", response_class=HTMLResponse)
+def duplicates_page(request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Группы книг-дублей: совпадает нормализованное название + автор."""
+    books = (
+        db.query(Book)
+        .options(joinedload(Book.author))
+        .filter(Book.user_id == user.id, Book.deleted_at.is_(None))
+        .all()
+    )
+    groups_map: dict = {}
+    for b in books:
+        key = (_dup_key(b.title), b.author_id)
+        groups_map.setdefault(key, []).append(b)
+
+    groups = []
+    for (title_key, _author_id), items in groups_map.items():
+        if len(items) < 2:
+            continue
+        # «Лучшую» книгу (с файлом, крупнее, прочитанная) рекомендуем оставить — первой
+        items.sort(key=lambda b: (bool(b.file_format), b.file_size or 0, b.is_read, b.id), reverse=True)
+        groups.append(items)
+    groups.sort(key=lambda g: _dup_key(g[0].title))
+
+    return templates.TemplateResponse("books/duplicates.html", {
+        "request": request, "user": user, "groups": groups,
+    })
+
+
+@router.post("/duplicates/resolve")
+def duplicates_resolve(
+    ids: List[int] = Form(default=[]),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Отправить выбранные книги-дубли в корзину (soft-delete)."""
+    if ids:
+        now = datetime.utcnow()
+        for book in db.query(Book).filter(Book.user_id == user.id, Book.id.in_(ids)).all():
+            book.deleted_at = now
+        db.commit()
+    return RedirectResponse("/books/duplicates", status_code=302)
 
 
 @router.get("/{book_id}", response_class=HTMLResponse)
