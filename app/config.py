@@ -20,6 +20,7 @@ AUDIOBOOKS_DIR = Path(os.getenv("AUDIOBOOKS_DIR", str(BASE_DIR / "audiobooks")))
 FILES_DIR = Path(os.getenv("FILES_DIR", str(BASE_DIR / "userfiles")))
 MANGA_DIR = Path(os.getenv("MANGA_DIR", str(BASE_DIR / "manga")))
 LOGS_DIR = Path(os.getenv("LOGS_DIR", str(BASE_DIR / "logs")))
+BACKUPS_DIR = Path(os.getenv("BACKUPS_DIR", str(BASE_DIR / "backups")))
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
 ALLOWED_BOOK_FORMATS = {".epub", ".fb2", ".pdf"}

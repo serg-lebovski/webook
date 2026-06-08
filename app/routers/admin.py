@@ -42,7 +42,7 @@ LOG_VIEW_FILES = {
 
 def _get_system_info() -> dict:
     from app.config import (DATABASE_URL, BOOKS_DIR, COVERS_DIR, LINKS_CONTENT_DIR,
-                            AUDIOBOOKS_DIR, FILES_DIR, MANGA_DIR)
+                            AUDIOBOOKS_DIR, FILES_DIR, MANGA_DIR, BACKUPS_DIR)
 
     db_type = "PostgreSQL" if DATABASE_URL.startswith("postgresql") else "SQLite"
 
@@ -82,6 +82,26 @@ def _get_system_info() -> dict:
     except Exception:
         disk = shutil.disk_usage(".")
 
+    # Информация о бэкапах БД (host-cron pg_backup.sh → *.sql.gz)
+    backup_last_name = ""
+    backup_last_bytes = 0
+    backup_last_mtime = None
+    backup_count = 0
+    backup_total_bytes = 0
+    try:
+        if BACKUPS_DIR.exists():
+            dumps = sorted(BACKUPS_DIR.glob("*.sql.gz"), key=lambda f: f.stat().st_mtime, reverse=True)
+            backup_count = len(dumps)
+            backup_total_bytes = sum(f.stat().st_size for f in dumps)
+            if dumps:
+                latest = dumps[0]
+                st = latest.stat()
+                backup_last_name = latest.name
+                backup_last_bytes = st.st_size
+                backup_last_mtime = datetime.fromtimestamp(st.st_mtime)
+    except Exception:
+        pass
+
     return {
         "db_type": db_type,
         "db_display": db_display,
@@ -104,6 +124,11 @@ def _get_system_info() -> dict:
         "disk_total": disk.total,
         "disk_used": disk.used,
         "disk_free": disk.free,
+        "backup_last_name": backup_last_name,
+        "backup_last_bytes": backup_last_bytes,
+        "backup_last_mtime": backup_last_mtime,
+        "backup_count": backup_count,
+        "backup_total_bytes": backup_total_bytes,
     }
 
 
@@ -192,6 +217,7 @@ def admin_page(
         "success": success,
         "error": None,
         "system": system,
+        "now": datetime.utcnow(),
         "bans": bans,
     })
 

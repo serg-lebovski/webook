@@ -10,6 +10,7 @@ from app.models.book import Book
 from app.models.link import Link, LinkFolder
 from app.models.shelf import Shelf
 from app.models.share import Share
+from app.models.read_progress import ReadProgress
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -59,6 +60,62 @@ def _expiring_shares(db: Session, user_id: int) -> list:
             "expires_at": s.expires_at,
         })
     return items
+
+
+def _continue_reading(db: Session, user_id: int, limit: int = 8) -> list:
+    """Книги и статьи с незаконченным прогрессом чтения — «продолжить»."""
+    items = []
+
+    rows = (
+        db.query(ReadProgress, Book)
+        .join(Book, Book.id == ReadProgress.book_id)
+        .filter(
+            ReadProgress.user_id == user_id,
+            Book.user_id == user_id,
+            Book.deleted_at.is_(None),
+            Book.is_read == False,
+            ReadProgress.percentage > 0.01,
+            ReadProgress.percentage < 0.95,
+        )
+        .order_by(ReadProgress.updated_at.desc())
+        .limit(limit)
+        .all()
+    )
+    for rp, b in rows:
+        items.append({
+            "kind": "book",
+            "title": b.title,
+            "url": f"/books/{b.id}/read",
+            "cover_url": f"/books/{b.id}/cover" if b.cover_path else None,
+            "pct": round((rp.percentage or 0) * 100),
+            "updated": rp.updated_at or datetime.min,
+        })
+
+    links = (
+        db.query(Link)
+        .filter(
+            Link.user_id == user_id,
+            Link.deleted_at.is_(None),
+            Link.is_read == False,
+            Link.read_progress > 0.01,
+            Link.read_progress < 0.95,
+        )
+        .order_by(Link.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    for l in links:
+        items.append({
+            "kind": "link",
+            "title": l.title,
+            "url": f"/links/{l.id}/read",
+            "cover_url": None,
+            "pct": round((l.read_progress or 0) * 100),
+            "updated": l.created_at or datetime.min,
+        })
+
+    items.sort(key=lambda x: x["updated"], reverse=True)
+    return items[:limit]
 
 
 def _reading_stats(db: Session, user_id: int, goal: int) -> dict:
@@ -163,10 +220,12 @@ def dashboard(
 
     from app.services import reco_service
     recommendations = reco_service.recommend(db, user.id, limit=6)
+    continue_reading = _continue_reading(db, user.id)
 
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
         "user": user,
+        "continue_reading": continue_reading,
         "recommendations": recommendations,
         "books_total": books_total,
         "books_read": books_read,

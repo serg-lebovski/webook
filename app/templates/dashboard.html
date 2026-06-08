@@ -82,6 +82,46 @@
 
 </div>
 
+{% if continue_reading %}
+<!-- Продолжить чтение -->
+<div class="card mb-4">
+  <div class="card-header fw-semibold">
+    <i class="bi bi-play-circle me-1"></i>Продолжить чтение
+  </div>
+  <div class="card-body">
+    <div class="row g-3">
+      {% for it in continue_reading %}
+      <div class="col-6 col-md-4 col-lg-3">
+        <a href="{{ it.url }}" class="text-decoration-none">
+          <div class="card h-100">
+            <div class="d-flex">
+              {% if it.cover_url %}
+              <img src="{{ it.cover_url }}" alt="{{ it.title }}"
+                   style="width:48px;height:68px;object-fit:cover;border-radius:.35rem 0 0 .35rem;flex:0 0 auto">
+              {% else %}
+              <div class="d-flex align-items-center justify-content-center bg-body-secondary"
+                   style="width:48px;height:68px;border-radius:.35rem 0 0 .35rem;flex:0 0 auto">
+                <i class="bi {{ 'bi-journal-text' if it.kind == 'link' else 'bi-book' }} text-muted"></i>
+              </div>
+              {% endif %}
+              <div class="p-2 overflow-hidden">
+                <p class="card-text small fw-semibold mb-1 text-body text-truncate">{{ it.title }}</p>
+                <div class="progress" style="height:6px">
+                  <div class="progress-bar {{ 'bg-info' if it.kind == 'link' else 'bg-success' }}"
+                       style="width:{{ it.pct }}%"></div>
+                </div>
+                <span class="text-muted" style="font-size:.72rem">{{ it.pct }}%</span>
+              </div>
+            </div>
+          </div>
+        </a>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
 <!-- Цель чтения и серия -->
 <div class="row g-3 mb-4">
   <div class="col-md-7">

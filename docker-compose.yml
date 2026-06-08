@@ -32,6 +32,7 @@ services:
       - ./userfiles:/app/userfiles
       - ./manga:/app/manga
       - ./logs:/app/logs
+      - ./backups:/app/backups:ro
     env_file:
       - .env
     depends_on:
