@@ -48,6 +48,9 @@ def _migrate_db():
             "ALTER TABLE shares ADD COLUMN IF NOT EXISTS max_downloads INTEGER",
             "ALTER TABLE shares ADD COLUMN IF NOT EXISTS download_count INTEGER NOT NULL DEFAULT 0",
             "ALTER TABLE audiobooks ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP",
+            # Полнотекстовый поиск по статьям (PostgreSQL FTS)
+            "ALTER TABLE links ADD COLUMN IF NOT EXISTS content_tsv tsvector",
+            "CREATE INDEX IF NOT EXISTS ix_links_content_tsv ON links USING gin(content_tsv)",
         ]
         backfill_expires = (
             "UPDATE shares SET expires_at = created_at + INTERVAL '7 days' WHERE expires_at IS NULL"

@@ -57,6 +57,9 @@ def refresh_feed(feed: Feed, db: Session) -> int:
             (LINKS_CONTENT_DIR / f"{link.id}.txt").write_text(content, encoding="utf-8")
             link.word_count = len(content.split())
             db.commit()
+            from app.services.search_service import reindex_link
+            reindex_link(db, link)
+            db.commit()
         new_count += 1
 
     feed.etag = getattr(d, "etag", None) or feed.etag

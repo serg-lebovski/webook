@@ -231,6 +231,9 @@ def add_link(
     link.word_count = len((content or "").split())
     set_tags_from_string(link, tags, user.id, db)
     db.commit()
+    from app.services.search_service import reindex_link
+    reindex_link(db, link)
+    db.commit()
     return RedirectResponse(f"/links?folder_id={folder_id}", status_code=302)
 
 
@@ -253,6 +256,10 @@ def refetch_link(
         link.content_fetched_at = datetime.utcnow()
         link.word_count = len(fetched["content"].split())
     db.commit()
+    if fetched.get("content"):
+        from app.services.search_service import reindex_link
+        reindex_link(db, link)
+        db.commit()
     folder_id = link.folder_id or 0
     return RedirectResponse(f"/links?folder_id={folder_id}", status_code=302)
 

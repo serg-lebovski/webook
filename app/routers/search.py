@@ -88,15 +88,29 @@ def search(
                 links.append(l)
                 link_ids.add(l.id)
 
-        # Полнотекстовый поиск по содержимому статей (хранится в файлах)
-        ql = q.lower()
-        for l in db.query(Link).filter(Link.user_id == user.id, Link.deleted_at.is_(None)).all():
-            if l.id in link_ids:
-                continue
-            content = l.content
-            if content and ql in content.lower():
-                links.append(l)
-                link_ids.add(l.id)
+        # Полнотекстовый поиск по содержимому статей
+        from app.services import search_service
+        if search_service.is_postgres(db):
+            # PostgreSQL: индексируемый tsvector (быстро, не читает файлы)
+            fts_ids = search_service.search_link_ids(db, user.id, q) - link_ids
+            if fts_ids:
+                for l in (
+                    db.query(Link)
+                    .filter(Link.user_id == user.id, Link.deleted_at.is_(None), Link.id.in_(fts_ids))
+                    .all()
+                ):
+                    links.append(l)
+                    link_ids.add(l.id)
+        else:
+            # SQLite (dev): перебор содержимого файлов в Python
+            ql = q.lower()
+            for l in db.query(Link).filter(Link.user_id == user.id, Link.deleted_at.is_(None)).all():
+                if l.id in link_ids:
+                    continue
+                content = l.content
+                if content and ql in content.lower():
+                    links.append(l)
+                    link_ids.add(l.id)
 
         # ── Аудиокниги: название, автор, чтец ──────────────────────────────
         audiobooks = (
