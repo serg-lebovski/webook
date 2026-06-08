@@ -65,61 +65,13 @@ def settings_page(
     db: Session = Depends(get_db),
 ):
     stats = _get_stats(db, user)
-    from app.services import telegram_service
     return templates.TemplateResponse("settings.html", {
         "request": request,
         "user": user,
         "stats": stats,
         "success": success,
         "error": None,
-        "tg_configured": telegram_service.is_configured(db),
-        "tg_code": request.query_params.get("tg_code", ""),
     })
-
-
-@router.post("/telegram/connect")
-def telegram_connect(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    import secrets
-    code = secrets.token_hex(3).upper()  # 6 hex-символов
-    user.telegram_link_code = code
-    db.commit()
-    return RedirectResponse(f"/settings?tg_code={code}#tg", status_code=302)
-
-
-@router.post("/telegram/confirm")
-def telegram_confirm(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    from app.services import telegram_service
-    token = telegram_service.get_token(db)
-    if not token or not user.telegram_link_code:
-        return RedirectResponse("/settings?success=tg_error#tg", status_code=302)
-    chat_id = telegram_service.find_chat_by_code(token, user.telegram_link_code)
-    if not chat_id:
-        return RedirectResponse(f"/settings?tg_code={user.telegram_link_code}&success=tg_notfound#tg", status_code=302)
-    user.telegram_chat_id = chat_id
-    user.telegram_link_code = None
-    user.tg_last_check = datetime.utcnow()
-    db.commit()
-    telegram_service.send_message(token, chat_id,
-                                  "✅ WeBook подключён. Сюда будут приходить напоминания о задачах, "
-                                  "заметках, истекающих ссылках и новых статьях.")
-    return RedirectResponse("/settings?success=tg_connected#tg", status_code=302)
-
-
-@router.post("/telegram/disconnect")
-def telegram_disconnect(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    user.telegram_chat_id = None
-    user.telegram_link_code = None
-    db.commit()
-    return RedirectResponse("/settings?success=tg_off#tg", status_code=302)
-
-
-@router.post("/telegram/test")
-def telegram_test(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    from app.services import telegram_service
-    token = telegram_service.get_token(db)
-    ok = telegram_service.send_message(token, user.telegram_chat_id or "",
-                                       "🔔 Тестовое уведомление от WeBook — связь работает.")
-    return RedirectResponse(f"/settings?success={'tg_test' if ok else 'tg_error'}#tg", status_code=302)
 
 
 @router.post("/profile")
@@ -135,15 +87,12 @@ def update_profile(
     stats = _get_stats(db, user)
 
     def error(msg):
-        from app.services import telegram_service
         return templates.TemplateResponse("settings.html", {
             "request": request,
             "user": user,
             "stats": stats,
             "success": "",
             "error": msg,
-            "tg_configured": telegram_service.is_configured(db),
-            "tg_code": "",
         }, status_code=400)
 
     # Проверяем текущий пароль
@@ -291,11 +240,9 @@ async def restore(
     finally:
         if os.path.exists(tmp_path):
             os.unlink(tmp_path)
-    from app.services import telegram_service
     return templates.TemplateResponse("settings.html", {
         "request": request, "user": user, "stats": _get_stats(db, user),
         "success": "", "error": error, "restore_result": result,
-        "tg_configured": telegram_service.is_configured(db), "tg_code": "",
     })
 
 
