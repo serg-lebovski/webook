@@ -19,6 +19,7 @@ from app.models.shelf import Shelf
 from app.models.author import Author
 from app.models.read_progress import ReadProgress
 from app.models.audiobook import Audiobook
+from app.models.manga import Manga, MangaChapter
 from app.services.auth_service import verify_password, create_access_token
 from app.services.security_service import client_ip, banned_until, record_failure, record_success
 from app.services import book_service
@@ -569,5 +570,128 @@ async def api_audiobook_progress(
     if body.get("finished") is not None:
         ab.is_finished = bool(body["finished"])
     ab.last_played_at = datetime.utcnow()
+    db.commit()
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Манга — список, главы, страницы-изображения, прогресс
+# ---------------------------------------------------------------------------
+
+_IMG_MIME = {
+    "jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png",
+    "webp": "image/webp", "gif": "image/gif", "bmp": "image/bmp",
+}
+
+
+def _own_manga(manga_id: int, user: User, db: Session) -> Manga:
+    m = db.query(Manga).filter(
+        Manga.id == manga_id, Manga.user_id == user.id, Manga.deleted_at.is_(None)
+    ).first()
+    if not m:
+        raise HTTPException(status_code=404, detail="Manga not found")
+    return m
+
+
+@router.get("/manga")
+def api_manga_list(
+    user: User = Depends(_get_api_user),
+    db: Session = Depends(get_db),
+):
+    items = (
+        db.query(Manga)
+        .filter(Manga.user_id == user.id, Manga.deleted_at.is_(None))
+        .all()
+    )
+    items = sorted(items, key=lambda m: _natural_key(m.title))
+    return [
+        {
+            "id": m.id,
+            "title": m.title,
+            "author": m.author or "",
+            "chapter_count": m.chapter_count,
+            "page_total": m.page_total,
+            "has_cover": bool(m.cover_path),
+            "is_favorite": m.is_favorite,
+            "current_chapter_id": m.current_chapter_id,
+            "current_page": m.current_page or 0,
+        }
+        for m in items
+    ]
+
+
+@router.get("/manga/{manga_id}")
+def api_manga_detail(
+    manga_id: int,
+    user: User = Depends(_get_api_user),
+    db: Session = Depends(get_db),
+):
+    m = _own_manga(manga_id, user, db)
+    return {
+        "id": m.id,
+        "title": m.title,
+        "author": m.author or "",
+        "current_chapter_id": m.current_chapter_id,
+        "current_page": m.current_page or 0,
+        "chapters": [
+            {"id": c.id, "title": c.label, "order": c.order, "page_count": c.page_count or 0}
+            for c in m.chapters
+        ],
+    }
+
+
+@router.get("/manga/{manga_id}/cover")
+def api_manga_cover(
+    manga_id: int,
+    user: User = Depends(_get_api_user),
+    db: Session = Depends(get_db),
+):
+    m = _own_manga(manga_id, user, db)
+    if not m.cover_path:
+        raise HTTPException(status_code=404, detail="No cover")
+    path = COVERS_DIR / m.cover_path
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="No cover")
+    return Response(content=path.read_bytes(), media_type="image/jpeg")
+
+
+@router.get("/manga/{manga_id}/chapters/{chapter_id}/pages/{n}")
+def api_manga_page(
+    manga_id: int,
+    chapter_id: int,
+    n: int,
+    user: User = Depends(_get_api_user),
+    db: Session = Depends(get_db),
+):
+    from app.services import manga_service
+    m = _own_manga(manga_id, user, db)
+    chapter = next((c for c in m.chapters if c.id == chapter_id), None)
+    if not chapter:
+        raise HTTPException(status_code=404, detail="Chapter not found")
+    files = manga_service.page_files(m.folder, chapter.folder)
+    if n < 0 or n >= len(files):
+        raise HTTPException(status_code=404, detail="Page out of range")
+    path = manga_service.chapter_dir(m.folder, chapter.folder) / files[n]
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="File missing")
+    ext = path.suffix.lower().lstrip(".")
+    return FileResponse(path, media_type=_IMG_MIME.get(ext, "application/octet-stream"),
+                        headers={"Cache-Control": "public, max-age=2592000"})
+
+
+@router.post("/manga/{manga_id}/progress")
+async def api_manga_progress(
+    manga_id: int,
+    request: Request,
+    user: User = Depends(_get_api_user),
+    db: Session = Depends(get_db),
+):
+    m = _own_manga(manga_id, user, db)
+    body = await request.json()
+    if body.get("chapter_id") is not None:
+        m.current_chapter_id = int(body["chapter_id"])
+    if body.get("page") is not None:
+        m.current_page = max(0, int(body["page"]))
+    m.last_read_at = datetime.utcnow()
     db.commit()
     return {"ok": True}

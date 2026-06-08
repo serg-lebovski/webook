@@ -16,12 +16,8 @@ BG_COLOR = "#f8f9fa"
 ICON_RGB = (37, 99, 235)  # #2563eb
 
 
-def _solid_png(size: int, rgb: tuple) -> bytes:
-    """Минимальный сплошной PNG заданного цвета без внешних зависимостей."""
-    r, g, b = rgb
-    scanline = b"\x00" + bytes([r, g, b] * size)
-    raw = scanline * size
-
+def _png_from_rgb(size: int, raw: bytearray) -> bytes:
+    """Собрать PNG (truecolor) из готового буфера строк (с байтом-фильтром)."""
     def chunk(tag: bytes, data: bytes) -> bytes:
         crc = struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
         return struct.pack(">I", len(data)) + tag + data + crc
@@ -30,18 +26,40 @@ def _solid_png(size: int, rgb: tuple) -> bytes:
     return (
         b"\x89PNG\r\n\x1a\n"
         + chunk(b"IHDR", ihdr)
-        + chunk(b"IDAT", zlib.compress(raw, 9))
+        + chunk(b"IDAT", zlib.compress(bytes(raw), 9))
         + chunk(b"IEND", b"")
     )
 
 
+def _icon_png(size: int) -> bytes:
+    """Иконка-логотип (синяя открытая книга), как у приложения, без зависимостей.
+
+    Full-bleed синий фон + две страницы (белая/светло-голубая) с зазором-корешком —
+    повторяет `ic_launcher.xml`. Маскируемая иконка, поэтому без скруглений.
+    """
+    bg = (37, 99, 235)       # #2563EB
+    white = (255, 255, 255)
+    light = (219, 234, 254)  # #DBEAFE
+    raw = bytearray()
+    for y in range(size):
+        raw.append(0)  # фильтр строки = None
+        v = y * 108.0 / size
+        for x in range(size):
+            u = x * 108.0 / size
+            # книга занимает x 30..78, y 28..82 (как в ic_launcher)
+            if 30 <= u <= 78 and 28 <= v <= 82 and not (52.5 <= u <= 55.5):
+                r, g, b = white if u < 54 else light
+            else:
+                r, g, b = bg
+            raw += bytes((r, g, b))
+    return _png_from_rgb(size, raw)
+
+
 _ICON_SVG = (
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">'
-    '<rect width="512" height="512" rx="96" fill="#2563eb"/>'
-    '<path fill="#ffffff" d="M150 130h95c20 0 34 8 41 22 7-14 21-22 41-22h95v240'
-    'h-95c-18 0-30 6-36 18-6-12-18-18-36-18h-95c-18 0-30 6-36 18-6-12-18-18-36-18'
-    'h-3V130z" opacity="0.95"/>'
-    '<path fill="#2563eb" d="M256 174v196" stroke="#2563eb" stroke-width="10"/>'
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108">'
+    '<rect width="108" height="108" fill="#2563eb"/>'
+    '<path fill="#ffffff" d="M30,30h30c4,0 6,2 6,6v42c0,-3 -3,-5 -6,-5h-30z"/>'
+    '<path fill="#dbeafe" d="M78,30h-30c-4,0 -6,2 -6,6v42c0,-3 3,-5 6,-5h30z"/>'
     "</svg>"
 )
 
@@ -78,12 +96,12 @@ def icon_svg():
 def icon_png(size: int):
     if size not in (192, 512):
         size = 192
-    return Response(content=_solid_png(size, ICON_RGB), media_type="image/png",
+    return Response(content=_icon_png(size), media_type="image/png",
                     headers={"Cache-Control": "public, max-age=604800"})
 
 
 _SW_JS = """
-const CACHE = 'webook-v1';
+const CACHE = 'webook-v2';
 
 self.addEventListener('install', () => self.skipWaiting());
 
