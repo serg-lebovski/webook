@@ -161,9 +161,13 @@ def dashboard(
     expiring_shares = _expiring_shares(db, user.id)
     stats = _reading_stats(db, user.id, user.reading_goal or 0)
 
+    from app.services import reco_service
+    recommendations = reco_service.recommend(db, user.id, limit=6)
+
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
         "user": user,
+        "recommendations": recommendations,
         "books_total": books_total,
         "books_read": books_read,
         "books_unread": books_total - books_read,

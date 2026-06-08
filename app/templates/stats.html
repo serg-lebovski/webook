@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+{% block title %}Статистика чтения — WeBook{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-4">
+  <div>
+    <h2 class="mb-0"><i class="bi bi-graph-up-arrow me-2"></i>Статистика чтения</h2>
+    <p class="text-muted mb-0 small">Итоги за {{ sel_year }} год</p>
+  </div>
+  {% if years | length > 1 %}
+  <form method="get" class="d-flex align-items-center gap-2">
+    <label class="text-muted small mb-0">Год:</label>
+    <select name="year" class="form-select form-select-sm" style="width:auto" onchange="this.form.submit()">
+      {% for y in years %}
+      <option value="{{ y }}" {% if y == sel_year %}selected{% endif %}>{{ y }}</option>
+      {% endfor %}
+    </select>
+  </form>
+  {% endif %}
+</div>
+
+<!-- Ключевые цифры -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-lg-3">
+    <div class="card text-center h-100"><div class="card-body py-4">
+      <div class="display-5 fw-bold text-primary">{{ books_count }}</div>
+      <div class="text-muted small mt-1">книг прочитано</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card text-center h-100"><div class="card-body py-4">
+      <div class="display-5 fw-bold text-info">{{ links_count }}</div>
+      <div class="text-muted small mt-1">статей прочитано</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card text-center h-100"><div class="card-body py-4">
+      <div class="display-5 fw-bold text-success">{{ hours_year }}</div>
+      <div class="text-muted small mt-1">часов на статьи</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card text-center h-100"><div class="card-body py-4">
+      <div class="display-5 fw-bold text-warning">{{ active_days }}</div>
+      <div class="text-muted small mt-1">дней с чтением</div>
+    </div></div>
+  </div>
+</div>
+
+<!-- Серии -->
+<div class="row g-3 mb-4">
+  <div class="col-md-6">
+    <div class="card h-100"><div class="card-body d-flex align-items-center gap-3">
+      <i class="bi bi-fire text-danger display-6 mb-0"></i>
+      <div>
+        <div class="h4 mb-0">{{ current_streak }} <span class="fs-6 text-muted fw-normal">{{ 'день' if current_streak == 1 else 'дн.' }} подряд</span></div>
+        <div class="small text-muted">Текущая серия чтения</div>
+      </div>
+    </div></div>
+  </div>
+  <div class="col-md-6">
+    <div class="card h-100"><div class="card-body d-flex align-items-center gap-3">
+      <i class="bi bi-trophy text-warning display-6 mb-0"></i>
+      <div>
+        <div class="h4 mb-0">{{ best_streak }} <span class="fs-6 text-muted fw-normal">{{ 'день' if best_streak == 1 else 'дн.' }}</span></div>
+        <div class="small text-muted">Лучшая серия за всё время</div>
+      </div>
+    </div></div>
+  </div>
+</div>
+
+<!-- Помесячный график -->
+<div class="card mb-4">
+  <div class="card-header fw-semibold"><i class="bi bi-bar-chart me-1"></i>По месяцам — {{ sel_year }}</div>
+  <div class="card-body">
+    {% if (month_books | sum) + (month_links | sum) == 0 %}
+    <div class="text-center py-4 text-muted">
+      <i class="bi bi-bar-chart display-4"></i>
+      <p class="mt-3 mb-0">За {{ sel_year }} год отмеченного чтения нет.</p>
+    </div>
+    {% else %}
+    <canvas id="monthChart" height="90"></canvas>
+    {% endif %}
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <!-- Топ авторов -->
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header fw-semibold"><i class="bi bi-person me-1"></i>Топ авторов</div>
+      <div class="card-body">
+        {% if top_authors %}
+        <ol class="list-group list-group-numbered list-group-flush">
+          {% for name, n in top_authors %}
+          <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+            <span class="text-truncate">{{ name }}</span>
+            <span class="badge bg-primary rounded-pill">{{ n }}</span>
+          </li>
+          {% endfor %}
+        </ol>
+        {% else %}
+        <p class="text-muted small mb-0">Нет прочитанных книг за год.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Распределение оценок -->
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header fw-semibold"><i class="bi bi-star me-1"></i>Оценки книг</div>
+      <div class="card-body">
+        {% if ratings_max %}
+        {% for r in [5, 4, 3, 2, 1] %}
+        <div class="d-flex align-items-center gap-2 mb-2">
+          <span class="text-warning" style="width:70px">{{ '★' * r }}</span>
+          <div class="progress flex-grow-1" style="height:14px">
+            <div class="progress-bar bg-warning text-dark" style="width:{{ (ratings[r] / ratings_max * 100) | round(0) | int if ratings_max else 0 }}%">
+            </div>
+          </div>
+          <span class="small text-muted" style="width:32px;text-align:right">{{ ratings[r] }}</span>
+        </div>
+        {% endfor %}
+        {% else %}
+        <p class="text-muted small mb-0">Вы ещё не оценивали книги. Поставьте оценку на странице книги.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <!-- Теги -->
+  <div class="col-lg-7">
+    <div class="card h-100">
+      <div class="card-header fw-semibold"><i class="bi bi-tags me-1"></i>Темы года (теги)</div>
+      <div class="card-body">
+        {% if top_tags %}
+        <div class="d-flex flex-wrap gap-2">
+          {% for name, n in top_tags %}
+          <a href="/books?tag={{ name | urlencode }}" class="text-decoration-none">
+            <span class="badge rounded-pill bg-secondary-subtle text-body border"
+                  style="font-size:{{ (0.8 + (n / tags_max) * 0.7) | round(2) }}rem">
+              {{ name }} <span class="text-muted">{{ n }}</span>
+            </span>
+          </a>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-muted small mb-0">У прочитанного за год нет тегов.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Форматы -->
+  <div class="col-lg-5">
+    <div class="card h-100">
+      <div class="card-header fw-semibold"><i class="bi bi-file-earmark me-1"></i>Форматы книг</div>
+      <div class="card-body">
+        {% if formats %}
+        {% for fmt, n in formats %}
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <span class="badge bg-light text-dark border">{{ fmt }}</span>
+          <span class="small text-muted">{{ n }}</span>
+        </div>
+        {% endfor %}
+        {% else %}
+        <p class="text-muted small mb-0">Нет прочитанных книг за год.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const mLabels = {{ month_labels | tojson }};
+const mBooks = {{ month_books | tojson }};
+const mLinks = {{ month_links | tojson }};
+if (document.getElementById('monthChart')) {
+  new Chart(document.getElementById('monthChart'), {
+    type: 'bar',
+    data: {
+      labels: mLabels,
+      datasets: [
+        { label: 'Книги', data: mBooks, backgroundColor: 'rgba(13,110,253,0.7)', borderRadius: 4 },
+        { label: 'Статьи', data: mLinks, backgroundColor: 'rgba(13,202,240,0.7)', borderRadius: 4 },
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { position: 'top' } },
+      scales: {
+        x: { stacked: true, grid: { display: false } },
+        y: { stacked: true, beginAtZero: true, ticks: { stepSize: 1, precision: 0 } }
+      }
+    }
+  });
+}
+</script>
+{% endblock %}
