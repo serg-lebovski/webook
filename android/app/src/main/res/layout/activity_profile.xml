@@ -50,6 +50,36 @@
             android:textSize="16sp" />
 
         <com.google.android.material.button.MaterialButton
+            android:id="@+id/offlineBtn"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            app:icon="@android:drawable/stat_sys_download_done"
+            android:text="Офлайн-библиотека" />
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginBottom="16dp"
+            android:background="#22000000" />
+
+        <com.google.android.material.switchmaterial.SwitchMaterial
+            android:id="@+id/reminderSwitch"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Напоминать читать каждый день" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/reminderTimeBtn"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="24dp"
+            app:icon="@android:drawable/ic_menu_recent_history"
+            android:text="Время: 19:00" />
+
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/logoutBtn"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

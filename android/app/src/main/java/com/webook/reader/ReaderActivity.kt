@@ -141,6 +141,8 @@ class ReaderActivity : AppCompatActivity(), TtsService.Listener {
                 val res = Api.text(base, token, path)
                 text = res
                 Offline.save(this@ReaderActivity, resourceKey, res)  // авто-кэш для офлайна
+                if (resourceKey.isNotEmpty())
+                    Reminders.saveLastRead(this@ReaderActivity, resourceKey, res.title, path)
                 serverPercent = try { Api.getProgress(base, token, progressPath()) }
                     catch (e: Exception) { 0.0 }
                 b.toolbar.title = res.title
@@ -152,6 +154,8 @@ class ReaderActivity : AppCompatActivity(), TtsService.Listener {
                 if (cached != null) {
                     text = cached
                     serverPercent = 0.0
+                    if (resourceKey.isNotEmpty())
+                        Reminders.saveLastRead(this@ReaderActivity, resourceKey, cached.title, path)
                     b.toolbar.title = cached.title
                     adapter.submit(cached.paragraphs)
                     Toast.makeText(this@ReaderActivity, "Офлайн-режим", Toast.LENGTH_SHORT).show()

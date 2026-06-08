@@ -132,6 +132,14 @@ data class TextResult(
     val paragraphs: List<String>,
 )
 
+/** Элемент офлайн-библиотеки. */
+data class OfflineItem(
+    val key: String,        // напр. "book:12" / "article:5"
+    val title: String,
+    val author: String,
+    val paragraphs: Int,
+)
+
 /** Офлайн-кэш текста книг/статей (для озвучки и чтения без сети). */
 object Offline {
     private fun dir(c: Context) = java.io.File(c.filesDir, "offline").apply { mkdirs() }
@@ -144,6 +152,7 @@ object Offline {
             val arr = JSONArray()
             r.paragraphs.forEach { arr.put(it) }
             val o = JSONObject()
+                .put("key", key)
                 .put("title", r.title).put("author", r.author).put("paragraphs", arr)
             fileFor(c, key).writeText(o.toString())
         } catch (e: Exception) { /* офлайн-кэш необязателен */ }
@@ -162,6 +171,38 @@ object Offline {
     }
 
     fun has(c: Context, key: String) = fileFor(c, key).exists()
+
+    fun delete(c: Context, key: String) {
+        try { fileFor(c, key).delete() } catch (e: Exception) {}
+    }
+
+    /** Список всех сохранённых офлайн-материалов. */
+    fun list(c: Context): List<OfflineItem> {
+        val files = dir(c).listFiles { f -> f.extension == "json" } ?: return emptyList()
+        val items = ArrayList<OfflineItem>()
+        for (f in files) {
+            try {
+                val o = JSONObject(f.readText())
+                val key = o.optString("key")
+                if (key.isBlank()) continue
+                items.add(OfflineItem(
+                    key = key,
+                    title = o.optString("title").ifBlank { key },
+                    author = o.optString("author"),
+                    paragraphs = o.optJSONArray("paragraphs")?.length() ?: 0,
+                ))
+            } catch (e: Exception) { /* пропускаем битый файл */ }
+        }
+        return items.sortedWith(compareBy(naturalOrder) { it.title })
+    }
+
+    /** Путь API для повторного открытия по ключу. */
+    fun pathForKey(key: String): String {
+        val parts = key.split(":")
+        if (parts.size != 2) return ""
+        return if (parts[0] == "book") "/api/books/${parts[1]}/text"
+        else "/api/articles/${parts[1]}/text"
+    }
 }
 
 /** Передаём абзацы между активити и сервисом без ограничения размера Intent. */
