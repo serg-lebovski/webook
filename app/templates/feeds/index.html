@@ -7,6 +7,19 @@
 </div>
 <p class="text-muted small mb-4">RSS/Atom-подписки. Новые записи автоматически попадают в «Статьи».</p>
 
+{% if success == 'opml_import' %}
+<div class="alert alert-success alert-dismissible fade show" role="alert">
+  <i class="bi bi-check-circle me-1"></i>Импорт OPML завершён: добавлено <strong>{{ imp_added }}</strong>,
+  пропущено дублей <strong>{{ imp_skipped }}</strong>.
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% elif success == 'opml_error' %}
+<div class="alert alert-danger alert-dismissible fade show" role="alert">
+  <i class="bi bi-exclamation-triangle me-1"></i>Не удалось разобрать OPML-файл.
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
 <div class="card mb-4">
   <div class="card-header fw-semibold"><i class="bi bi-plus-circle me-1"></i>Добавить подписку</div>
   <div class="card-body">
@@ -30,6 +43,20 @@
       Новые записи автоматически сохраняются как статьи. Обновление — по расписанию на сервере,
       либо вручную кнопкой ниже.
     </div>
+    <hr>
+    <div class="d-flex align-items-center gap-3 flex-wrap">
+      <span class="small text-muted"><i class="bi bi-arrow-left-right me-1"></i>OPML:</span>
+      <a href="/feeds/export.opml" class="btn btn-sm btn-outline-secondary"
+         {% if not feeds %}aria-disabled="true" tabindex="-1" style="pointer-events:none;opacity:.5"{% endif %}>
+        <i class="bi bi-download me-1"></i>Экспорт
+      </a>
+      <form method="post" action="/feeds/import" enctype="multipart/form-data" class="d-flex align-items-center gap-2">
+        <input type="file" name="file" accept=".opml,.xml,text/xml,text/x-opml" required
+               class="form-control form-control-sm" style="max-width:240px">
+        <button type="submit" class="btn btn-sm btn-outline-primary"><i class="bi bi-upload me-1"></i>Импорт</button>
+      </form>
+    </div>
+    <div class="form-text mt-1">Перенос подписок из/в другие читалки (Feedly, Inoreader и т. п.).</div>
   </div>
 </div>
 
