@@ -140,6 +140,68 @@ async def upload_manga(
     return RedirectResponse(f"/manga/{m.id}", status_code=302)
 
 
+# ─────────────────────── импорт по ссылке ───────────────────────
+
+@router.get("/import", response_class=HTMLResponse)
+def import_form(request: Request, error: str = "", success: str = "",
+                user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    mangas = (db.query(Manga)
+              .filter(Manga.user_id == user.id, Manga.deleted_at.is_(None))
+              .order_by(Manga.title).all())
+    return templates.TemplateResponse("manga/import.html", {
+        "request": request, "user": user, "mangas": mangas,
+        "error": error, "success": success,
+    })
+
+
+@router.post("/import")
+def import_by_url(
+    url: str = Form(...),
+    mode: str = Form("new"),
+    manga_id: int = Form(0),
+    title: str = Form(""),
+    author: str = Form(""),
+    chapter_title: str = Form(""),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    from app.services import manga_import_service
+
+    url = url.strip()
+    if not url:
+        return RedirectResponse("/manga/import?error=Укажите+ссылку", status_code=302)
+
+    try:
+        images, page_title = manga_import_service.fetch_page_images(url)
+    except ValueError as e:
+        from urllib.parse import quote
+        return RedirectResponse(f"/manga/import?error={quote(str(e))}", status_code=302)
+
+    # Куда сохранять: в существующую мангу или создать новую
+    if mode == "existing" and manga_id:
+        m = db.query(Manga).filter_by(id=manga_id, user_id=user.id, deleted_at=None).first()
+        if not m:
+            return RedirectResponse("/manga/import?error=Манга+не+найдена", status_code=302)
+        next_order = (max((c.order for c in m.chapters), default=0)) + 1
+    else:
+        new_title = (title.strip() or page_title or "Импортированная манга")[:200]
+        m = Manga(user_id=user.id, title=new_title, author=author.strip(),
+                  folder=manga_service.new_folder())
+        db.add(m)
+        db.flush()
+        next_order = 1
+
+    ch_folder, count, first = manga_service.save_chapter(m.folder, images)
+    db.add(MangaChapter(manga_id=m.id,
+                        title=chapter_title.strip() or f"Глава {next_order}",
+                        order=next_order, folder=ch_folder, page_count=count))
+    if not m.cover_path and first:
+        first_bytes = (manga_service.chapter_dir(m.folder, ch_folder) / first).read_bytes()
+        m.cover_path = save_cover_file(first_bytes, Path(first).suffix.lower() or ".jpg")
+    db.commit()
+    return RedirectResponse(f"/manga/{m.id}", status_code=302)
+
+
 @router.post("/{manga_id}/chapters")
 async def add_chapter(
     manga_id: int,
