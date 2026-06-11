@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">WeBook</string>
+    <string name="nav_open">Открыть меню</string>
+    <string name="nav_close">Закрыть меню</string>
 </resources>

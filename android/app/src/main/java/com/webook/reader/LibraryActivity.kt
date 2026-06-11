@@ -58,27 +58,39 @@ class LibraryActivity : AppCompatActivity() {
             override fun onTabReselected(tab: TabLayout.Tab) {}
         })
 
-        b.bottomNav.setOnItemSelectedListener { item ->
+        // Боковое меню (выезжает слева по «гамбургеру»)
+        val toggle = androidx.appcompat.app.ActionBarDrawerToggle(
+            this, b.drawer, b.toolbar, R.string.nav_open, R.string.nav_close
+        )
+        b.drawer.addDrawerListener(toggle)
+        toggle.syncState()
+
+        b.navView.setNavigationItemSelectedListener { item ->
+            b.drawer.closeDrawers()
             when (item.itemId) {
-                R.id.nav_books -> { setMode("books"); true }
-                R.id.nav_audio -> {
-                    startActivity(Intent(this, AudioListActivity::class.java))
-                    false   // аудио — отдельный экран
-                }
-                R.id.nav_manga -> {
-                    startActivity(Intent(this, MangaListActivity::class.java))
-                    false   // манга — отдельный экран
-                }
-                R.id.nav_notes -> { setMode("notes"); true }
-                R.id.nav_profile -> {
-                    startActivity(Intent(this, ProfileActivity::class.java))
-                    false   // не «выбираем» профиль — это отдельный экран
-                }
-                else -> false
+                R.id.nav_books -> { item.isChecked = true; setMode("books") }
+                R.id.nav_notes -> { item.isChecked = true; setMode("notes") }
+                R.id.nav_audio -> startActivity(Intent(this, AudioListActivity::class.java))
+                R.id.nav_manga -> startActivity(Intent(this, MangaListActivity::class.java))
+                R.id.nav_offline -> startActivity(Intent(this, OfflineActivity::class.java))
+                R.id.nav_profile -> startActivity(Intent(this, ProfileActivity::class.java))
             }
+            true
         }
 
         b.fab.setOnClickListener { pickBook.launch("*/*") }
+
+        // Закрываем боковое меню по «Назад», если оно открыто
+        onBackPressedDispatcher.addCallback(this, object : androidx.activity.OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (b.drawer.isDrawerOpen(androidx.core.view.GravityCompat.START)) {
+                    b.drawer.closeDrawers()
+                } else {
+                    isEnabled = false
+                    onBackPressedDispatcher.onBackPressed()
+                }
+            }
+        })
 
         setMode("books")
     }
