@@ -162,20 +162,25 @@ def import_by_url(
     title: str = Form(""),
     author: str = Form(""),
     chapter_title: str = Form(""),
+    follow_read: str = Form(""),
+    paginate: str = Form("on"),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     from app.services import manga_import_service
+    from urllib.parse import quote
 
     url = url.strip()
     if not url:
         return RedirectResponse("/manga/import?error=Укажите+ссылку", status_code=302)
 
     try:
-        images, page_title = manga_import_service.fetch_page_images(url)
+        result = manga_import_service.fetch_manga(
+            url, follow_read=bool(follow_read), paginate=bool(paginate))
     except ValueError as e:
-        from urllib.parse import quote
         return RedirectResponse(f"/manga/import?error={quote(str(e))}", status_code=302)
+
+    images = result["images"]
 
     # Куда сохранять: в существующую мангу или создать новую
     if mode == "existing" and manga_id:
@@ -184,8 +189,9 @@ def import_by_url(
             return RedirectResponse("/manga/import?error=Манга+не+найдена", status_code=302)
         next_order = (max((c.order for c in m.chapters), default=0)) + 1
     else:
-        new_title = (title.strip() or page_title or "Импортированная манга")[:200]
+        new_title = (title.strip() or result.get("title") or "Импортированная манга")[:200]
         m = Manga(user_id=user.id, title=new_title, author=author.strip(),
+                  description=(result.get("description") or "")[:2000],
                   folder=manga_service.new_folder())
         db.add(m)
         db.flush()
@@ -195,9 +201,13 @@ def import_by_url(
     db.add(MangaChapter(manga_id=m.id,
                         title=chapter_title.strip() or f"Глава {next_order}",
                         order=next_order, folder=ch_folder, page_count=count))
-    if not m.cover_path and first:
-        first_bytes = (manga_service.chapter_dir(m.folder, ch_folder) / first).read_bytes()
-        m.cover_path = save_cover_file(first_bytes, Path(first).suffix.lower() or ".jpg")
+    # обложка: og:image со страницы, иначе первая страница
+    if not m.cover_path:
+        if result.get("cover_bytes"):
+            m.cover_path = save_cover_file(result["cover_bytes"], ".jpg")
+        elif first:
+            first_bytes = (manga_service.chapter_dir(m.folder, ch_folder) / first).read_bytes()
+            m.cover_path = save_cover_file(first_bytes, Path(first).suffix.lower() or ".jpg")
     db.commit()
     return RedirectResponse(f"/manga/{m.id}", status_code=302)
 

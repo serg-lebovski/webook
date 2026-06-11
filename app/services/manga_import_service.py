@@ -30,6 +30,11 @@ _LAZY_ATTRS = ("data-src", "data-original", "data-lazy-src", "data-cfsrc",
                "data-url", "data-image", "src")
 _IMG_EXT = (".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".avif")
 
+_MAX_SUBPAGES = 250            # защита от бесконечного перелистывания
+_READ_TEXT = re.compile(r"чита|read\s*now|read\s*manga|начать\s*чтен|start\s*read", re.I)
+_READ_HREF = re.compile(r"(read|chapter|chap-|/chap/|glava|глава|vol)", re.I)
+_NEXT_TEXT = re.compile(r"след(ующ)?|next|вперёд|вперед|дальше|»|›|→", re.I)
+
 
 def _largest_from_srcset(srcset: str) -> str | None:
     """Из srcset берём кандидат с наибольшим дескриптором ширины."""
@@ -108,64 +113,177 @@ def _name_for(idx: int, url: str, content_type: str) -> str:
     return f"{idx:04d}{ext}"
 
 
-def fetch_page_images(url: str) -> tuple[list[tuple[str, bytes]], str]:
-    """Скачать все изображения со страницы.
+def _meta_content(doc, *names) -> str:
+    """Значение первого найденного <meta property/name=...>."""
+    for n in names:
+        for attr in ("property", "name", "itemprop"):
+            vals = doc.xpath(f'//meta[@{attr}="{n}"]/@content')
+            if vals and vals[0].strip():
+                return vals[0].strip()
+    return ""
 
-    Возвращает (список (имя, байты), заголовок_страницы). Бросает ValueError с
-    понятным сообщением при сетевых ошибках.
+
+def extract_meta(page_html: str, base_url: str) -> dict:
+    """Заголовок, описание, обложка (og:image) и ссылка «Читать» со страницы серии."""
+    try:
+        doc = lhtml.fromstring(page_html.encode("utf-8"),
+                               parser=lhtml.HTMLParser(encoding="utf-8"))
+    except Exception:
+        return {}
+
+    title = _meta_content(doc, "og:title")
+    if not title:
+        t = doc.xpath("//title/text()")
+        title = t[0].strip() if t else ""
+    description = _meta_content(doc, "og:description", "description")
+    cover = _meta_content(doc, "og:image", "twitter:image")
+    cover = urljoin(base_url, cover) if cover else ""
+
+    read_url = ""
+    for a in doc.xpath("//a[@href]"):
+        href = a.get("href") or ""
+        if href.startswith(("#", "javascript:")):
+            continue
+        text = (a.text_content() or "").strip()
+        cls = " ".join(a.classes)
+        if _READ_TEXT.search(text) or _READ_TEXT.search(cls) or _READ_HREF.search(href):
+            read_url = urljoin(base_url, href)
+            break
+
+    return {"title": title, "description": description, "cover": cover, "read_url": read_url}
+
+
+def find_next_url(page_html: str, base_url: str, current_url: str) -> str | None:
+    """Ссылка на следующую страницу постраничной читалки (rel=next или по тексту)."""
+    try:
+        doc = lhtml.fromstring(page_html.encode("utf-8"),
+                               parser=lhtml.HTMLParser(encoding="utf-8"))
+    except Exception:
+        return None
+    for sel in ('//link[@rel="next"]/@href', '//a[@rel="next"]/@href'):
+        vals = doc.xpath(sel)
+        if vals:
+            nxt = urljoin(base_url, vals[0])
+            if nxt != current_url:
+                return nxt
+    for a in doc.xpath("//a[@href]"):
+        href = a.get("href") or ""
+        if href.startswith(("#", "javascript:")):
+            continue
+        text = (a.text_content() or "").strip()
+        cls = " ".join(a.classes)
+        if (_NEXT_TEXT.search(text) or "next" in cls.lower()) and len(text) < 30:
+            nxt = urljoin(base_url, href)
+            if nxt != current_url:
+                return nxt
+    return None
+
+
+def _download_images(client, img_urls, referer, start_idx, budget):
+    """Скачать изображения. budget — изменяемый dict со счётчиком total байт."""
+    headers = {"User-Agent": _UA, "Accept-Language": "ru,en;q=0.9", "Referer": referer}
+    out = []
+    for iu in img_urls:
+        try:
+            r = client.get(iu, headers=headers, timeout=_IMG_TIMEOUT)
+            if r.status_code != 200:
+                continue
+            ctype = r.headers.get("content-type", "")
+            if not _looks_like_image(iu, ctype):
+                continue
+            data = r.content
+            if len(data) < _MIN_BYTES or len(data) > _MAX_IMG_BYTES:
+                continue
+            budget["total"] += len(data)
+            if budget["total"] > _MAX_TOTAL_BYTES:
+                break
+            out.append((_name_for(start_idx + len(out), iu, ctype), data))
+        except Exception:
+            continue
+    return out
+
+
+def fetch_manga(url: str, follow_read: bool = False, paginate: bool = True) -> dict:
+    """Скачать главу манги по ссылке.
+
+    follow_read — сначала найти на странице серии ссылку «Читать» и описание/обложку.
+    paginate    — листать постраничные читалки по ссылке «Следующая».
+    Возвращает {images, title, description, cover_bytes}. Бросает ValueError при ошибке.
     """
     if not url.startswith(("http://", "https://")):
         url = "https://" + url
     headers = {"User-Agent": _UA, "Accept-Language": "ru,en;q=0.9"}
 
+    title = description = ""
+    cover_bytes = None
+    images: list[tuple[str, bytes]] = []
+
     try:
         with httpx.Client(follow_redirects=True, timeout=_PAGE_TIMEOUT, headers=headers) as client:
             resp = client.get(url)
             resp.raise_for_status()
-            page_html = resp.text
-            final_url = str(resp.url)
+            series_html = resp.text
+            series_url = str(resp.url)
+            meta = extract_meta(series_html, series_url)
+            title = meta.get("title", "")
+            description = meta.get("description", "")
 
-            img_urls = extract_image_urls(page_html, final_url)[:_MAX_IMAGES]
-            if not img_urls:
-                raise ValueError("На странице не найдено изображений.")
-
-            title = ""
-            m = re.search(r"<title[^>]*>([^<]+)</title>", page_html, re.I)
-            if m:
-                title = m.group(1).strip()
-
-            images: list[tuple[str, bytes]] = []
-            total = 0
-            ref_headers = dict(headers)
-            ref_headers["Referer"] = final_url
-            for i, iu in enumerate(img_urls, start=1):
+            # обложка из og:image
+            cover_url = meta.get("cover")
+            if cover_url:
                 try:
-                    r = client.get(iu, headers=ref_headers, timeout=_IMG_TIMEOUT)
-                    if r.status_code != 200:
-                        continue
-                    ctype = r.headers.get("content-type", "")
-                    if not _looks_like_image(iu, ctype):
-                        continue
-                    data = r.content
-                    if len(data) < _MIN_BYTES or len(data) > _MAX_IMG_BYTES:
-                        continue
-                    total += len(data)
-                    if total > _MAX_TOTAL_BYTES:
-                        break
-                    images.append((_name_for(len(images) + 1, iu, ctype), data))
+                    cr = client.get(cover_url, headers={**headers, "Referer": series_url})
+                    if cr.status_code == 200 and cr.headers.get("content-type", "").startswith("image/") \
+                            and len(cr.content) >= _MIN_BYTES:
+                        cover_bytes = cr.content
                 except Exception:
-                    continue
-    except ValueError:
-        raise
+                    pass
+
+            # начальная страница чтения
+            if follow_read and meta.get("read_url"):
+                cur = meta["read_url"]
+                resp = client.get(cur)
+                resp.raise_for_status()
+            cur_url = str(resp.url)
+            cur_html = resp.text
+
+            budget = {"total": (len(cover_bytes) if cover_bytes else 0)}
+            seen_img: set[str] = set()
+            visited_pages: set[str] = set()
+            subpages = 0
+
+            while cur_url and subpages < (_MAX_SUBPAGES if paginate else 1):
+                visited_pages.add(cur_url)
+                page_imgs = [u for u in extract_image_urls(cur_html, cur_url) if u not in seen_img]
+                seen_img.update(page_imgs)
+                if page_imgs:
+                    images += _download_images(client, page_imgs[:_MAX_IMAGES],
+                                               cur_url, len(images) + 1, budget)
+                if budget["total"] > _MAX_TOTAL_BYTES or len(images) >= _MAX_IMAGES:
+                    break
+                if not paginate:
+                    break
+                nxt = find_next_url(cur_html, cur_url, cur_url)
+                if not nxt or nxt in visited_pages:
+                    break
+                try:
+                    r = client.get(nxt)
+                    if r.status_code != 200:
+                        break
+                    cur_url, cur_html = str(r.url), r.text
+                except Exception:
+                    break
+                subpages += 1
     except httpx.HTTPStatusError as e:
         raise ValueError(f"Страница недоступна (HTTP {e.response.status_code}).")
+    except ValueError:
+        raise
     except Exception as e:
         raise ValueError(f"Не удалось загрузить страницу: {e}")
 
-    # сохраняем порядок появления на странице; если имена «цифровые» — натуральная сортировка
     if images and all(re.match(r"^\d+", n) for n, _ in images):
         images.sort(key=lambda p: _natural_key(p[0]))
     if not images:
-        raise ValueError("Изображения найдены, но ни одно не удалось скачать "
-                         "(возможна защита от хотлинка или загрузка через JavaScript).")
-    return images, title
+        raise ValueError("Не удалось скачать изображения — возможно, картинки грузятся "
+                         "скриптом, стоит защита от хотлинка, или ссылка ведёт не на главу.")
+    return {"images": images, "title": title, "description": description, "cover_bytes": cover_bytes}
