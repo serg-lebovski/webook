@@ -143,85 +143,150 @@ async def upload_manga(
 # ─────────────────────── импорт по ссылке ───────────────────────
 
 @router.get("/import", response_class=HTMLResponse)
-def import_form(request: Request, error: str = "", success: str = "",
+def import_form(request: Request, error: str = "",
                 user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     mangas = (db.query(Manga)
               .filter(Manga.user_id == user.id, Manga.deleted_at.is_(None))
               .order_by(Manga.title).all())
     return templates.TemplateResponse("manga/import.html", {
-        "request": request, "user": user, "mangas": mangas,
-        "error": error, "success": success,
+        "request": request, "user": user, "mangas": mangas, "error": error,
     })
 
 
-@router.post("/import")
-def import_by_url(
+@router.post("/import/plan")
+def import_plan(
     url: str = Form(...),
+    follow_read: str = Form(""),
+    paginate: str = Form("on"),
     mode: str = Form("new"),
     manga_id: int = Form(0),
     title: str = Form(""),
     author: str = Form(""),
     chapter_title: str = Form(""),
-    follow_read: str = Form(""),
-    paginate: str = Form("on"),
     user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
 ):
-    from app.services import manga_import_service
+    from app.services import manga_import_service, import_jobs
     from urllib.parse import quote
 
     url = url.strip()
     if not url:
         return RedirectResponse("/manga/import?error=Укажите+ссылку", status_code=302)
-
-    # follow_read = «это страница серии»: импортируем ВСЕ главы; иначе — одна глава по ссылке
-    series_mode = bool(follow_read)
     try:
-        if series_mode:
-            result = manga_import_service.fetch_series(url, paginate=bool(paginate))
-            chapters = result["chapters"]
-        else:
-            single = manga_import_service.fetch_manga(url, follow_read=False, paginate=bool(paginate))
-            result = single
-            chapters = [(chapter_title.strip() or "Глава 1", single["images"])]
+        plan = manga_import_service.plan_import(url, series=bool(follow_read))
     except ValueError as e:
         return RedirectResponse(f"/manga/import?error={quote(str(e))}", status_code=302)
 
-    # Куда сохранять: в существующую мангу или создать новую
-    if mode == "existing" and manga_id and not series_mode:
+    plan["paginate"] = bool(paginate)
+    plan["mode"] = mode
+    plan["manga_id"] = manga_id
+    plan["form_title"] = title.strip()
+    plan["author"] = author.strip()
+    plan["chapter_title"] = chapter_title.strip()
+    pid = import_jobs.save_plan(user.id, plan)
+    return RedirectResponse(f"/manga/import/plan/{pid}", status_code=302)
+
+
+@router.get("/import/plan/{pid}", response_class=HTMLResponse)
+def import_plan_page(pid: str, request: Request,
+                     user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    from app.services import import_jobs
+    plan = import_jobs.get_plan(pid, user.id)
+    if not plan:
+        return RedirectResponse("/manga/import?error=План+устарел,+повторите", status_code=302)
+    mangas = (db.query(Manga)
+              .filter(Manga.user_id == user.id, Manga.deleted_at.is_(None))
+              .order_by(Manga.title).all())
+    return templates.TemplateResponse("manga/import_plan.html", {
+        "request": request, "user": user, "pid": pid, "plan": plan, "mangas": mangas,
+    })
+
+
+@router.post("/import/start")
+def import_start(
+    pid: str = Form(...),
+    title: str = Form(""),
+    author: str = Form(""),
+    mode: str = Form("new"),
+    manga_id: int = Form(0),
+    chapters: List[int] = Form([]),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    from app.services import manga_import_service, import_jobs
+    plan = import_jobs.get_plan(pid, user.id)
+    if not plan:
+        return RedirectResponse("/manga/import?error=План+устарел,+повторите", status_code=302)
+
+    paginate = plan.get("paginate", True)
+    # Список глав к загрузке
+    if plan["kind"] == "series":
+        all_ch = plan["chapters"]
+        chosen = [all_ch[i] for i in chapters if 0 <= i < len(all_ch)] or all_ch
+        job_chapters = [{"url": c["url"], "label": c["label"]} for c in chosen]
+    else:
+        label = plan.get("chapter_title") or "Глава 1"
+        job_chapters = [{"url": plan["final_url"], "label": label}]
+
+    # Манга-приёмник
+    if mode == "existing" and manga_id and plan["kind"] != "series":
         m = db.query(Manga).filter_by(id=manga_id, user_id=user.id, deleted_at=None).first()
         if not m:
             return RedirectResponse("/manga/import?error=Манга+не+найдена", status_code=302)
-        base_order = max((c.order for c in m.chapters), default=0)
+        order_base = max((c.order for c in m.chapters), default=0)
     else:
-        new_title = (title.strip() or result.get("title") or "Импортированная манга")[:200]
+        new_title = (title.strip() or plan.get("title") or "Импортированная манга")[:200]
         m = Manga(user_id=user.id, title=new_title, author=author.strip(),
-                  description=(result.get("description") or "")[:2000],
+                  description=(plan.get("description") or "")[:2000],
                   folder=manga_service.new_folder())
         db.add(m)
         db.flush()
-        base_order = 0
-
-    first_page_bytes = None
-    for offset, (label, images) in enumerate(chapters, start=1):
-        if not images:
-            continue
-        ch_folder, count, first = manga_service.save_chapter(m.folder, images)
-        order = base_order + offset
-        db.add(MangaChapter(manga_id=m.id,
-                            title=label if series_mode else (chapter_title.strip() or label),
-                            order=order, folder=ch_folder, page_count=count))
-        if first_page_bytes is None and first:
-            first_page_bytes = (manga_service.chapter_dir(m.folder, ch_folder) / first).read_bytes()
-
-    # обложка: og:image со страницы, иначе первая страница первой главы
-    if not m.cover_path:
-        if result.get("cover_bytes"):
-            m.cover_path = save_cover_file(result["cover_bytes"], ".jpg")
-        elif first_page_bytes:
-            m.cover_path = save_cover_file(first_page_bytes, ".jpg")
+        order_base = 0
+        # обложка из og:image — качаем сразу (быстро)
+        if plan.get("cover"):
+            with manga_import_service.make_client() as c:
+                cb = manga_import_service.download_cover(c, plan["cover"], plan.get("final_url", ""))
+            if cb:
+                m.cover_path = save_cover_file(cb, ".jpg")
+    manga_pk, manga_folder = m.id, m.folder
     db.commit()
-    return RedirectResponse(f"/manga/{m.id}", status_code=302)
+
+    jid = import_jobs.create(user.id, manga_pk, manga_folder, m.title,
+                             job_chapters, paginate, order_base)
+    return RedirectResponse(f"/manga/import/job/{jid}", status_code=302)
+
+
+@router.get("/import/job/{jid}", response_class=HTMLResponse)
+def import_job_page(jid: str, request: Request, user: User = Depends(get_current_user)):
+    from app.services import import_jobs
+    job = import_jobs.get(jid)
+    if not job or job["user_id"] != user.id:
+        return RedirectResponse("/manga/import?error=Задача+не+найдена", status_code=302)
+    return templates.TemplateResponse("manga/import_progress.html", {
+        "request": request, "user": user, "jid": jid, "manga_id": job["manga_id"],
+    })
+
+
+@router.get("/import/job/{jid}/status")
+def import_job_status(jid: str, user: User = Depends(get_current_user)):
+    from app.services import import_jobs
+    job = import_jobs.get(jid)
+    if not job or job["user_id"] != user.id:
+        return JSONResponse({"error": "not found"}, status_code=404)
+    return JSONResponse({
+        "status": job["status"], "message": job["message"],
+        "chapters_total": job["chapters_total"], "chapters_done": job["chapters_done"],
+        "current_label": job["current_label"], "pages_done": job["pages_done"],
+        "manga_id": job["manga_id"],
+    })
+
+
+@router.post("/import/job/{jid}/cancel")
+def import_job_cancel(jid: str, user: User = Depends(get_current_user)):
+    from app.services import import_jobs
+    job = import_jobs.get(jid)
+    if job and job["user_id"] == user.id:
+        import_jobs.cancel(jid)
+    return JSONResponse({"ok": True})
 
 
 @router.post("/{manga_id}/chapters")

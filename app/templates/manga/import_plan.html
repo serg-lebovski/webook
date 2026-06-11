@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Предпросмотр импорта — WeBook{% endblock %}
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/manga">Манга</a></li>
+    <li class="breadcrumb-item"><a href="/manga/import">Импорт</a></li>
+    <li class="breadcrumb-item active">Предпросмотр</li>
+  </ol>
+</nav>
+
+<h2 class="mb-2"><i class="bi bi-eye me-2"></i>Предпросмотр перед загрузкой</h2>
+<p class="text-muted">Проверьте, что нашлось, при необходимости отредактируйте — потом запустите загрузку.</p>
+
+<form method="post" action="/manga/import/start" class="card card-body" style="max-width:760px">
+  <input type="hidden" name="pid" value="{{ pid }}">
+
+  <div class="row g-3 mb-3">
+    <div class="col-md-8">
+      <label class="form-label small fw-semibold">Название</label>
+      <input name="title" class="form-control" value="{{ plan.form_title or plan.title }}">
+    </div>
+    <div class="col-md-4">
+      <label class="form-label small">Автор</label>
+      <input name="author" class="form-control" value="{{ plan.author }}">
+    </div>
+  </div>
+
+  {% if plan.description %}
+  <div class="mb-3">
+    <label class="form-label small">Описание (со страницы)</label>
+    <div class="border rounded p-2 small text-muted" style="max-height:120px;overflow:auto">{{ plan.description }}</div>
+  </div>
+  {% endif %}
+
+  {% if plan.cover %}
+  <div class="mb-3 d-flex align-items-center gap-2">
+    <img src="{{ plan.cover }}" alt="" style="width:60px;height:84px;object-fit:cover;border-radius:6px"
+         onerror="this.style.display='none'">
+    <span class="text-muted small">Обложка найдена ({{ plan.cover }})</span>
+  </div>
+  {% endif %}
+
+  {% if plan.kind == 'series' %}
+  <input type="hidden" name="mode" value="new">
+  <div class="d-flex align-items-center justify-content-between mb-2">
+    <label class="form-label small fw-semibold mb-0">Главы ({{ plan.chapters | length }})</label>
+    <div>
+      <button type="button" class="btn btn-sm btn-outline-secondary py-0" onclick="toggleAll(true)">Все</button>
+      <button type="button" class="btn btn-sm btn-outline-secondary py-0" onclick="toggleAll(false)">Снять</button>
+    </div>
+  </div>
+  <div class="border rounded" style="max-height:340px;overflow:auto">
+    <div class="list-group list-group-flush">
+      {% for c in plan.chapters %}
+      <label class="list-group-item d-flex align-items-center gap-2 py-1">
+        <input class="form-check-input mt-0 chap" type="checkbox" name="chapters" value="{{ loop.index0 }}" checked>
+        <span class="text-truncate">{{ c.label }}</span>
+        <span class="text-muted small ms-auto text-truncate" style="max-width:50%">{{ c.url }}</span>
+      </label>
+      {% endfor %}
+    </div>
+  </div>
+  <div class="form-text mb-3">
+    Снимите галочки с уже скачанных глав, чтобы продолжить с нужного места.
+  </div>
+  {% else %}
+  <input type="hidden" name="mode" value="{{ plan.mode }}">
+  <input type="hidden" name="manga_id" value="{{ plan.manga_id }}">
+  <div class="alert alert-info py-2">
+    <i class="bi bi-images me-1"></i>На странице найдено изображений: <strong>{{ plan.page_urls | length }}</strong>.
+    Будет сохранено как одна глава{% if plan.chapter_title %} «{{ plan.chapter_title }}»{% endif %}.
+  </div>
+  {% endif %}
+
+  <div class="mt-2">
+    <button class="btn btn-success"><i class="bi bi-cloud-download me-1"></i>Скачать</button>
+    <a href="/manga/import" class="btn btn-outline-secondary">Назад</a>
+  </div>
+</form>
+
+<script>
+function toggleAll(v) {
+  document.querySelectorAll('.chap').forEach(function (c) { c.checked = v; });
+}
+</script>
+{% endblock %}

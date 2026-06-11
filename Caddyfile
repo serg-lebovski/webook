@@ -27,5 +27,12 @@
 	# ДЛЯ ПУБЛИЧНОГО ДОМЕНА удалите строку `tls internal` ниже — тогда Caddy
 	# автоматически получит доверенный сертификат Let's Encrypt.
 	tls internal
-	reverse_proxy app:8000
+	reverse_proxy app:8000 {
+		# Длинные операции не должны падать с 504 Gateway Timeout.
+		transport http {
+			read_timeout 600s
+			write_timeout 600s
+			dial_timeout 30s
+		}
+	}
 }

@@ -182,8 +182,9 @@ def find_next_url(page_html: str, base_url: str, current_url: str) -> str | None
     return None
 
 
-def _download_images(client, img_urls, referer, start_idx, budget):
-    """Скачать изображения. budget — изменяемый dict со счётчиком total байт."""
+def _download_images(client, img_urls, referer, start_idx, budget, on_page=None):
+    """Скачать изображения. budget — изменяемый dict со счётчиком total байт.
+    on_page(n) — колбэк с числом скачанных страниц (для прогресса)."""
     headers = {"User-Agent": _UA, "Accept-Language": "ru,en;q=0.9", "Referer": referer}
     out = []
     for iu in img_urls:
@@ -201,9 +202,110 @@ def _download_images(client, img_urls, referer, start_idx, budget):
             if budget["total"] > _MAX_TOTAL_BYTES:
                 break
             out.append((_name_for(start_idx + len(out), iu, ctype), data))
+            if on_page:
+                on_page(start_idx - 1 + len(out))
         except Exception:
             continue
     return out
+
+
+def make_client():
+    return httpx.Client(follow_redirects=True, timeout=_PAGE_TIMEOUT,
+                        headers={"User-Agent": _UA, "Accept-Language": "ru,en;q=0.9"})
+
+
+def download_cover(client, cover_url, referer):
+    if not cover_url:
+        return None
+    try:
+        cr = client.get(cover_url, headers={"User-Agent": _UA, "Referer": referer})
+        if cr.status_code == 200 and cr.headers.get("content-type", "").startswith("image/") \
+                and len(cr.content) >= _MIN_BYTES:
+            return cr.content
+    except Exception:
+        pass
+    return None
+
+
+def extract_chapters(series_html: str, base_url: str) -> list[dict]:
+    """Главы серии: [{url, label}] — упорядочены по номеру (возр.). С подписями."""
+    try:
+        doc = lhtml.fromstring(series_html.encode("utf-8"),
+                               parser=lhtml.HTMLParser(encoding="utf-8"))
+    except Exception:
+        return []
+    base_path = urlparse(base_url).path.rstrip("/")
+    seen: set[str] = set()
+    items: list[dict] = []
+    for a in doc.xpath("//a[@href]"):
+        href = a.get("href") or ""
+        if href.startswith(("#", "javascript:", "mailto:")):
+            continue
+        absu = urljoin(base_url, href).split("#")[0]
+        path = urlparse(absu).path
+        tail = path[len(base_path):] if base_path and path.startswith(base_path + "/") else ""
+        if not ((tail and _NUM_RE.search(tail)) or _CHAPTER_HREF.search(absu)):
+            continue
+        if absu in seen or absu.rstrip("/") == base_url.rstrip("/"):
+            continue
+        seen.add(absu)
+        label = " ".join((a.text_content() or "").split())[:80]
+        items.append({"url": absu, "label": label})
+
+    def sort_key(it):
+        nums = [float(n.replace(",", ".")) for n in _NUM_RE.findall(urlparse(it["url"]).path)]
+        return (nums or [0.0])
+    items.sort(key=sort_key)
+    for i, it in enumerate(items, start=1):
+        if not it["label"]:
+            it["label"] = f"Глава {i}"
+    return items[:_MAX_CHAPTERS]
+
+
+def plan_import(url: str, series: bool) -> dict:
+    """Разведка БЕЗ скачивания: метаданные + список глав (для серии) или
+    список URL страниц (для одиночной главы). Для предпросмотра/редактирования."""
+    if not url.startswith(("http://", "https://")):
+        url = "https://" + url
+    try:
+        with make_client() as client:
+            resp = client.get(url)
+            resp.raise_for_status()
+            page_html, final_url = resp.text, str(resp.url)
+            meta = extract_meta(page_html, final_url)
+            if series:
+                chapters = extract_chapters(page_html, final_url)
+                if not chapters and meta.get("read_url"):
+                    chapters = [{"url": meta["read_url"], "label": "Глава 1"}]
+                if not chapters:
+                    raise ValueError("Не нашёл ссылок на главы — список глав может "
+                                     "подгружаться скриптом.")
+                return {"kind": "series", "title": meta.get("title", ""),
+                        "description": meta.get("description", ""),
+                        "cover": meta.get("cover", ""), "chapters": chapters,
+                        "final_url": final_url}
+            else:
+                page_urls = extract_image_urls(page_html, final_url)[:_MAX_IMAGES]
+                if not page_urls:
+                    raise ValueError("На странице не найдено изображений.")
+                return {"kind": "chapter", "title": meta.get("title", ""),
+                        "description": meta.get("description", ""),
+                        "cover": meta.get("cover", ""), "page_urls": page_urls,
+                        "final_url": final_url}
+    except httpx.HTTPStatusError as e:
+        raise ValueError(f"Страница недоступна (HTTP {e.response.status_code}).")
+    except ValueError:
+        raise
+    except Exception as e:
+        raise ValueError(f"Не удалось загрузить страницу: {e}")
+
+
+def download_chapter(client, chapter_url: str, paginate: bool = True,
+                     budget: dict | None = None, on_page=None) -> list[tuple[str, bytes]]:
+    """Скачать изображения одной главы (публичная, с колбэком прогресса)."""
+    if budget is None:
+        budget = {"total": 0}
+    return _download_chapter(client, chapter_url, paginate, budget, on_page)
 
 
 def extract_chapter_links(series_html: str, base_url: str) -> list[str]:
@@ -238,7 +340,7 @@ def extract_chapter_links(series_html: str, base_url: str) -> list[str]:
     return cands[:_MAX_CHAPTERS]
 
 
-def _download_chapter(client, chapter_url: str, paginate: bool, budget: dict) -> list[tuple[str, bytes]]:
+def _download_chapter(client, chapter_url: str, paginate: bool, budget: dict, on_page=None) -> list[tuple[str, bytes]]:
     """Скачать изображения одной главы (с перелистыванием постраничных читалок)."""
     images: list[tuple[str, bytes]] = []
     seen_img: set[str] = set()
@@ -257,7 +359,7 @@ def _download_chapter(client, chapter_url: str, paginate: bool, budget: dict) ->
         page_imgs = [u for u in extract_image_urls(cur_html, cur_url) if u not in seen_img]
         seen_img.update(page_imgs)
         if page_imgs:
-            images += _download_images(client, page_imgs[:_MAX_IMAGES], cur_url, len(images) + 1, budget)
+            images += _download_images(client, page_imgs[:_MAX_IMAGES], cur_url, len(images) + 1, budget, on_page)
         if budget["total"] > _MAX_TOTAL_BYTES or len(images) >= _MAX_IMAGES:
             break
         if not paginate:

@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Загрузка манги — WeBook{% endblock %}
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/manga">Манга</a></li>
+    <li class="breadcrumb-item active">Загрузка</li>
+  </ol>
+</nav>
+
+<h2 class="mb-3"><i class="bi bi-cloud-download me-2"></i>Загрузка манги</h2>
+
+<div class="card card-body" style="max-width:760px">
+  <div id="statusLine" class="fw-semibold mb-2">Подготовка…</div>
+
+  <div class="mb-1 small text-muted">Главы: <span id="chDone">0</span> из <span id="chTotal">0</span></div>
+  <div class="progress mb-3" style="height:16px">
+    <div id="chBar" class="progress-bar" role="progressbar" style="width:0%"></div>
+  </div>
+
+  <div id="curLine" class="small text-muted mb-3"></div>
+
+  <div class="d-flex gap-2 mb-3">
+    <a href="/manga/{{ manga_id }}" class="btn btn-primary btn-sm" id="openBtn">
+      <i class="bi bi-book me-1"></i>Открыть мангу
+    </a>
+    <button class="btn btn-outline-danger btn-sm" id="cancelBtn">
+      <i class="bi bi-x-circle me-1"></i>Остановить
+    </button>
+  </div>
+
+  <div class="form-text">
+    Загрузка идёт на сервере — можно закрыть страницу, скачивание продолжится.
+    Главы появляются в манге по мере готовности (предпросмотр — кнопка «Открыть мангу»).
+  </div>
+</div>
+
+<script>
+const JID = "{{ jid }}";
+const elStatus = document.getElementById('statusLine');
+const elDone = document.getElementById('chDone');
+const elTotal = document.getElementById('chTotal');
+const elBar = document.getElementById('chBar');
+const elCur = document.getElementById('curLine');
+const cancelBtn = document.getElementById('cancelBtn');
+
+const LABELS = {
+  running: 'Загрузка…', done: 'Готово ✓', error: 'Ошибка',
+  canceled: 'Остановлено', planning: 'Подготовка…'
+};
+
+cancelBtn.addEventListener('click', function () {
+  fetch('/manga/import/job/' + JID + '/cancel', { method: 'POST' });
+  cancelBtn.disabled = true;
+  cancelBtn.textContent = 'Останавливаем…';
+});
+
+let timer = setInterval(poll, 1500);
+poll();
+
+async function poll() {
+  try {
+    const r = await fetch('/manga/import/job/' + JID + '/status');
+    if (!r.ok) { return; }
+    const j = await r.json();
+    elTotal.textContent = j.chapters_total;
+    elDone.textContent = j.chapters_done;
+    const pct = j.chapters_total ? Math.round(j.chapters_done / j.chapters_total * 100) : 0;
+    elBar.style.width = pct + '%';
+    elStatus.textContent = LABELS[j.status] || j.status;
+    if (j.status === 'running') {
+      elCur.textContent = j.current_label
+        ? ('Качаю: ' + j.current_label + ' — страниц: ' + j.pages_done)
+        : '';
+    } else {
+      elCur.textContent = j.message || '';
+      elBar.classList.remove('progress-bar-animated', 'progress-bar-striped');
+      if (j.status === 'done') elBar.classList.add('bg-success');
+      if (j.status === 'error') elBar.classList.add('bg-danger');
+      cancelBtn.style.display = 'none';
+      clearInterval(timer);
+    }
+  } catch (e) { /* игнорируем сетевые сбои опроса */ }
+}
+document.addEventListener('DOMContentLoaded', function () {
+  elBar.classList.add('progress-bar-striped', 'progress-bar-animated');
+});
+</script>
+{% endblock %}
