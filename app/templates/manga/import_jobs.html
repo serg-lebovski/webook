@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Загрузки манги — WeBook{% endblock %}
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/manga">Манга</a></li>
+    <li class="breadcrumb-item active">Загрузки</li>
+  </ol>
+</nav>
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h2 class="mb-0"><i class="bi bi-cloud-download me-2"></i>Загрузки</h2>
+  <a href="/manga/import" class="btn btn-success btn-sm"><i class="bi bi-plus-lg me-1"></i>Новая</a>
+</div>
+
+{% set badges = {'running':('primary','идёт'),'done':('success','готово'),
+                 'error':('danger','ошибка'),'canceled':('secondary','остановлено')} %}
+
+{% if jobs %}
+<div class="list-group" style="max-width:760px">
+  {% for j in jobs %}
+  <div class="list-group-item d-flex align-items-center gap-3 flex-wrap">
+    <span class="badge bg-{{ badges.get(j.status, ('secondary','?'))[0] }}">
+      {{ badges.get(j.status, ('secondary', j.status))[1] }}
+    </span>
+    <div class="flex-grow-1 min-width-0">
+      <div class="fw-semibold text-truncate">{{ j.title or 'Импорт' }}</div>
+      <div class="text-muted small">
+        Глав: {{ j.chapters_done }} / {{ j.chapters_total }}
+        {% if j.status == 'running' and j.current_label %} · {{ j.current_label }} ({{ j.pages_done }} стр.){% endif %}
+        {% if j.message %} · {{ j.message }}{% endif %}
+      </div>
+    </div>
+    {% if j.status == 'running' %}
+    <a href="/manga/import/job/{{ j.id }}" class="btn btn-sm btn-outline-primary">Открыть</a>
+    {% else %}
+    <a href="/manga/{{ j.manga_id }}" class="btn btn-sm btn-outline-secondary">К манге</a>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="text-center text-muted py-5">
+  <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+  Активных и недавних загрузок нет.
+</div>
+{% endif %}
+<p class="text-muted small mt-3">
+  Список хранится в памяти сервера и сбрасывается при его перезапуске. Скачанные главы остаются в манге.
+</p>
+{% endblock %}

@@ -244,22 +244,31 @@ def extract_chapters(series_html: str, base_url: str) -> list[dict]:
         absu = urljoin(base_url, href).split("#")[0]
         path = urlparse(absu).path
         tail = path[len(base_path):] if base_path and path.startswith(base_path + "/") else ""
-        if not ((tail and _NUM_RE.search(tail)) or _CHAPTER_HREF.search(absu)):
+        text = " ".join((a.text_content() or "").split())[:80]
+
+        tail_nums = _NUM_RE.findall(tail) if tail else []
+        is_chapter = bool(tail and tail_nums) or (_CHAPTER_HREF.search(absu) and _NUM_RE.search(path))
+        if not is_chapter:
+            continue
+        # кнопка «Читать» без номера в адресе — не глава
+        if _READ_TEXT.search(text) and not tail_nums:
             continue
         if absu in seen or absu.rstrip("/") == base_url.rstrip("/"):
             continue
         seen.add(absu)
-        label = " ".join((a.text_content() or "").split())[:80]
-        items.append({"url": absu, "label": label})
 
-    def sort_key(it):
-        nums = [float(n.replace(",", ".")) for n in _NUM_RE.findall(urlparse(it["url"]).path)]
-        return (nums or [0.0])
-    items.sort(key=sort_key)
+        all_nums = [float(n.replace(",", ".")) for n in _NUM_RE.findall(path)]
+        items.append({"url": absu, "_nums": all_nums or [0.0], "_text": text})
+
+    items.sort(key=lambda it: it["_nums"])
+    out = []
     for i, it in enumerate(items, start=1):
-        if not it["label"]:
-            it["label"] = f"Глава {i}"
-    return items[:_MAX_CHAPTERS]
+        n = it["_nums"][-1]
+        num_str = str(int(n)) if float(n).is_integer() else str(n)
+        # подпись: «Глава N» по номеру из URL; если номера нет — текст ссылки/индекс
+        label = f"Глава {num_str}" if it["_nums"] != [0.0] else (it["_text"] or f"Глава {i}")
+        out.append({"url": it["url"], "label": label})
+    return out[:_MAX_CHAPTERS]
 
 
 def plan_import(url: str, series: bool) -> dict:

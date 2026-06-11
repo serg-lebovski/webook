@@ -66,10 +66,35 @@
         </ul>
       </div>
 
+      <button class="btn btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#editMeta">
+        <i class="bi bi-pencil me-1"></i>Изменить
+      </button>
+
       <form method="post" action="/manga/{{ manga.id }}/delete" onsubmit="return confirm('Удалить мангу со всеми главами?')">
         <button class="btn btn-outline-secondary"><i class="bi bi-trash me-1"></i>Удалить</button>
       </form>
     </div>
+
+    <div class="collapse mb-3" id="editMeta">
+      <form method="post" action="/manga/{{ manga.id }}/edit" class="card card-body">
+        <div class="row g-2">
+          <div class="col-md-8">
+            <label class="form-label small">Название</label>
+            <input name="title" class="form-control form-control-sm" value="{{ manga.title }}" required>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small">Автор</label>
+            <input name="author" class="form-control form-control-sm" value="{{ manga.author or '' }}">
+          </div>
+          <div class="col-12">
+            <label class="form-label small">Описание</label>
+            <textarea name="description" class="form-control form-control-sm" rows="3">{{ manga.description or '' }}</textarea>
+          </div>
+        </div>
+        <div class="mt-2"><button class="btn btn-sm btn-primary">Сохранить</button></div>
+      </form>
+    </div>
+
     {% if manga.description %}<p class="text-body" style="white-space:pre-line">{{ manga.description }}</p>{% endif %}
   </div>
 </div>
@@ -105,15 +130,33 @@
 {% if manga.chapters %}
 <div class="list-group">
   {% for c in manga.chapters %}
-  <div class="list-group-item d-flex align-items-center gap-3 py-2">
-    <span class="badge bg-light text-dark border">{{ c.order }}</span>
-    <a href="/manga/{{ manga.id }}/read/{{ c.id }}" class="flex-grow-1 text-decoration-none text-body">
-      {{ c.label }} <span class="text-muted small">· {{ c.page_count }} стр.</span>
-    </a>
-    <a href="/manga/{{ manga.id }}/read/{{ c.id }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-book-open"></i></a>
-    <form method="post" action="/manga/{{ manga.id }}/chapters/{{ c.id }}/delete" onsubmit="return confirm('Удалить главу?')">
-      <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
-    </form>
+  <div class="list-group-item py-2">
+    <div class="d-flex align-items-center gap-2">
+      <span class="badge bg-light text-dark border">{{ c.order }}</span>
+      <a href="/manga/{{ manga.id }}/read/{{ c.id }}" class="flex-grow-1 text-decoration-none text-body text-truncate">
+        {{ c.label }} <span class="text-muted small">· {{ c.page_count }} стр.</span>
+      </a>
+      <form method="post" action="/manga/{{ manga.id }}/chapters/{{ c.id }}/move">
+        <input type="hidden" name="dir" value="up">
+        <button class="btn btn-sm btn-outline-secondary py-0 px-1" title="Выше" {% if loop.first %}disabled{% endif %}><i class="bi bi-arrow-up"></i></button>
+      </form>
+      <form method="post" action="/manga/{{ manga.id }}/chapters/{{ c.id }}/move">
+        <input type="hidden" name="dir" value="down">
+        <button class="btn btn-sm btn-outline-secondary py-0 px-1" title="Ниже" {% if loop.last %}disabled{% endif %}><i class="bi bi-arrow-down"></i></button>
+      </form>
+      <button class="btn btn-sm btn-outline-secondary py-0 px-1" title="Переименовать"
+              data-bs-toggle="collapse" data-bs-target="#ren{{ c.id }}"><i class="bi bi-pencil"></i></button>
+      <a href="/manga/{{ manga.id }}/read/{{ c.id }}" class="btn btn-sm btn-outline-primary py-0 px-1"><i class="bi bi-book-open"></i></a>
+      <form method="post" action="/manga/{{ manga.id }}/chapters/{{ c.id }}/delete" onsubmit="return confirm('Удалить главу?')">
+        <button class="btn btn-sm btn-outline-danger py-0 px-1"><i class="bi bi-trash"></i></button>
+      </form>
+    </div>
+    <div class="collapse mt-2" id="ren{{ c.id }}">
+      <form method="post" action="/manga/{{ manga.id }}/chapters/{{ c.id }}/rename" class="input-group input-group-sm" style="max-width:420px">
+        <input name="title" class="form-control" value="{{ c.title }}" placeholder="Название главы">
+        <button class="btn btn-primary">Сохранить</button>
+      </form>
+    </div>
   </div>
   {% endfor %}
 </div>

@@ -73,6 +73,14 @@ def get(jid: str) -> dict | None:
         return dict(j) if j else None
 
 
+def list_for_user(user_id: int) -> list[dict]:
+    """Задачи пользователя, новые сверху (для страницы «Загрузки»)."""
+    with _lock:
+        jobs = [dict(j) for j in _jobs.values() if j["user_id"] == user_id]
+    jobs.sort(key=lambda j: j["created"], reverse=True)
+    return jobs
+
+
 def _update(jid: str, **kw):
     with _lock:
         j = _jobs.get(jid)

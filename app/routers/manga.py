@@ -255,6 +255,15 @@ def import_start(
     return RedirectResponse(f"/manga/import/job/{jid}", status_code=302)
 
 
+@router.get("/import/jobs", response_class=HTMLResponse)
+def import_jobs_page(request: Request, user: User = Depends(get_current_user)):
+    from app.services import import_jobs
+    jobs = import_jobs.list_for_user(user.id)
+    return templates.TemplateResponse("manga/import_jobs.html", {
+        "request": request, "user": user, "jobs": jobs,
+    })
+
+
 @router.get("/import/job/{jid}", response_class=HTMLResponse)
 def import_job_page(jid: str, request: Request, user: User = Depends(get_current_user)):
     from app.services import import_jobs
@@ -308,6 +317,45 @@ async def add_chapter(
             fb = (manga_service.chapter_dir(m.folder, ch_folder) / first).read_bytes()
             m.cover_path = save_cover_file(fb, Path(first).suffix.lower() or ".jpg")
         db.commit()
+    return RedirectResponse(f"/manga/{manga_id}", status_code=302)
+
+
+# ─────────────────────────── редактирование ───────────────────────────
+
+@router.post("/{manga_id}/edit")
+def edit_manga(manga_id: int, title: str = Form(...), author: str = Form(""),
+               description: str = Form(""),
+               user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    m = _own_manga(manga_id, user, db)
+    if title.strip():
+        m.title = title.strip()[:200]
+    m.author = author.strip()[:200]
+    m.description = description.strip()[:2000]
+    db.commit()
+    return RedirectResponse(f"/manga/{manga_id}", status_code=302)
+
+
+@router.post("/{manga_id}/chapters/{chapter_id}/rename")
+def rename_chapter(manga_id: int, chapter_id: int, title: str = Form(""),
+                   user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    m = _own_manga(manga_id, user, db)
+    c = _own_chapter(m, chapter_id, db)
+    c.title = title.strip()[:120]
+    db.commit()
+    return RedirectResponse(f"/manga/{manga_id}", status_code=302)
+
+
+@router.post("/{manga_id}/chapters/{chapter_id}/move")
+def move_chapter(manga_id: int, chapter_id: int, dir: str = Form("up"),
+                 user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    m = _own_manga(manga_id, user, db)
+    ordered = sorted(m.chapters, key=lambda c: c.order)
+    idx = next((i for i, c in enumerate(ordered) if c.id == chapter_id), -1)
+    if idx >= 0:
+        swap = idx - 1 if dir == "up" else idx + 1
+        if 0 <= swap < len(ordered):
+            ordered[idx].order, ordered[swap].order = ordered[swap].order, ordered[idx].order
+            db.commit()
     return RedirectResponse(f"/manga/{manga_id}", status_code=302)
 
 

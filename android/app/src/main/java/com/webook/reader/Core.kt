@@ -132,6 +132,15 @@ data class TextResult(
     val paragraphs: List<String>,
 )
 
+data class DashboardStats(
+    val username: String,
+    val booksTotal: Int, val booksRead: Int,
+    val linksTotal: Int, val linksRead: Int,
+    val audiobooksTotal: Int, val mangaTotal: Int,
+    val year: Int, val booksYear: Int, val linksYear: Int,
+    val streak: Int, val goal: Int, val goalPct: Int,
+)
+
 data class MangaItem(
     val id: Int,
     val title: String,
@@ -461,6 +470,19 @@ object Api {
     fun bookCoverUrl(base: String, id: Int): String = "$base/api/books/$id/cover"
 
     // --- Манга ---
+
+    suspend fun dashboard(base: String, token: String): DashboardStats {
+        val o = JSONObject(getBody(base, token, "/api/dashboard"))
+        return DashboardStats(
+            username = o.optString("username"),
+            booksTotal = o.optInt("books_total"), booksRead = o.optInt("books_read"),
+            linksTotal = o.optInt("links_total"), linksRead = o.optInt("links_read"),
+            audiobooksTotal = o.optInt("audiobooks_total"), mangaTotal = o.optInt("manga_total"),
+            year = o.optInt("year"), booksYear = o.optInt("books_year"),
+            linksYear = o.optInt("links_year"), streak = o.optInt("streak"),
+            goal = o.optInt("goal"), goalPct = o.optInt("goal_pct"),
+        )
+    }
 
     suspend fun mangaList(base: String, token: String): List<MangaItem> {
         val arr = JSONArray(getBody(base, token, "/api/manga"))

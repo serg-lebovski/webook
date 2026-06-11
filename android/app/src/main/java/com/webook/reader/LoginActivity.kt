@@ -17,7 +17,7 @@ class LoginActivity : AppCompatActivity() {
 
         // Уже авторизованы — сразу в библиотеку.
         if (Prefs.isLoggedIn(this)) {
-            startActivity(Intent(this, LibraryActivity::class.java))
+            startActivity(Intent(this, DashboardActivity::class.java))
             finish()
             return
         }
@@ -51,7 +51,7 @@ class LoginActivity : AppCompatActivity() {
             try {
                 val token = Api.login(base, user, pass)
                 Prefs.save(this@LoginActivity, base, token, user)
-                startActivity(Intent(this@LoginActivity, LibraryActivity::class.java))
+                startActivity(Intent(this@LoginActivity, DashboardActivity::class.java))
                 finish()
             } catch (e: ApiException) {
                 showError(e.message ?: "Ошибка входа")

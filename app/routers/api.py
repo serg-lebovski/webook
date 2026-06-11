@@ -144,6 +144,30 @@ def save_link(
 # Мобильное приложение (Android): список книг/статей + извлечение текста для TTS
 # ---------------------------------------------------------------------------
 
+@router.get("/dashboard")
+def api_dashboard(user: User = Depends(_get_api_user), db: Session = Depends(get_db)):
+    """Сводка для главного экрана приложения (как дашборд сайта)."""
+    from app.models.manga import Manga
+    from app.routers.dashboard import _reading_stats
+
+    books_total = db.query(Book).filter_by(user_id=user.id, deleted_at=None).count()
+    books_read = db.query(Book).filter_by(user_id=user.id, deleted_at=None, is_read=True).count()
+    links_total = db.query(Link).filter_by(user_id=user.id, deleted_at=None).count()
+    links_read = db.query(Link).filter_by(user_id=user.id, deleted_at=None, is_read=True).count()
+    audiobooks_total = db.query(Audiobook).filter_by(user_id=user.id, deleted_at=None).count()
+    manga_total = db.query(Manga).filter_by(user_id=user.id, deleted_at=None).count()
+    stats = _reading_stats(db, user.id, user.reading_goal or 0)
+    return {
+        "username": user.username,
+        "books_total": books_total, "books_read": books_read,
+        "links_total": links_total, "links_read": links_read,
+        "audiobooks_total": audiobooks_total, "manga_total": manga_total,
+        "year": stats["year"], "books_year": stats["books_year"],
+        "links_year": stats["links_year"], "streak": stats["streak"],
+        "goal": stats["goal"], "goal_pct": stats["goal_pct"],
+    }
+
+
 @router.get("/me")
 def api_me(user: User = Depends(_get_api_user)):
     return {"id": user.id, "username": user.username, "is_admin": user.is_admin}

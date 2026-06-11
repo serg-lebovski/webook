@@ -67,6 +67,7 @@ class LibraryActivity : AppCompatActivity() {
         b.navView.setNavigationItemSelectedListener { item ->
             b.drawer.closeDrawers()
             when (item.itemId) {
+                R.id.nav_home -> startActivity(Intent(this, DashboardActivity::class.java))
                 R.id.nav_books -> { item.isChecked = true; setMode("books") }
                 R.id.nav_notes -> { item.isChecked = true; setMode("notes") }
                 R.id.nav_audio -> startActivity(Intent(this, AudioListActivity::class.java))
@@ -91,7 +92,7 @@ class LibraryActivity : AppCompatActivity() {
             }
         })
 
-        setMode("books")
+        setMode(if (intent.getStringExtra("mode") == "notes") "notes" else "books")
     }
 
     private fun setMode(m: String) {
