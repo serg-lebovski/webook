@@ -31,9 +31,12 @@ _LAZY_ATTRS = ("data-src", "data-original", "data-lazy-src", "data-cfsrc",
 _IMG_EXT = (".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".avif")
 
 _MAX_SUBPAGES = 250            # защита от бесконечного перелистывания
+_MAX_CHAPTERS = 400            # предел числа глав при импорте серии
 _READ_TEXT = re.compile(r"чита|read\s*now|read\s*manga|начать\s*чтен|start\s*read", re.I)
 _READ_HREF = re.compile(r"(read|chapter|chap-|/chap/|glava|глава|vol)", re.I)
 _NEXT_TEXT = re.compile(r"след(ующ)?|next|вперёд|вперед|дальше|»|›|→", re.I)
+_CHAPTER_HREF = re.compile(r"(chapter|chap[-_/]|/ch\d|глав|glav|tom|том|vol(ume)?[-_/ ]?\d)", re.I)
+_NUM_RE = re.compile(r"\d+(?:[.,]\d+)?")
 
 
 def _largest_from_srcset(srcset: str) -> str | None:
@@ -201,6 +204,134 @@ def _download_images(client, img_urls, referer, start_idx, budget):
         except Exception:
             continue
     return out
+
+
+def extract_chapter_links(series_html: str, base_url: str) -> list[str]:
+    """Список ссылок на главы со страницы серии, упорядоченный по номеру (возр.)."""
+    try:
+        doc = lhtml.fromstring(series_html.encode("utf-8"),
+                               parser=lhtml.HTMLParser(encoding="utf-8"))
+    except Exception:
+        return []
+
+    base_path = urlparse(base_url).path.rstrip("/")
+    seen: set[str] = set()
+    cands: list[str] = []
+    for a in doc.xpath("//a[@href]"):
+        href = a.get("href") or ""
+        if href.startswith(("#", "javascript:", "mailto:")):
+            continue
+        absu = urljoin(base_url, href).split("#")[0]
+        path = urlparse(absu).path
+        tail = path[len(base_path):] if base_path and path.startswith(base_path + "/") else ""
+        # глава = либо расширяет путь серии и содержит число, либо адрес «похож на главу»
+        is_chapter = (tail and _NUM_RE.search(tail)) or _CHAPTER_HREF.search(absu)
+        if is_chapter and absu not in seen and absu.rstrip("/") != base_url.rstrip("/"):
+            seen.add(absu)
+            cands.append(absu)
+
+    def sort_key(u: str):
+        tail = urlparse(u).path
+        nums = [float(n.replace(",", ".")) for n in _NUM_RE.findall(tail)]
+        return (nums or [0.0])
+    cands.sort(key=sort_key)
+    return cands[:_MAX_CHAPTERS]
+
+
+def _download_chapter(client, chapter_url: str, paginate: bool, budget: dict) -> list[tuple[str, bytes]]:
+    """Скачать изображения одной главы (с перелистыванием постраничных читалок)."""
+    images: list[tuple[str, bytes]] = []
+    seen_img: set[str] = set()
+    visited: set[str] = set()
+    try:
+        r = client.get(chapter_url)
+        if r.status_code != 200:
+            return []
+        cur_url, cur_html = str(r.url), r.text
+    except Exception:
+        return []
+
+    subpages = 0
+    while cur_url and subpages < (_MAX_SUBPAGES if paginate else 1):
+        visited.add(cur_url)
+        page_imgs = [u for u in extract_image_urls(cur_html, cur_url) if u not in seen_img]
+        seen_img.update(page_imgs)
+        if page_imgs:
+            images += _download_images(client, page_imgs[:_MAX_IMAGES], cur_url, len(images) + 1, budget)
+        if budget["total"] > _MAX_TOTAL_BYTES or len(images) >= _MAX_IMAGES:
+            break
+        if not paginate:
+            break
+        nxt = find_next_url(cur_html, cur_url, cur_url)
+        if not nxt or nxt in visited:
+            break
+        try:
+            r = client.get(nxt)
+            if r.status_code != 200:
+                break
+            cur_url, cur_html = str(r.url), r.text
+        except Exception:
+            break
+        subpages += 1
+
+    if images and all(re.match(r"^\d+", n) for n, _ in images):
+        images.sort(key=lambda p: _natural_key(p[0]))
+    return images
+
+
+def fetch_series(url: str, paginate: bool = True) -> dict:
+    """Импорт всей серии: метаданные + все главы со страницы тайтла.
+
+    Возвращает {title, description, cover_bytes, chapters: [(label, images), ...]}.
+    """
+    if not url.startswith(("http://", "https://")):
+        url = "https://" + url
+    headers = {"User-Agent": _UA, "Accept-Language": "ru,en;q=0.9"}
+
+    try:
+        with httpx.Client(follow_redirects=True, timeout=_PAGE_TIMEOUT, headers=headers) as client:
+            resp = client.get(url)
+            resp.raise_for_status()
+            series_html, series_url = resp.text, str(resp.url)
+            meta = extract_meta(series_html, series_url)
+
+            cover_bytes = None
+            if meta.get("cover"):
+                try:
+                    cr = client.get(meta["cover"], headers={**headers, "Referer": series_url})
+                    if cr.status_code == 200 and cr.headers.get("content-type", "").startswith("image/") \
+                            and len(cr.content) >= _MIN_BYTES:
+                        cover_bytes = cr.content
+                except Exception:
+                    pass
+
+            chapter_urls = extract_chapter_links(series_html, series_url)
+            if not chapter_urls and meta.get("read_url"):
+                chapter_urls = [meta["read_url"]]
+            if not chapter_urls:
+                raise ValueError("Не нашёл ссылок на главы на странице серии. "
+                                 "Возможно, список глав подгружается скриптом.")
+
+            budget = {"total": (len(cover_bytes) if cover_bytes else 0)}
+            chapters = []
+            for i, ch_url in enumerate(chapter_urls, start=1):
+                imgs = _download_chapter(client, ch_url, paginate, budget)
+                if imgs:
+                    chapters.append((f"Глава {i}", imgs))
+                if budget["total"] > _MAX_TOTAL_BYTES:
+                    break
+    except httpx.HTTPStatusError as e:
+        raise ValueError(f"Страница недоступна (HTTP {e.response.status_code}).")
+    except ValueError:
+        raise
+    except Exception as e:
+        raise ValueError(f"Не удалось загрузить серию: {e}")
+
+    if not chapters:
+        raise ValueError("Главы найдены, но изображения скачать не удалось "
+                         "(вероятно, картинки грузятся скриптом или стоит защита).")
+    return {"title": meta.get("title", ""), "description": meta.get("description", ""),
+            "cover_bytes": cover_bytes, "chapters": chapters}
 
 
 def fetch_manga(url: str, follow_read: bool = False, paginate: bool = True) -> dict:

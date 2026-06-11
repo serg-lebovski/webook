@@ -174,20 +174,25 @@ def import_by_url(
     if not url:
         return RedirectResponse("/manga/import?error=Укажите+ссылку", status_code=302)
 
+    # follow_read = «это страница серии»: импортируем ВСЕ главы; иначе — одна глава по ссылке
+    series_mode = bool(follow_read)
     try:
-        result = manga_import_service.fetch_manga(
-            url, follow_read=bool(follow_read), paginate=bool(paginate))
+        if series_mode:
+            result = manga_import_service.fetch_series(url, paginate=bool(paginate))
+            chapters = result["chapters"]
+        else:
+            single = manga_import_service.fetch_manga(url, follow_read=False, paginate=bool(paginate))
+            result = single
+            chapters = [(chapter_title.strip() or "Глава 1", single["images"])]
     except ValueError as e:
         return RedirectResponse(f"/manga/import?error={quote(str(e))}", status_code=302)
 
-    images = result["images"]
-
     # Куда сохранять: в существующую мангу или создать новую
-    if mode == "existing" and manga_id:
+    if mode == "existing" and manga_id and not series_mode:
         m = db.query(Manga).filter_by(id=manga_id, user_id=user.id, deleted_at=None).first()
         if not m:
             return RedirectResponse("/manga/import?error=Манга+не+найдена", status_code=302)
-        next_order = (max((c.order for c in m.chapters), default=0)) + 1
+        base_order = max((c.order for c in m.chapters), default=0)
     else:
         new_title = (title.strip() or result.get("title") or "Импортированная манга")[:200]
         m = Manga(user_id=user.id, title=new_title, author=author.strip(),
@@ -195,19 +200,26 @@ def import_by_url(
                   folder=manga_service.new_folder())
         db.add(m)
         db.flush()
-        next_order = 1
+        base_order = 0
 
-    ch_folder, count, first = manga_service.save_chapter(m.folder, images)
-    db.add(MangaChapter(manga_id=m.id,
-                        title=chapter_title.strip() or f"Глава {next_order}",
-                        order=next_order, folder=ch_folder, page_count=count))
-    # обложка: og:image со страницы, иначе первая страница
+    first_page_bytes = None
+    for offset, (label, images) in enumerate(chapters, start=1):
+        if not images:
+            continue
+        ch_folder, count, first = manga_service.save_chapter(m.folder, images)
+        order = base_order + offset
+        db.add(MangaChapter(manga_id=m.id,
+                            title=label if series_mode else (chapter_title.strip() or label),
+                            order=order, folder=ch_folder, page_count=count))
+        if first_page_bytes is None and first:
+            first_page_bytes = (manga_service.chapter_dir(m.folder, ch_folder) / first).read_bytes()
+
+    # обложка: og:image со страницы, иначе первая страница первой главы
     if not m.cover_path:
         if result.get("cover_bytes"):
             m.cover_path = save_cover_file(result["cover_bytes"], ".jpg")
-        elif first:
-            first_bytes = (manga_service.chapter_dir(m.folder, ch_folder) / first).read_bytes()
-            m.cover_path = save_cover_file(first_bytes, Path(first).suffix.lower() or ".jpg")
+        elif first_page_bytes:
+            m.cover_path = save_cover_file(first_page_bytes, ".jpg")
     db.commit()
     return RedirectResponse(f"/manga/{m.id}", status_code=302)
 
