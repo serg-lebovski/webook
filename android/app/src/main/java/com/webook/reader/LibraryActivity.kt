@@ -58,12 +58,11 @@ class LibraryActivity : AppCompatActivity() {
             override fun onTabReselected(tab: TabLayout.Tab) {}
         })
 
-        // Боковое меню (выезжает слева по «гамбургеру»)
-        val toggle = androidx.appcompat.app.ActionBarDrawerToggle(
-            this, b.drawer, b.toolbar, R.string.nav_open, R.string.nav_close
-        )
-        b.drawer.addDrawerListener(toggle)
-        toggle.syncState()
+        // Боковое меню: явная кнопка-«гамбургер» в тулбаре (надёжнее ActionBarDrawerToggle)
+        b.toolbar.navigationIcon = androidx.core.content.ContextCompat.getDrawable(this, R.drawable.ic_hamburger)
+        b.toolbar.setNavigationOnClickListener {
+            b.drawer.openDrawer(androidx.core.view.GravityCompat.START)
+        }
 
         b.navView.setNavigationItemSelectedListener { item ->
             b.drawer.closeDrawers()
