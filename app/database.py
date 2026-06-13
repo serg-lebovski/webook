@@ -17,7 +17,7 @@ def init_db():
     from app.models import (  # noqa: F401
         user, shelf, author, series, book, link, site_settings, share,
         read_progress, login_attempt, tag, highlight, feed, audiobook, series_tier,
-        stored_file, manga, collection,
+        stored_file, manga, collection, game,
     )
     Base.metadata.create_all(bind=engine)
     _migrate_db()
@@ -48,6 +48,8 @@ def _migrate_db():
             "ALTER TABLE shares ADD COLUMN IF NOT EXISTS max_downloads INTEGER",
             "ALTER TABLE shares ADD COLUMN IF NOT EXISTS download_count INTEGER NOT NULL DEFAULT 0",
             "ALTER TABLE audiobooks ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS steam_profile_url VARCHAR DEFAULT ''",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS steam_id VARCHAR DEFAULT ''",
             # Полнотекстовый поиск по статьям (PostgreSQL FTS)
             "ALTER TABLE links ADD COLUMN IF NOT EXISTS content_tsv tsvector",
             "CREATE INDEX IF NOT EXISTS ix_links_content_tsv ON links USING gin(content_tsv)",
@@ -76,6 +78,8 @@ def _migrate_db():
             "ALTER TABLE shares ADD COLUMN max_downloads INTEGER",
             "ALTER TABLE shares ADD COLUMN download_count INTEGER NOT NULL DEFAULT 0",
             "ALTER TABLE audiobooks ADD COLUMN deleted_at DATETIME",
+            "ALTER TABLE users ADD COLUMN steam_profile_url VARCHAR DEFAULT ''",
+            "ALTER TABLE users ADD COLUMN steam_id VARCHAR DEFAULT ''",
         ]
         backfill_expires = (
             "UPDATE shares SET expires_at = datetime(created_at, '+7 days') WHERE expires_at IS NULL"

@@ -12,6 +12,12 @@
   <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
 </div>
 {% endif %}
+{% if success == 'steam' %}
+<div class="alert alert-success alert-dismissible fade show" role="alert">
+  <i class="bi bi-steam me-1"></i>Профиль Steam сохранён{% if user.steam_id %} (SteamID: {{ user.steam_id }}){% endif %}.
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
 {% if error %}
 <div class="alert alert-danger alert-dismissible fade show" role="alert">
   <i class="bi bi-exclamation-triangle me-1"></i>{{ error }}
@@ -29,6 +35,24 @@
 </div>
 {% endif %}
 <div class="row g-4">
+
+  <!-- Steam -->
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header fw-semibold"><i class="bi bi-steam me-1"></i>Steam</div>
+      <div class="card-body">
+        <p class="text-muted small mb-2">Укажите ссылку на свой профиль Steam, чтобы для игр подтягивалось наигранное время. Профиль и игровая активность должны быть открыты.</p>
+        <form method="post" action="/settings/steam">
+          <label class="form-label small">Ссылка на профиль или SteamID64</label>
+          <input name="steam_profile_url" class="form-control mb-2"
+                 value="{{ user.steam_profile_url or '' }}"
+                 placeholder="https://steamcommunity.com/id/ваш_ник">
+          <button class="btn btn-sm btn-primary">Сохранить</button>
+          {% if user.steam_id %}<span class="text-muted small ms-2">SteamID: {{ user.steam_id }}</span>{% endif %}
+        </form>
+      </div>
+    </div>
+  </div>
 
   <!-- Профиль -->
   <div class="col-lg-6">

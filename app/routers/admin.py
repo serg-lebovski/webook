@@ -200,6 +200,7 @@ def admin_page(
     from app.services.settings_service import get_max_file_mb, get_user_quota_mb
     max_file_mb = get_max_file_mb(db)
     user_quota_mb = get_user_quota_mb(db)
+    steam_api_key = get_setting(db, "steam_api_key", "")
     system = _get_system_info()
     bans = (
         db.query(IpBan)
@@ -214,6 +215,7 @@ def admin_page(
         "allow_registration": allow_registration,
         "max_file_mb": max_file_mb,
         "user_quota_mb": user_quota_mb,
+        "steam_api_key": steam_api_key,
         "success": success,
         "error": None,
         "system": system,
@@ -228,12 +230,14 @@ def update_admin_settings(
     allow_registration: str = Form("off"),
     max_file_mb: str = Form(""),
     user_quota_mb: str = Form(""),
+    steam_api_key: str = Form(""),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     _require_admin(user)
     value = "true" if allow_registration == "on" else "false"
     set_setting(db, "allow_registration", value)
+    set_setting(db, "steam_api_key", steam_api_key.strip())
     try:
         mb = int(max_file_mb)
         if mb > 0:
@@ -510,5 +514,12 @@ def _purge_user_data(uid: int, db: Session):
     # 14. подборки (элементы каскадом)
     from app.models.collection import Collection
     db.query(Collection).filter_by(user_id=uid).delete(synchronize_session=False)
+
+    # 15. игры: обложки + строки (+ тир-лист каскадом)
+    from app.models.game import Game, GameTier
+    db.query(GameTier).filter_by(user_id=uid).delete(synchronize_session=False)
+    for gm in db.query(Game).filter_by(user_id=uid).all():
+        _del_cover(gm.cover_path, _COVERS)
+        db.delete(gm)
 
     db.flush()

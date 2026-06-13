@@ -135,6 +135,26 @@ def update_profile(
     return response
 
 
+@router.post("/steam")
+def update_steam(
+    steam_profile_url: str = Form(""),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Сохранить ссылку на профиль Steam и резолвить SteamID64 (для наигранного времени)."""
+    from app.services import steam_service, settings_service
+    user.steam_profile_url = steam_profile_url.strip()[:300]
+    api_key = settings_service.get_setting(db, "steam_api_key", "")
+    if user.steam_profile_url:
+        sid = steam_service.resolve_steamid(user.steam_profile_url, api_key)
+        if sid:
+            user.steam_id = sid
+    else:
+        user.steam_id = ""
+    db.commit()
+    return RedirectResponse("/settings?success=steam", status_code=302)
+
+
 def _make_icon_png(size: int) -> bytes:
     """Generate a minimal solid blue (#2563eb) PNG for extension icons."""
     import struct, zlib as _zlib

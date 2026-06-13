@@ -60,6 +60,7 @@
 {% set is_dash = path in ('/', '/dashboard') %}
 {% set is_lib = path.startswith('/books') or path.startswith('/shelves') or path.startswith('/authors') or path.startswith('/series') or path.startswith('/manga') or path.startswith('/collections') or path.startswith('/tier-list') or path.startswith('/audiobooks') %}
 {% set is_articles = path.startswith('/links') %}
+{% set is_games = path.startswith('/games') %}
 {% set is_files = path.startswith('/files') %}
 {% set is_feeds = path.startswith('/feeds') %}
 
@@ -99,6 +100,10 @@
               <li><a class="nav-link" href="/books/upload"><i class="bi bi-cloud-upload"></i>Загрузить</a></li>
             </ul>
           </div>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link {% if is_games %}active{% endif %}" href="/games">
+            <i class="bi bi-controller"></i>Игры</a>
         </li>
         <li class="nav-item">
           <a class="nav-link {% if is_articles %}active{% endif %}" href="/links">

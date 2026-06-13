@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Игры — WeBook{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+  <h2 class="mb-0"><i class="bi bi-controller me-2"></i>Игры</h2>
+  <div class="d-flex gap-2">
+    <a href="/games/tier-list" class="btn btn-outline-secondary btn-sm"><i class="bi bi-bar-chart-steps me-1"></i>Тир-лист</a>
+    <a href="/games/add" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>Добавить игру</a>
+  </div>
+</div>
+
+<div class="d-flex flex-wrap gap-2 mb-3 align-items-center">
+  <a href="/games" class="btn btn-sm {{ 'btn-primary' if not cur_status else 'btn-outline-primary' }}">Все</a>
+  {% for key, label in statuses %}
+  <a href="/games?status={{ key }}" class="btn btn-sm {{ 'btn-primary' if cur_status == key else 'btn-outline-primary' }}">
+    {{ label }} <span class="badge bg-light text-dark">{{ counts[key] }}</span>
+  </a>
+  {% endfor %}
+  <span class="ms-auto text-muted small"><i class="bi bi-clock-history me-1"></i>Наиграно всего: {{ total_hours }} ч</span>
+</div>
+
+<form method="get" class="d-flex gap-2 mb-3 flex-wrap">
+  <input type="hidden" name="status" value="{{ cur_status }}">
+  <select name="platform" class="form-select form-select-sm" style="width:auto" onchange="this.form.submit()">
+    <option value="">Все платформы</option>
+    {% for p in platforms %}<option value="{{ p }}" {% if cur_platform == p %}selected{% endif %}>{{ p }}</option>{% endfor %}
+  </select>
+  <select name="sort" class="form-select form-select-sm" style="width:auto" onchange="this.form.submit()">
+    <option value="added" {% if cur_sort == 'added' %}selected{% endif %}>Сначала новые</option>
+    <option value="rating" {% if cur_sort == 'rating' %}selected{% endif %}>По оценке</option>
+    <option value="title" {% if cur_sort == 'title' %}selected{% endif %}>По названию</option>
+  </select>
+</form>
+
+{% if games %}
+<div class="row g-3">
+  {% for g in games %}
+  <div class="col-6 col-sm-4 col-md-3 col-lg-2">
+    <a href="/games/{{ g.id }}" class="text-decoration-none">
+      <div class="card h-100">
+        {% if g.cover_path %}
+        <img src="/games/{{ g.id }}/cover" class="card-img-top" style="aspect-ratio:16/9;object-fit:cover" alt="">
+        {% else %}
+        <div class="card-img-top d-flex align-items-center justify-content-center text-white"
+             style="aspect-ratio:16/9;background:linear-gradient(135deg,#6366f1,#8b5cf6)"><i class="bi bi-controller fs-2"></i></div>
+        {% endif %}
+        <div class="card-body p-2">
+          <div class="d-flex justify-content-between align-items-start gap-1">
+            <span class="small fw-semibold text-body text-truncate">{{ g.title }}</span>
+            {% if g.rating %}<span class="badge bg-warning text-dark">{{ g.rating }}</span>{% endif %}
+          </div>
+          <div class="text-muted" style="font-size:.72rem">
+            {{ status_labels.get(g.status, g.status) }}{% if g.platform %} · {{ g.platform }}{% endif %}
+          </div>
+        </div>
+      </div>
+    </a>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="text-center text-muted py-5">
+  <i class="bi bi-controller fs-1 d-block mb-2"></i>
+  Игр пока нет. Нажмите «Добавить игру» — можно вставить ссылку Steam или заполнить вручную.
+</div>
+{% endif %}
+{% endblock %}

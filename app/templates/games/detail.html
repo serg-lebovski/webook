@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% block title %}{{ game.title }} — Игры{% endblock %}
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/games">Игры</a></li>
+    <li class="breadcrumb-item active">{{ game.title }}</li>
+  </ol>
+</nav>
+
+<div class="row g-4">
+  <div class="col-md-4 col-lg-3">
+    {% if game.cover_path %}
+    <img src="/games/{{ game.id }}/cover" class="w-100 rounded shadow-sm mb-2" alt="">
+    {% else %}
+    <div class="w-100 rounded d-flex align-items-center justify-content-center text-white mb-2"
+         style="aspect-ratio:16/9;background:linear-gradient(135deg,#6366f1,#8b5cf6)"><i class="bi bi-controller fs-1"></i></div>
+    {% endif %}
+
+    <div class="list-group small mb-2">
+      {% if game.platform %}<div class="list-group-item d-flex justify-content-between"><span class="text-muted">Платформа</span><span>{{ game.platform }}</span></div>{% endif %}
+      {% if game.release_year %}<div class="list-group-item d-flex justify-content-between"><span class="text-muted">Год</span><span>{{ game.release_year }}</span></div>{% endif %}
+      {% if game.genres %}<div class="list-group-item d-flex justify-content-between"><span class="text-muted">Жанры</span><span class="text-end">{{ game.genres }}</span></div>{% endif %}
+      {% if game.metacritic %}<div class="list-group-item d-flex justify-content-between"><span class="text-muted">Metacritic</span><span class="badge bg-success">{{ game.metacritic }}</span></div>{% endif %}
+      {% if game.hltb_main %}<div class="list-group-item d-flex justify-content-between"><span class="text-muted">Прохождение (HLTB)</span><span>{{ game.hltb_main }} ч{% if game.hltb_completionist %} / {{ game.hltb_completionist }} ч на 100%{% endif %}</span></div>{% endif %}
+      {% if game.playtime_hours %}<div class="list-group-item d-flex justify-content-between"><span class="text-muted">Вы наиграли</span><span class="fw-semibold">{{ game.playtime_hours }} ч</span></div>{% endif %}
+    </div>
+
+    {% if game.steam_url %}<a href="{{ game.steam_url }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-dark w-100 mb-1"><i class="bi bi-steam me-1"></i>Открыть в Steam</a>{% endif %}
+    {% if game.steam_appid or game.steam_url %}
+    <form method="post" action="/games/{{ game.id }}/refresh-steam" class="mb-1"><button class="btn btn-sm btn-outline-secondary w-100"><i class="bi bi-arrow-repeat me-1"></i>Обновить из Steam</button></form>
+    <form method="post" action="/games/{{ game.id }}/sync-playtime"><button class="btn btn-sm btn-outline-secondary w-100"><i class="bi bi-clock me-1"></i>Подтянуть наигранное</button></form>
+    {% endif %}
+  </div>
+
+  <div class="col-md-8 col-lg-9">
+    <div class="d-flex align-items-start justify-content-between flex-wrap gap-2">
+      <h2 class="mb-1">{{ game.title }}
+        {% if game.is_favorite %}<i class="bi bi-heart-fill text-danger fs-5"></i>{% endif %}
+      </h2>
+      <div class="d-flex gap-2">
+        <a href="/games/{{ game.id }}/edit" class="btn btn-sm btn-outline-primary"><i class="bi bi-pencil me-1"></i>Изменить</a>
+        <form method="post" action="/games/{{ game.id }}/favorite"><button class="btn btn-sm btn-outline-danger"><i class="bi bi-heart{% if game.is_favorite %}-fill{% endif %}"></i></button></form>
+        <form method="post" action="/games/{{ game.id }}/delete" onsubmit="return confirm('Удалить игру?')"><button class="btn btn-sm btn-outline-secondary"><i class="bi bi-trash"></i></button></form>
+      </div>
+    </div>
+
+    <!-- Статус -->
+    <div class="mb-3">
+      <div class="btn-group btn-group-sm flex-wrap" role="group">
+        {% for key, label in statuses %}
+        <form method="post" action="/games/{{ game.id }}/status">
+          <input type="hidden" name="status" value="{{ key }}">
+          <button class="btn {{ 'btn-primary' if game.status == key else 'btn-outline-primary' }}">{{ label }}</button>
+        </form>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Оценка -->
+    <form method="post" action="/games/{{ game.id }}/rate" class="d-flex align-items-center gap-2 mb-3">
+      <span class="text-muted small">Оценка:</span>
+      <select name="rating" class="form-select form-select-sm" style="width:auto" onchange="this.form.submit()">
+        <option value="0" {% if not game.rating %}selected{% endif %}>—</option>
+        {% for n in range(1, 11) %}<option value="{{ n }}" {% if game.rating == n %}selected{% endif %}>{{ n }}</option>{% endfor %}
+      </select>
+      {% if game.rating %}<span class="badge bg-warning text-dark fs-6">{{ game.rating }}/10</span>{% endif %}
+
+      <span class="text-muted small ms-3">Тир:</span>
+      <div class="btn-group btn-group-sm" id="tierBtns">
+        {% for t in tiers %}
+        <button type="button" class="btn {{ 'btn-dark' if tier == t else 'btn-outline-dark' }} tier-btn" data-tier="{{ t }}">{{ t }}</button>
+        {% endfor %}
+        <button type="button" class="btn btn-outline-secondary tier-btn" data-tier="">✕</button>
+      </div>
+    </form>
+
+    {% if game.description %}
+    <h6 class="text-muted">Описание</h6>
+    <p class="text-body" style="white-space:pre-line">{{ game.description }}</p>
+    {% endif %}
+
+    <!-- Комментарий -->
+    <h6 class="text-muted mt-3">Мой комментарий</h6>
+    <form method="post" action="/games/{{ game.id }}/comment">
+      <textarea name="comment" class="form-control mb-2" rows="3" placeholder="Впечатления, заметки…">{{ game.comment }}</textarea>
+      <button class="btn btn-sm btn-outline-primary">Сохранить комментарий</button>
+    </form>
+
+    <!-- Скриншоты -->
+    {% if game.screenshot_list %}
+    <h6 class="text-muted mt-4">Скриншоты</h6>
+    <div class="row g-2">
+      {% for s in game.screenshot_list %}
+      <div class="col-6 col-md-4 col-lg-3">
+        <a href="{{ s }}" target="_blank" rel="noopener"><img src="{{ s }}" class="w-100 rounded" loading="lazy" style="aspect-ratio:16/9;object-fit:cover" alt=""></a>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+document.querySelectorAll('.tier-btn').forEach(function (b) {
+  b.addEventListener('click', function () {
+    const fd = new FormData();
+    fd.append('game_id', '{{ game.id }}');
+    fd.append('tier', b.dataset.tier);
+    fetch('/games/tier-list/set', { method: 'POST', body: fd }).then(function () {
+      document.querySelectorAll('.tier-btn').forEach(function (x) {
+        x.classList.remove('btn-dark'); if (x.dataset.tier) x.classList.add('btn-outline-dark');
+      });
+      if (b.dataset.tier) { b.classList.remove('btn-outline-dark'); b.classList.add('btn-dark'); }
+    });
+  });
+});
+</script>
+{% endblock %}

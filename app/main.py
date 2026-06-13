@@ -14,7 +14,7 @@ from app.database import init_db
 from app.dependencies import get_current_user
 from app.logging_config import setup_logging, access_log, actions_log, error_log, db_log
 from app.services.security_service import client_ip
-from app.routers import auth, shelves, authors, series, books, opds, settings, links, admin, share, shared, dashboard, api, search, tags, highlights, feeds, pwa, audiobooks, tier_list, files, trash, manga, collections, stats
+from app.routers import auth, shelves, authors, series, books, opds, settings, links, admin, share, shared, dashboard, api, search, tags, highlights, feeds, pwa, audiobooks, tier_list, files, trash, manga, collections, stats, games
 
 app = FastAPI(title=APP_TITLE, docs_url=None, redoc_url=None)
 
@@ -84,6 +84,7 @@ app.include_router(trash.router)
 app.include_router(manga.router)
 app.include_router(collections.router)
 app.include_router(stats.router)
+app.include_router(games.router)
 
 templates = Jinja2Templates(directory="app/templates")
 

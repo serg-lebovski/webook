@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Тир-лист игр — WeBook{% endblock %}
+{% block head %}
+<style>
+  .tier-row { display:flex; align-items:stretch; border:1px solid var(--bs-border-color); border-radius:8px; margin-bottom:8px; overflow:hidden; }
+  .tier-label { width:64px; flex:0 0 64px; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:1.4rem; color:#fff; }
+  .tier-S{background:#e74c3c} .tier-A{background:#e67e22} .tier-B{background:#f1c40f;color:#333!important} .tier-C{background:#2ecc71} .tier-D{background:#3498db}
+  .tier-drop { flex:1; display:flex; flex-wrap:wrap; gap:6px; padding:8px; min-height:84px; }
+  .tier-unranked { border:1px dashed var(--bs-border-color); border-radius:8px; padding:8px; display:flex; flex-wrap:wrap; gap:6px; min-height:90px; }
+  .g-chip { width:120px; cursor:grab; }
+  .g-chip img, .g-chip .ph { width:100%; aspect-ratio:16/9; object-fit:cover; border-radius:6px; display:block; }
+  .g-chip .ph { background:linear-gradient(135deg,#6366f1,#8b5cf6); color:#fff; display:flex; align-items:center; justify-content:center; }
+  .g-chip .nm { font-size:.7rem; line-height:1.1; margin-top:2px; max-height:2.2em; overflow:hidden; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h2 class="mb-0"><i class="bi bi-bar-chart-steps me-2"></i>Тир-лист игр</h2>
+  <a href="/games" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>К списку</a>
+</div>
+<p class="text-muted small">Перетаскивайте игры между уровнями. Сохраняется автоматически.</p>
+
+{% macro chip(g) %}
+<div class="g-chip" draggable="true" data-id="{{ g.id }}">
+  <a href="/games/{{ g.id }}" draggable="false">
+    {% if g.cover_path %}<img src="/games/{{ g.id }}/cover" alt="">{% else %}<div class="ph"><i class="bi bi-controller"></i></div>{% endif %}
+  </a>
+  <div class="nm">{{ g.title }}</div>
+</div>
+{% endmacro %}
+
+{% for t in tiers %}
+<div class="tier-row">
+  <div class="tier-label tier-{{ t }}">{{ t }}</div>
+  <div class="tier-drop" data-tier="{{ t }}">
+    {% for g in buckets[t] %}{{ chip(g) }}{% endfor %}
+  </div>
+</div>
+{% endfor %}
+
+<h6 class="text-muted mt-4">Без уровня</h6>
+<div class="tier-unranked" data-tier="">
+  {% for g in unranked %}{{ chip(g) }}{% endfor %}
+</div>
+
+<script>
+let dragId = null;
+document.querySelectorAll('.g-chip').forEach(function (c) {
+  c.addEventListener('dragstart', function (e) { dragId = c.dataset.id; e.dataTransfer.effectAllowed = 'move'; });
+});
+document.querySelectorAll('.tier-drop, .tier-unranked').forEach(function (zone) {
+  zone.addEventListener('dragover', function (e) { e.preventDefault(); });
+  zone.addEventListener('drop', function (e) {
+    e.preventDefault();
+    if (!dragId) return;
+    const chip = document.querySelector('.g-chip[data-id="' + dragId + '"]');
+    if (chip) zone.appendChild(chip);
+    const fd = new FormData();
+    fd.append('game_id', dragId);
+    fd.append('tier', zone.dataset.tier);
+    fetch('/games/tier-list/set', { method: 'POST', body: fd });
+    dragId = null;
+  });
+});
+</script>
+{% endblock %}

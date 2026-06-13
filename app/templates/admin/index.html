@@ -82,6 +82,18 @@
               (сейчас: {% if user_quota_mb %}{{ user_quota_mb }} МБ{% else %}без ограничений{% endif %}).
             </div>
           </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold" for="steam_api_key">
+              <i class="bi bi-steam me-1"></i>Steam Web API key
+            </label>
+            <input type="text" class="form-control form-control-sm" autocomplete="off"
+                   name="steam_api_key" id="steam_api_key" value="{{ steam_api_key }}"
+                   placeholder="ключ с steamcommunity.com/dev/apikey">
+            <div class="form-text">
+              Нужен, чтобы для игр подтягивалось наигранное время из профилей Steam.
+              Пользователи указывают свою ссылку на профиль в своих настройках.
+            </div>
+          </div>
           <button type="submit" class="btn btn-primary btn-sm">
             <i class="bi bi-floppy me-1"></i>Сохранить
           </button>

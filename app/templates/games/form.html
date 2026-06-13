@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+{% block title %}{% if game %}Изменить игру{% else %}Добавить игру{% endif %} — WeBook{% endblock %}
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/games">Игры</a></li>
+    <li class="breadcrumb-item active">{% if game %}{{ game.title }}{% else %}Добавить{% endif %}</li>
+  </ol>
+</nav>
+
+<h2 class="mb-3"><i class="bi bi-controller me-2"></i>{% if game %}Изменить игру{% else %}Добавить игру{% endif %}</h2>
+
+<form method="post" action="{% if game %}/games/{{ game.id }}/edit{% else %}/games{% endif %}"
+      enctype="multipart/form-data" class="card card-body" style="max-width:820px" id="gform">
+
+  {% if not game %}
+  <div class="mb-3">
+    <label class="form-label small fw-semibold"><i class="bi bi-steam me-1"></i>Импорт из Steam (необязательно)</label>
+    <div class="input-group">
+      <input type="url" id="steamUrl" class="form-control" placeholder="https://store.steampowered.com/app/...">
+      <button type="button" class="btn btn-outline-primary" id="steamBtn">Подтянуть</button>
+    </div>
+    <div class="form-text" id="steamMsg">Вставьте ссылку на игру в Steam — название, описание, обложку и скриншоты подтянем автоматически. Или заполните всё вручную ниже.</div>
+  </div>
+  <hr>
+  {% endif %}
+
+  <div class="row g-3">
+    <div class="col-md-8">
+      <label class="form-label small fw-semibold">Название *</label>
+      <input name="title" id="title" class="form-control" required value="{{ game.title if game else '' }}">
+    </div>
+    <div class="col-md-4">
+      <label class="form-label small">Платформа</label>
+      <input name="platform" class="form-control" list="platforms" value="{{ game.platform if game else '' }}">
+      <datalist id="platforms">
+        {% for p in platforms %}<option value="{{ p }}">{% endfor %}
+      </datalist>
+    </div>
+
+    <div class="col-md-4">
+      <label class="form-label small">Статус</label>
+      <select name="status" class="form-select">
+        {% for key, label in statuses %}
+        <option value="{{ key }}" {% if game and game.status == key %}selected{% elif not game and key == 'want' %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-4">
+      <label class="form-label small">Оценка (1–10)</label>
+      <select name="rating" class="form-select">
+        <option value="">—</option>
+        {% for n in range(1, 11) %}
+        <option value="{{ n }}" {% if game and game.rating == n %}selected{% endif %}>{{ n }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-4">
+      <label class="form-label small">Год выхода</label>
+      <input name="release_year" id="release_year" class="form-control" value="{{ game.release_year or '' }}">
+    </div>
+
+    <div class="col-md-6">
+      <label class="form-label small">Жанры</label>
+      <input name="genres" id="genres" class="form-control" value="{{ game.genres if game else '' }}">
+    </div>
+    <div class="col-md-3">
+      <label class="form-label small">Metacritic</label>
+      <input name="metacritic" id="metacritic" class="form-control" value="{{ game.metacritic or '' }}">
+    </div>
+    <div class="col-md-3">
+      <label class="form-label small">Часов (HLTB)</label>
+      <div class="input-group">
+        <input name="hltb_main" id="hltb_main" class="form-control" value="{{ game.hltb_main or '' }}">
+        <button type="button" class="btn btn-outline-secondary" id="hltbBtn" title="Подтянуть с HowLongToBeat"><i class="bi bi-stopwatch"></i></button>
+      </div>
+    </div>
+    <input type="hidden" name="hltb_completionist" id="hltb_completionist" value="{{ game.hltb_completionist or '' }}">
+
+    <div class="col-12">
+      <label class="form-label small">Описание</label>
+      <textarea name="description" id="description" class="form-control" rows="4">{{ game.description if game else '' }}</textarea>
+    </div>
+    <div class="col-12">
+      <label class="form-label small">Комментарий (личный)</label>
+      <textarea name="comment" class="form-control" rows="2">{{ game.comment if game else '' }}</textarea>
+    </div>
+
+    <div class="col-md-6">
+      <label class="form-label small">Обложка (файл)</label>
+      <input type="file" name="cover" class="form-control" accept="image/*">
+      {% if game and game.cover_path %}<div class="form-text">Уже есть обложка — загрузите файл, чтобы заменить.</div>{% endif %}
+    </div>
+    <div class="col-md-6 d-flex align-items-end">
+      <div id="coverPrev" class="text-muted small">{% if game and game.cover_path %}<img src="/games/{{ game.id }}/cover" style="height:64px;border-radius:6px">{% endif %}</div>
+    </div>
+  </div>
+
+  <input type="hidden" name="steam_appid" id="steam_appid" value="{{ game.steam_appid or '' }}">
+  <input type="hidden" name="steam_url" id="steam_url" value="{{ game.steam_url if game else '' }}">
+  <input type="hidden" name="screenshots" id="screenshots" value="{{ game.screenshots if game else '' }}">
+  <input type="hidden" name="cover_url" id="cover_url" value="">
+
+  <div class="mt-3">
+    <button class="btn btn-success"><i class="bi bi-check-lg me-1"></i>Сохранить</button>
+    <a href="/games" class="btn btn-outline-secondary">Отмена</a>
+  </div>
+</form>
+
+<script>
+(function () {
+  const $ = id => document.getElementById(id);
+  const steamBtn = $('steamBtn');
+  if (steamBtn) steamBtn.addEventListener('click', async function () {
+    const url = $('steamUrl').value.trim();
+    if (!url) return;
+    $('steamMsg').textContent = 'Загрузка из Steam…';
+    try {
+      const r = await fetch('/games/steam-lookup?url=' + encodeURIComponent(url));
+      const d = await r.json();
+      if (d.error) { $('steamMsg').textContent = d.error; return; }
+      $('title').value = d.title || $('title').value;
+      $('description').value = d.description || '';
+      $('genres').value = d.genres || '';
+      if (d.release_year) $('release_year').value = d.release_year;
+      if (d.metacritic) $('metacritic').value = d.metacritic;
+      $('steam_appid').value = d.appid || '';
+      $('steam_url').value = d.steam_url || '';
+      $('screenshots').value = (d.screenshots || []).join('\n');
+      $('cover_url').value = d.cover_url || '';
+      if (d.cover_url) $('coverPrev').innerHTML = '<img src="' + d.cover_url + '" style="height:64px;border-radius:6px">';
+      $('steamMsg').textContent = 'Готово: данные подтянуты, проверьте и сохраните.';
+    } catch (e) { $('steamMsg').textContent = 'Ошибка запроса к Steam.'; }
+  });
+
+  const hltbBtn = $('hltbBtn');
+  if (hltbBtn) hltbBtn.addEventListener('click', async function () {
+    const t = $('title').value.trim();
+    if (!t) return;
+    hltbBtn.disabled = true;
+    try {
+      const r = await fetch('/games/hltb-lookup?title=' + encodeURIComponent(t));
+      const d = await r.json();
+      if (d.main) $('hltb_main').value = d.main;
+      if (d.completionist) $('hltb_completionist').value = d.completionist;
+      if (!d.main && !d.completionist) alert('HowLongToBeat не вернул данных — впишите часы вручную.');
+    } catch (e) { alert('Не удалось получить данные HLTB.'); }
+    finally { hltbBtn.disabled = false; }
+  });
+})();
+</script>
+{% endblock %}
