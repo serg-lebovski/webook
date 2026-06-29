@@ -116,6 +116,24 @@
     #fb2-scroll.theme-dark #fb2-content, #fb2-scroll.theme-dark #fb2-content p { color: #cfcfcf; }
     #fb2-scroll.theme-dark .fb2-title { color: #eee; }
     #fb2-scroll.theme-dark .fb2-subtitle { color: #bbb; }
+
+    /* Озвучка книги */
+    #fb2-content .tts-current {
+      background: rgba(37,99,235,.14);
+      box-shadow: -8px 0 0 rgba(37,99,235,.14);
+      border-radius: 4px;
+    }
+    .tts-panel {
+      position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%);
+      z-index: 1070; display: none; gap: .5rem; align-items: center;
+      background: var(--bs-body-bg, #fff); color: var(--bs-body-color, #222);
+      border: 1px solid rgba(0,0,0,.15); border-radius: 999px;
+      padding: .35rem .6rem; box-shadow: 0 4px 18px rgba(0,0,0,.22);
+      max-width: 95vw; flex-wrap: wrap; justify-content: center;
+    }
+    .tts-panel.show { display: flex; }
+    .tts-panel button { border: none; background: transparent; cursor: pointer; font-size: 1.15rem; color: inherit; padding: .15rem .35rem; }
+    .tts-panel select { font-size: .8rem; padding: .1rem .2rem; border-radius: 6px; }
   </style>
 </head>
 <body>
@@ -125,6 +143,7 @@
   <span class="r-title">{{ book.title }}</span>
   <span class="badge bg-secondary font-monospace">{{ book.file_format | upper }}</span>
   {% if book.file_format in ("epub", "fb2") %}
+  <a href="#" id="ttsBtn" title="Озвучка"><i class="bi bi-volume-up fs-5"></i></a>
   <a href="#" id="setBtn" title="Настройки чтения"><i class="bi bi-fonts fs-5"></i></a>
   {% endif %}
   <a href="/books/{{ book.id }}/download" title="Скачать файл"><i class="bi bi-download fs-5"></i></a>
@@ -158,6 +177,21 @@
       <button data-theme="dark">Тёмная</button>
     </div>
   </div>
+</div>
+{% endif %}
+
+{% if book.file_format in ("epub", "fb2") %}
+<div class="tts-panel" id="ttsPanel">
+  <button id="tts-play" title="Озвучить"><i class="bi bi-play-fill"></i></button>
+  <button id="tts-pause" title="Пауза" style="display:none"><i class="bi bi-pause-fill"></i></button>
+  <button id="tts-stop" title="Стоп"><i class="bi bi-stop-fill"></i></button>
+  <select id="tts-rate" title="Скорость">
+    <option value="0.7">0.7×</option><option value="0.85">0.85×</option>
+    <option value="1" selected>1×</option><option value="1.15">1.15×</option>
+    <option value="1.3">1.3×</option><option value="1.5">1.5×</option>
+  </select>
+  <select id="tts-voice" title="Голос" style="max-width:150px"></select>
+  <span id="tts-status" class="small text-muted"></span>
 </div>
 {% endif %}
 
@@ -245,6 +279,7 @@ window.RS = (function () {
     height: viewer.parentElement.offsetHeight || window.innerHeight - 50,
     spread: "none"
   });
+  window.__epub = { book: book, rendition: rendition };  // для озвучки
 
   // темы и применение пользовательских настроек чтения
   rendition.themes.register("light", { "body": { "background": "#ffffff", "color": "#111" } });
@@ -378,6 +413,191 @@ window.RS = (function () {
   if (el && window.WebookHighlighter) {
     WebookHighlighter.init({ container: el, resourceType: 'book', resourceId: {{ book.id }} });
   }
+})();
+</script>
+{% endif %}
+
+{% if book.file_format in ("epub", "fb2") %}
+<script>
+// ── Озвучка книги (browser SpeechSynthesis) ──────────────────────────
+(function () {
+  if (!("speechSynthesis" in window)) { var tb = document.getElementById("ttsBtn"); if (tb) tb.style.display = "none"; return; }
+  var FMT = "{{ book.file_format }}";
+  var BOOK_ID = {{ book.id }};
+  var POS_KEY = "ttspos_book_" + BOOK_ID;
+  var PREF = "tts_book";
+  var synth = window.speechSynthesis;
+  var voices = [];
+  var speaking = false, curBlock = -1, keepAlive = null;
+  var panel = document.getElementById("ttsPanel");
+  var btn = document.getElementById("ttsBtn");
+  var rateSel = document.getElementById("tts-rate"), voiceSel = document.getElementById("tts-voice");
+  var statusEl = document.getElementById("tts-status");
+
+  function loadVoices() {
+    voices = synth.getVoices();
+    var saved = {}; try { saved = JSON.parse(localStorage.getItem(PREF) || "{}"); } catch (e) {}
+    voiceSel.innerHTML = "";
+    var ru = voices.filter(function (v) { return v.lang && v.lang.toLowerCase().indexOf("ru") === 0; });
+    var all = ru.length ? ru : voices;
+    all.forEach(function (v) {
+      var o = document.createElement("option");
+      o.value = v.name; o.textContent = v.name.replace(/Microsoft|Google/gi, "").trim() + (v.lang !== "ru-RU" ? " (" + v.lang + ")" : "");
+      voiceSel.appendChild(o);
+    });
+    if (!all.length) voiceSel.innerHTML = "<option>Нет голосов</option>";
+    if (saved.voice) voiceSel.value = saved.voice;
+    if (saved.rate) rateSel.value = saved.rate;
+  }
+  synth.onvoiceschanged = loadVoices; loadVoices();
+  function savePref() { localStorage.setItem(PREF, JSON.stringify({ voice: voiceSel.value, rate: rateSel.value })); }
+
+  function chunkText(text) {
+    var parts = text.replace(/\s+/g, " ").trim().match(/[^.!?…]+[.!?…]*\s*|\S+\s*/g) || [];
+    var out = [], buf = "";
+    parts.forEach(function (p) {
+      if ((buf + p).length > 200 && buf) { out.push(buf.trim()); buf = ""; }
+      buf += p;
+      if (buf.length > 220) { out.push(buf.trim()); buf = ""; }
+    });
+    if (buf.trim()) out.push(buf.trim());
+    return out.length ? out : [text];
+  }
+  function applyVoice(u) {
+    u.lang = "ru-RU"; u.rate = parseFloat(rateSel.value) || 1;
+    var v = voices.find(function (x) { return x.name === voiceSel.value; });
+    if (v) u.voice = v;
+  }
+  function startKeepAlive() { clearInterval(keepAlive); keepAlive = setInterval(function () { if (speaking && !synth.paused) { synth.pause(); synth.resume(); } }, 12000); }
+  function setPlaying(p) {
+    document.getElementById("tts-play").style.display = p ? "none" : "";
+    document.getElementById("tts-pause").style.display = p ? "" : "none";
+  }
+
+  // ── FB2: по абзацам ──
+  var blocks = [], queue = [], qi = 0;
+  function fb2Build() {
+    var root = document.getElementById("fb2-content");
+    blocks = []; queue = [];
+    if (!root) return;
+    root.querySelectorAll("p, h1, h2, h3, h4, li, blockquote, .fb2-title, .fb2-subtitle").forEach(function (el) {
+      var t = (el.innerText || "").trim();
+      if (t) blocks.push({ el: el, text: t });
+    });
+    blocks.forEach(function (b, bi) { chunkText(b.text).forEach(function (t) { queue.push({ bi: bi, text: t }); }); });
+  }
+  function fb2Highlight(bi) {
+    if (bi === curBlock) return;
+    if (blocks[curBlock]) blocks[curBlock].el.classList.remove("tts-current");
+    curBlock = bi;
+    var b = blocks[bi];
+    if (b) {
+      b.el.classList.add("tts-current");
+      b.el.scrollIntoView({ behavior: "smooth", block: "center" });
+      localStorage.setItem(POS_KEY, String(bi));
+      statusEl.textContent = "Абзац " + (bi + 1) + " из " + blocks.length;
+    }
+  }
+  function fb2Speak() {
+    if (!speaking) return;
+    if (qi >= queue.length) { stop(); return; }
+    var item = queue[qi]; fb2Highlight(item.bi);
+    var u = new SpeechSynthesisUtterance(item.text); applyVoice(u);
+    u.onend = function () { if (speaking) { qi++; fb2Speak(); } };
+    u.onerror = function () { if (speaking) { qi++; fb2Speak(); } };
+    synth.speak(u);
+  }
+  function fb2Start() {
+    synth.cancel(); fb2Build();
+    if (!queue.length) { alert("Нет текста для озвучки"); return; }
+    var startBi = parseInt(localStorage.getItem(POS_KEY) || "-1", 10);
+    if (!(startBi >= 0 && startBi < blocks.length)) {
+      var sc = document.getElementById("fb2-scroll"); startBi = 0;
+      for (var i = 0; i < blocks.length; i++) {
+        var r = blocks[i].el.getBoundingClientRect();
+        if (r.bottom > 80) { startBi = i; break; }
+      }
+    }
+    qi = queue.findIndex(function (q) { return q.bi === startBi; }); if (qi < 0) qi = 0;
+    speaking = true; setPlaying(true); startKeepAlive(); fb2Speak();
+  }
+  // клик по абзацу во время озвучки — перейти
+  if (FMT === "fb2") {
+    var fc = document.getElementById("fb2-content");
+    if (fc) fc.addEventListener("click", function (e) {
+      if (!speaking) return;
+      if (window.getSelection && String(window.getSelection())) return;
+      var el = e.target.closest("p, h2, h3, h4, li, blockquote, .fb2-title, .fb2-subtitle");
+      if (!el) return;
+      var bi = blocks.findIndex(function (b) { return b.el === el; });
+      if (bi < 0) return;
+      qi = queue.findIndex(function (q) { return q.bi === bi; }); if (qi < 0) return;
+      synth.cancel(); fb2Speak();
+    });
+  }
+
+  // ── EPUB: по главам ──
+  var epSection = 0, epQueue = [], epi = 0;
+  function epReadSection(index) {
+    var ep = window.__epub; if (!ep) { alert("Книга ещё грузится, попробуйте через секунду"); return; }
+    var spine = ep.book.spine;
+    var total = (spine.spineItems || []).length;
+    if (index < 0 || index >= total) { stop(); return; }
+    epSection = index;
+    var section = spine.get(index);
+    try { ep.rendition.display(section.href); } catch (e) {}
+    statusEl.textContent = "Глава " + (index + 1) + " из " + total;
+    section.load(ep.book.load.bind(ep.book)).then(function (doc) {
+      var texts = [];
+      doc.querySelectorAll("p, h1, h2, h3, h4, li, blockquote").forEach(function (p) {
+        var t = (p.textContent || "").trim(); if (t) texts.push(t);
+      });
+      try { section.unload(); } catch (e) {}
+      epQueue = [];
+      texts.forEach(function (t) { chunkText(t).forEach(function (c) { epQueue.push(c); }); });
+      epi = 0;
+      localStorage.setItem(POS_KEY, "s" + index);
+      if (!epQueue.length) { epReadSection(index + 1); return; }
+      epSpeak();
+    }).catch(function () { epReadSection(index + 1); });
+  }
+  function epSpeak() {
+    if (!speaking) return;
+    if (epi >= epQueue.length) { epReadSection(epSection + 1); return; }
+    var u = new SpeechSynthesisUtterance(epQueue[epi]); applyVoice(u);
+    u.onend = function () { if (speaking) { epi++; epSpeak(); } };
+    u.onerror = function () { if (speaking) { epi++; epSpeak(); } };
+    synth.speak(u);
+  }
+  function epStart() {
+    synth.cancel();
+    var ep = window.__epub; if (!ep) { alert("Книга ещё грузится, попробуйте ещё раз"); return; }
+    var start = 0;
+    var saved = localStorage.getItem(POS_KEY) || "";
+    if (saved.charAt(0) === "s") start = parseInt(saved.slice(1), 10) || 0;
+    else { try { start = ep.rendition.currentLocation().start.index || 0; } catch (e) { start = 0; } }
+    speaking = true; setPlaying(true); startKeepAlive(); epReadSection(start);
+  }
+
+  // ── Общие кнопки ──
+  function play() {
+    if (synth.paused && speaking) { synth.resume(); setPlaying(true); startKeepAlive(); return; }
+    if (FMT === "fb2") fb2Start(); else epStart();
+  }
+  function pause() { synth.pause(); setPlaying(false); clearInterval(keepAlive); }
+  function stop() {
+    speaking = false; synth.cancel(); clearInterval(keepAlive);
+    if (blocks[curBlock]) blocks[curBlock].el.classList.remove("tts-current");
+    curBlock = -1; setPlaying(false); statusEl.textContent = "";
+  }
+
+  btn.addEventListener("click", function (e) { e.preventDefault(); panel.classList.toggle("show"); });
+  document.getElementById("tts-play").addEventListener("click", play);
+  document.getElementById("tts-pause").addEventListener("click", pause);
+  document.getElementById("tts-stop").addEventListener("click", stop);
+  rateSel.addEventListener("change", function () { savePref(); if (speaking && !synth.paused) { synth.cancel(); FMT === "fb2" ? fb2Speak() : epSpeak(); } });
+  voiceSel.addEventListener("change", function () { savePref(); if (speaking && !synth.paused) { synth.cancel(); FMT === "fb2" ? fb2Speak() : epSpeak(); } });
+  window.addEventListener("beforeunload", function () { synth.cancel(); });
 })();
 </script>
 {% endif %}

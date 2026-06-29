@@ -36,6 +36,13 @@
     border-bottom: 1px solid var(--bs-border-color);
     padding: .5rem 0;
   }
+  .reader-content .tts-current {
+    background: rgba(37, 99, 235, .12);
+    box-shadow: -8px 0 0 rgba(37, 99, 235, .12);
+    border-radius: 4px;
+  }
+  body.tts-on #article-text p, body.tts-on #article-text li,
+  body.tts-on #article-text blockquote { cursor: pointer; }
 </style>
 {% endblock %}
 
@@ -181,15 +188,23 @@
   });
 })();
 
+// ── Озвучка статьи по абзацам (browser SpeechSynthesis) ──────────────
 const synth = window.speechSynthesis;
-let utter = null;
 let voices = [];
+let blocks = [];        // [{el, text}] — абзацы статьи
+let queue = [];         // [{bi, text}] — короткие фразы для надёжности
+let qi = 0;
+let speaking = false;   // активна ли озвучка (вкл. паузу)
+let curBlock = -1;
+let keepAlive = null;
+const TTS_PREF = 'tts_article';
 
 function loadVoices() {
   voices = synth.getVoices();
   const sel = document.getElementById('tts-voice');
+  const saved = JSON.parse(localStorage.getItem(TTS_PREF) || '{}');
   sel.innerHTML = '';
-  const ru = voices.filter(v => v.lang.startsWith('ru'));
+  const ru = voices.filter(v => v.lang && v.lang.toLowerCase().startsWith('ru'));
   const all = ru.length ? ru : voices;
   all.forEach(v => {
     const opt = document.createElement('option');
@@ -197,58 +212,145 @@ function loadVoices() {
     opt.textContent = v.name + (v.lang !== 'ru-RU' ? ` (${v.lang})` : '');
     sel.appendChild(opt);
   });
-  if (!all.length) {
-    sel.innerHTML = '<option>Нет голосов</option>';
-  }
+  if (!all.length) sel.innerHTML = '<option>Нет голосов</option>';
+  if (saved.voice) sel.value = saved.voice;
+  if (saved.rate) document.getElementById('tts-rate').value = saved.rate;
 }
-
 synth.onvoiceschanged = loadVoices;
 loadVoices();
 
-function getText() {
-  const el = document.getElementById('article-text');
-  return el ? el.innerText : '';
+function savePref() {
+  localStorage.setItem(TTS_PREF, JSON.stringify({
+    voice: document.getElementById('tts-voice').value,
+    rate: document.getElementById('tts-rate').value,
+  }));
+}
+
+// Разбивка длинного абзаца на короткие фразы — обходит обрыв TTS в Chrome
+function chunkText(text) {
+  const parts = text.replace(/\s+/g, ' ').trim().match(/[^.!?…]+[.!?…]*\s*|\S+\s*/g) || [];
+  const out = [];
+  let buf = '';
+  for (const p of parts) {
+    if ((buf + p).length > 200 && buf) { out.push(buf.trim()); buf = ''; }
+    buf += p;
+    if (buf.length > 220) { out.push(buf.trim()); buf = ''; }
+  }
+  if (buf.trim()) out.push(buf.trim());
+  return out.length ? out : [text];
+}
+
+function buildQueue() {
+  const root = document.getElementById('article-text');
+  blocks = []; queue = [];
+  const title = document.querySelector('.reader-content > h1');
+  if (title && title.innerText.trim()) blocks.push({ el: title, text: title.innerText.trim() });
+  if (root) {
+    root.querySelectorAll('p, h2, h3, h4, li, blockquote').forEach(el => {
+      const t = el.innerText.trim();
+      if (t) blocks.push({ el, text: t });
+    });
+  }
+  blocks.forEach((b, bi) => chunkText(b.text).forEach(t => queue.push({ bi, text: t })));
+}
+
+function highlight(bi) {
+  if (bi === curBlock) return;
+  if (blocks[curBlock]) blocks[curBlock].el.classList.remove('tts-current');
+  curBlock = bi;
+  const b = blocks[bi];
+  if (b) {
+    b.el.classList.add('tts-current');
+    const r = b.el.getBoundingClientRect();
+    if (r.top < 80 || r.bottom > window.innerHeight - 40) {
+      b.el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }
+}
+
+function speakNext() {
+  if (!speaking) return;
+  if (qi >= queue.length) { ttsStop(); return; }
+  const item = queue[qi];
+  highlight(item.bi);
+  const u = new SpeechSynthesisUtterance(item.text);
+  u.lang = 'ru-RU';
+  u.rate = parseFloat(document.getElementById('tts-rate').value) || 1;
+  const v = voices.find(x => x.name === document.getElementById('tts-voice').value);
+  if (v) u.voice = v;
+  u.onend = () => { if (speaking) { qi++; speakNext(); } };
+  u.onerror = () => { if (speaking) { qi++; speakNext(); } };
+  synth.speak(u);
 }
 
 function ttsPlay() {
-  if (synth.paused) { synth.resume(); _setState('playing'); return; }
-  ttsStop();
-  const text = getText();
-  if (!text.trim()) { alert('Нет текста для озвучки'); return; }
-  utter = new SpeechSynthesisUtterance(text);
-  utter.lang = 'ru-RU';
-  utter.rate = parseFloat(document.getElementById('tts-rate').value);
-  const vName = document.getElementById('tts-voice').value;
-  const v = voices.find(v => v.name === vName);
-  if (v) utter.voice = v;
-  utter.onend = () => _setState('stopped');
-  utter.onerror = () => _setState('stopped');
-  synth.speak(utter);
+  if (synth.paused && speaking) { synth.resume(); _setState('playing'); startKeepAlive(); return; }
+  synth.cancel();
+  buildQueue();
+  if (!queue.length) { alert('Нет текста для озвучки'); return; }
+  // старт с абзаца у верхней кромки экрана
+  let startBi = 0;
+  for (let i = 0; i < blocks.length; i++) {
+    if (blocks[i].el.getBoundingClientRect().top > 70) { startBi = i; break; }
+  }
+  qi = queue.findIndex(q => q.bi === startBi); if (qi < 0) qi = 0;
+  speaking = true;
+  document.body.classList.add('tts-on');
   _setState('playing');
+  startKeepAlive();
+  speakNext();
 }
 
-function ttsPause() {
-  synth.pause();
-  _setState('paused');
+function startKeepAlive() {  // Chrome засыпает на длинной озвучке — будим
+  clearInterval(keepAlive);
+  keepAlive = setInterval(() => { if (speaking && !synth.paused) { synth.pause(); synth.resume(); } }, 12000);
 }
+
+function ttsPause() { synth.pause(); _setState('paused'); clearInterval(keepAlive); }
 
 function ttsStop() {
+  speaking = false;
   synth.cancel();
+  clearInterval(keepAlive);
+  if (blocks[curBlock]) blocks[curBlock].el.classList.remove('tts-current');
+  curBlock = -1;
+  document.body.classList.remove('tts-on');
   _setState('stopped');
 }
+
+// клик по абзацу во время озвучки — перейти к нему
+document.addEventListener('click', function (e) {
+  if (!speaking) return;                       // только когда озвучка активна
+  const root = document.getElementById('article-text');
+  if (!root) return;
+  if (e.target.closest('a')) return;           // не перехватываем ссылки
+  const el = e.target.closest('p, h2, h3, h4, li, blockquote');
+  if (!el || !root.contains(el)) return;
+  if (window.getSelection && String(window.getSelection())) return; // не мешаем выделению цитат
+  const bi = blocks.findIndex(b => b.el === el);
+  if (bi < 0) return;
+  qi = queue.findIndex(q => q.bi === bi); if (qi < 0) return;
+  synth.cancel(); _setState('playing'); startKeepAlive(); speakNext();
+});
+
+document.getElementById('tts-rate').addEventListener('change', function () {
+  savePref();
+  if (speaking && !synth.paused) { synth.cancel(); speakNext(); } // применить скорость сразу
+});
+document.getElementById('tts-voice').addEventListener('change', function () {
+  savePref();
+  if (speaking && !synth.paused) { synth.cancel(); speakNext(); }
+});
+window.addEventListener('beforeunload', () => synth.cancel());
 
 function _setState(state) {
   document.getElementById('tts-play').classList.toggle('d-none', state === 'playing');
   document.getElementById('tts-pause').classList.toggle('d-none', state !== 'playing');
   document.getElementById('tts-stop').classList.toggle('d-none', state === 'stopped');
-  if (state === 'paused') {
-    document.getElementById('tts-play').classList.remove('d-none');
-    document.getElementById('tts-play').innerHTML = '<i class="bi bi-play-fill me-1"></i>Продолжить';
-  } else if (state === 'playing') {
-    document.getElementById('tts-play').innerHTML = '<i class="bi bi-play-fill me-1"></i>Озвучить';
-  } else {
-    document.getElementById('tts-play').innerHTML = '<i class="bi bi-play-fill me-1"></i>Озвучить';
-  }
+  const play = document.getElementById('tts-play');
+  play.innerHTML = (state === 'paused')
+    ? '<i class="bi bi-play-fill me-1"></i>Продолжить'
+    : '<i class="bi bi-play-fill me-1"></i>Озвучить';
 }
 </script>
 <script src="/static/highlighter.js"></script>
