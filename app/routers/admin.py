@@ -14,7 +14,7 @@ from app.models.login_attempt import IpBan, LoginAttempt
 from app.services.auth_service import hash_password
 from app.services.settings_service import get_setting, set_setting
 from app.logging_config import auth_log
-from app.config import LOGS_DIR
+from app.config import LOGS_DIR, UPDATE_DIR
 
 router = APIRouter(prefix="/admin")
 templates = Jinja2Templates(directory="app/templates")
@@ -137,6 +137,46 @@ def _require_admin(user: User):
         raise HTTPException(status_code=403, detail="Только для администраторов")
 
 
+def _read_update_state() -> dict:
+    """Текущая версия (из version.json) и статус последнего обновления (status.json).
+
+    Файлы пишет host-watcher / deploy.sh в смонтированный каталог UPDATE_DIR.
+    """
+    import json
+    info = {"version": None, "status": None, "queued": False}
+    try:
+        vf = UPDATE_DIR / "version.json"
+        if vf.is_file():
+            info["version"] = json.loads(vf.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    try:
+        sf = UPDATE_DIR / "status.json"
+        if sf.is_file():
+            info["status"] = json.loads(sf.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    info["queued"] = (UPDATE_DIR / "trigger").exists()
+    return info
+
+
+@router.post("/update")
+def trigger_update(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Запросить обновление: пишем файл-триггер, host-watcher выполнит git pull + rebuild."""
+    _require_admin(user)
+    try:
+        UPDATE_DIR.mkdir(parents=True, exist_ok=True)
+        (UPDATE_DIR / "trigger").write_text(datetime.utcnow().isoformat(), encoding="utf-8")
+        import json
+        (UPDATE_DIR / "status.json").write_text(
+            json.dumps({"state": "queued", "at": datetime.utcnow().isoformat()}),
+            encoding="utf-8")
+        auth_log.info("update requested by %s", user.username)
+        return RedirectResponse("/admin?success=update_queued", status_code=302)
+    except Exception as e:
+        return RedirectResponse(f"/admin?error=update_failed", status_code=302)
+
+
 def _cleanup(path: str):
     if path and os.path.exists(path):
         os.unlink(path)
@@ -221,6 +261,7 @@ def admin_page(
         "system": system,
         "now": datetime.utcnow(),
         "bans": bans,
+        "update": _read_update_state(),
     })
 
 

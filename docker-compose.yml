@@ -33,6 +33,7 @@ services:
       - ./manga:/app/manga
       - ./logs:/app/logs
       - ./backups:/app/backups:ro
+      - ./update:/app/update
     env_file:
       - .env
     depends_on:
