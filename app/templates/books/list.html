@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Библиотека — WeBook{% endblock %}
+{% block title %}Книги — WeBook{% endblock %}
 
 {% block head %}
 <style>
@@ -25,20 +25,48 @@
   .lib-title, .lib-author { overflow:hidden; text-overflow:ellipsis; }
   .lib-cover-ph { display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg,#667eea,#764ba2); color:#fff; }
   .lib-grid .lib-cover-ph { font-size:2rem; }
+
+  .shelf-chips { display:flex; gap:.4rem; overflow-x:auto; padding-bottom:.3rem; }
+  .shelf-chips .chip { flex:none; white-space:nowrap; }
+
+  .lib-actions { display:none; }
+  .lib-list .lib-cell .lib-actions {
+    display:flex; align-items:center; gap:.3rem; flex:none;
+    opacity:0; pointer-events:none; transition:opacity .12s; margin-left:.4rem;
+  }
+  .lib-list .lib-cell:hover .lib-actions { opacity:1; pointer-events:auto; }
+  .lib-actions .lib-stars button { font-size:.8rem; line-height:1; }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-  <h2 class="mb-0"><i class="bi bi-collection me-2"></i>{% if type == 'audio' %}Аудиокниги{% elif favorite %}Избранное{% elif reading %}Хочу прочитать{% else %}Библиотека{% endif %}</h2>
-  <a href="/books/upload" class="btn btn-primary"><i class="bi bi-cloud-upload me-1"></i>Загрузить</a>
+  <h2 class="mb-0"><i class="bi bi-collection me-2"></i>{% if type == 'audio' %}Аудиокниги{% elif favorite %}Избранное{% elif reading %}Хочу прочитать{% else %}Книги{% endif %}</h2>
 </div>
 
+{% if type != 'audio' %}
+<div class="shelf-chips mb-3">
+  <a href="/books?{{ all_shelf_qs }}" class="btn btn-sm chip {% if not shelf_id %}btn-primary{% else %}btn-outline-secondary{% endif %}">Все полки</a>
+  {% for sc in shelf_chips %}
+  <a href="/books?{{ sc.qs }}" class="btn btn-sm chip {% if shelf_id == sc.id %}btn-primary{% else %}btn-outline-secondary{% endif %}">{{ sc.name }}</a>
+  {% endfor %}
+  <a href="/shelves" class="btn btn-sm btn-outline-secondary chip" title="Управление полками"><i class="bi bi-gear"></i></a>
+</div>
+{% endif %}
+
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-  <div class="btn-group btn-group-sm" role="group">
-    <a href="/books{% if q %}?q={{ q|urlencode }}{% endif %}" class="btn btn-outline-secondary {% if type == 'all' %}active{% endif %}">Все</a>
-    <a href="/books?type=book{% if q %}&q={{ q|urlencode }}{% endif %}" class="btn btn-outline-secondary {% if type == 'book' %}active{% endif %}"><i class="bi bi-book me-1"></i>Книги</a>
-    <a href="/books?type=audio{% if q %}&q={{ q|urlencode }}{% endif %}" class="btn btn-outline-secondary {% if type == 'audio' %}active{% endif %}"><i class="bi bi-headphones me-1"></i>Аудио</a>
+  <div class="d-flex flex-wrap gap-2">
+    <div class="btn-group btn-group-sm" role="group">
+      <a href="/books{% if q %}?q={{ q|urlencode }}{% endif %}" class="btn btn-outline-secondary {% if type == 'all' %}active{% endif %}">Все</a>
+      <a href="/books?type=book{% if q %}&q={{ q|urlencode }}{% endif %}" class="btn btn-outline-secondary {% if type == 'book' %}active{% endif %}"><i class="bi bi-book me-1"></i>Книги</a>
+      <a href="/books?type=audio{% if q %}&q={{ q|urlencode }}{% endif %}" class="btn btn-outline-secondary {% if type == 'audio' %}active{% endif %}"><i class="bi bi-headphones me-1"></i>Аудио</a>
+    </div>
+    {% if type != 'audio' %}
+    <div class="btn-group btn-group-sm" role="group">
+      <a href="/books?{{ fav_qs }}" class="btn btn-outline-secondary {% if favorite %}active{% endif %}" title="Избранное"><i class="bi bi-heart-fill text-danger"></i> Избранное</a>
+      <a href="/books?{{ reading_qs }}" class="btn btn-outline-secondary {% if reading %}active{% endif %}" title="Хочу прочитать"><i class="bi bi-bookmark-check"></i> Хочу прочитать</a>
+    </div>
+    {% endif %}
   </div>
   <div class="btn-group btn-group-sm" role="group" aria-label="Вид">
     <button type="button" class="btn btn-outline-secondary" id="viewGrid" title="Сетка"><i class="bi bi-grid-3x3-gap"></i></button>
@@ -49,31 +77,22 @@
 {% if type != 'audio' %}
 <form method="get" class="row g-2 mb-3">
   <input type="hidden" name="type" value="{{ type }}">
+  {% if favorite %}<input type="hidden" name="favorite" value="1">{% endif %}
+  {% if reading %}<input type="hidden" name="reading" value="1">{% endif %}
+  {% if shelf_id %}<input type="hidden" name="shelf_id" value="{{ shelf_id }}">{% endif %}
+  {% if tag %}<input type="hidden" name="tag" value="{{ tag }}">{% endif %}
   <div class="col-sm-6 col-md-4">
     <input type="text" name="q" class="form-control form-control-sm" placeholder="Поиск по названию…" value="{{ q }}">
   </div>
-  <div class="col-sm-4 col-md-3">
-    <select name="shelf_id" class="form-select form-select-sm">
-      <option value="">Все полки</option>
-      {% for s in shelves %}<option value="{{ s.id }}" {% if s.id == shelf_id %}selected{% endif %}>{{ s.name }}</option>{% endfor %}
-    </select>
-  </div>
-  {% if tag %}<input type="hidden" name="tag" value="{{ tag }}">{% endif %}
   <div class="col-auto">
     <select name="sort" class="form-select form-select-sm">
       <option value="">По названию</option>
       <option value="rating" {% if sort == 'rating' %}selected{% endif %}>По оценке</option>
     </select>
   </div>
-  <div class="col-auto d-flex align-items-center">
-    <div class="form-check mb-0">
-      <input class="form-check-input" type="checkbox" name="favorite" value="1" id="favOnly" {% if favorite %}checked{% endif %}>
-      <label class="form-check-label small" for="favOnly"><i class="bi bi-heart-fill text-danger"></i></label>
-    </div>
-  </div>
   <div class="col-auto">
     <button type="submit" class="btn btn-sm btn-outline-secondary">Найти</button>
-    {% if q or shelf_id or tag or favorite or sort %}<a href="/books" class="btn btn-sm btn-outline-danger ms-1">✕</a>{% endif %}
+    {% if q or shelf_id or tag or favorite or reading or sort %}<a href="/books" class="btn btn-sm btn-outline-danger ms-1">✕</a>{% endif %}
   </div>
 </form>
 {% endif %}
@@ -124,6 +143,45 @@
         </div>
       </div>
     </a>
+    {% if it.kind == 'book' %}
+    <div class="lib-actions">
+      <div class="lib-stars d-flex align-items-center">
+        {% for n in range(1, 6) %}
+        <form method="post" action="/books/{{ it.id }}/rate" class="d-inline">
+          <input type="hidden" name="rating" value="{{ n }}">
+          <input type="hidden" name="next" value="{{ current_url }}">
+          <button type="submit" class="btn btn-link p-0 border-0 text-warning lh-1" title="Оценка {{ n }}">
+            <i class="bi bi-star{% if it.rating and it.rating >= n %}-fill{% endif %}"></i>
+          </button>
+        </form>
+        {% endfor %}
+      </div>
+      {% if it.fmt %}
+      <a href="/books/{{ it.id }}/download" class="btn btn-sm btn-outline-secondary py-0 px-1" title="Скачать">
+        <i class="bi bi-download"></i>
+      </a>
+      {% endif %}
+      <div class="dropdown">
+        <button class="btn btn-sm btn-outline-secondary py-0 px-1 dropdown-toggle" type="button" data-bs-toggle="dropdown" title="Статус">
+          <i class="bi bi-flag"></i>
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end">
+          <li>
+            <form method="post" action="/books/{{ it.id }}/toggle-read">
+              <input type="hidden" name="next" value="{{ current_url }}">
+              <button type="submit" class="dropdown-item"><i class="bi bi-check2-circle me-2"></i>{% if it.is_read %}Убрать «прочитано»{% else %}Отметить прочитанной{% endif %}</button>
+            </form>
+          </li>
+          <li>
+            <form method="post" action="/books/{{ it.id }}/reading">
+              <input type="hidden" name="next" value="{{ current_url }}">
+              <button type="submit" class="dropdown-item"><i class="bi bi-bookmark-check me-2"></i>{% if it.in_reading_list %}Убрать из «хочу прочитать»{% else %}В «хочу прочитать»{% endif %}</button>
+            </form>
+          </li>
+        </ul>
+      </div>
+    </div>
+    {% endif %}
   </div>
   {% endfor %}
 </div>

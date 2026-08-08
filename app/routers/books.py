@@ -218,11 +218,19 @@ def books_list(
     page = min(max(1, page), total_pages)
     items = items[(page - 1) * BOOKS_PER_PAGE: page * BOOKS_PER_PAGE]
 
-    base_qs = urlencode({k: v for k, v in
-                         {"shelf_id": shelf_id or "", "author_id": author_id or "",
-                          "q": q, "tag": tag, "favorite": favorite or "", "reading": reading or "",
-                          "sort": sort, "type": type_ if type_ != "all" else ""}.items() if v})
-    shelves = db.query(Shelf).filter(Shelf.user_id == user.id).all()
+    def _filters_qs(**overrides):
+        vals = {"shelf_id": shelf_id, "author_id": author_id, "q": q, "tag": tag,
+                "favorite": favorite, "reading": reading, "sort": sort,
+                "type": type_ if type_ != "all" else ""}
+        vals.update(overrides)
+        return urlencode({k: v for k, v in vals.items() if v})
+
+    base_qs = _filters_qs()
+    fav_qs = _filters_qs(favorite=0 if favorite else 1)
+    reading_qs = _filters_qs(reading=0 if reading else 1)
+    all_shelf_qs = _filters_qs(shelf_id=0)
+    shelves = db.query(Shelf).filter(Shelf.user_id == user.id).order_by(Shelf.sort_order, Shelf.name).all()
+    shelf_chips = [{"id": s.id, "name": s.name, "qs": _filters_qs(shelf_id=s.id)} for s in shelves]
 
     # books shared with this user (shown as a separate section)
     shared_books = []
@@ -240,9 +248,13 @@ def books_list(
                 sq = sq.filter(Book.title.ilike(f"%{q}%"))
             shared_books = sq.order_by(Book.title).all()
 
+    current_url = f"/books{('?' + base_qs) if base_qs else ''}{('&' if base_qs else '?') + 'page=' + str(page) if page > 1 else ''}"
+
     return templates.TemplateResponse(
         "books/list.html",
         {"request": request, "user": user, "items": items, "shelves": shelves,
+         "shelf_chips": shelf_chips, "all_shelf_qs": all_shelf_qs,
+         "fav_qs": fav_qs, "reading_qs": reading_qs, "current_url": current_url,
          "q": q, "shelf_id": shelf_id, "tag": tag, "favorite": favorite, "reading": reading, "sort": sort,
          "type": type_, "shared_books": shared_books,
          "page": page, "total_pages": total_pages, "total": total, "base_qs": base_qs},
@@ -610,37 +622,41 @@ async def save_progress(book_id: int, request: Request, user: User = Depends(get
     return JSONResponse({"ok": True})
 
 
+def _safe_next(next: str, book_id: int) -> str:
+    return next if next.startswith("/") and not next.startswith("//") else f"/books/{book_id}"
+
+
 @router.post("/{book_id}/toggle-read")
-def toggle_read_book(book_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def toggle_read_book(book_id: int, next: str = Form(""), user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     book = _own_book(book_id, user, db)
     book.is_read = not book.is_read
     book.read_at = datetime.utcnow() if book.is_read else None
     db.commit()
-    return RedirectResponse(f"/books/{book_id}", status_code=302)
+    return RedirectResponse(_safe_next(next, book_id), status_code=302)
 
 
 @router.post("/{book_id}/rate")
-def rate_book(book_id: int, rating: int = Form(...), user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def rate_book(book_id: int, rating: int = Form(...), next: str = Form(""), user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     book = _own_book(book_id, user, db)
     book.rating = rating if 1 <= rating <= 5 else None  # 0 (или вне диапазона) — сброс
     db.commit()
-    return RedirectResponse(f"/books/{book_id}", status_code=302)
+    return RedirectResponse(_safe_next(next, book_id), status_code=302)
 
 
 @router.post("/{book_id}/favorite")
-def toggle_favorite_book(book_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def toggle_favorite_book(book_id: int, next: str = Form(""), user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     book = _own_book(book_id, user, db)
     book.is_favorite = not book.is_favorite
     db.commit()
-    return RedirectResponse(f"/books/{book_id}", status_code=302)
+    return RedirectResponse(_safe_next(next, book_id), status_code=302)
 
 
 @router.post("/{book_id}/reading")
-def toggle_reading_list(book_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def toggle_reading_list(book_id: int, next: str = Form(""), user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     book = _own_book(book_id, user, db)
     book.in_reading_list = not book.in_reading_list
     db.commit()
-    return RedirectResponse(f"/books/{book_id}", status_code=302)
+    return RedirectResponse(_safe_next(next, book_id), status_code=302)
 
 
 @router.post("/bulk")

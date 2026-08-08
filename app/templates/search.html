@@ -7,7 +7,7 @@
 <form method="get" action="/search" class="mb-4">
   <div class="input-group input-group-lg">
     <input type="text" name="q" class="form-control" autofocus
-           placeholder="Книги, статьи, аудиокниги, манга, файлы…" value="{{ q }}">
+           placeholder="Книги, статьи, аудиокниги, манга…" value="{{ q }}">
     <button class="btn btn-primary" type="submit"><i class="bi bi-search me-1"></i>Найти</button>
   </div>
 </form>
@@ -15,7 +15,7 @@
 {% if q %}
 <p class="text-muted">
   По запросу «{{ q }}» найдено: книг — {{ books | length }}, аудиокниг — {{ audiobooks | length }},
-  манги — {{ manga | length }}, статей — {{ links | length }}, файлов — {{ files | length }}.
+  манги — {{ manga | length }}, статей — {{ links | length }}.
 </p>
 
 {# ── Книги ────────────────────────────────────────────────────────── #}
@@ -128,26 +128,7 @@
 </div>
 {% endif %}
 
-{# ── Файлы ────────────────────────────────────────────────────────── #}
-{% if files %}
-<h5 class="mt-5 mb-3"><i class="bi bi-folder2-open me-2"></i>Файлы</h5>
-<div class="d-flex flex-column gap-2">
-  {% for f in files %}
-  <div class="card">
-    <div class="card-body py-2 px-3 d-flex align-items-center gap-3">
-      <i class="bi bi-{{ f.icon }} fs-5 text-secondary"></i>
-      <div class="flex-grow-1 min-width-0">
-        <a href="/files{% if f.folder_id %}?folder={{ f.folder_id }}{% endif %}" class="fw-semibold text-decoration-none text-body text-truncate d-block">{{ f.original_name }}</a>
-        <div class="text-muted small">{{ f.size_human }}</div>
-      </div>
-      <a href="/files/{{ f.id }}/download" class="btn btn-sm btn-outline-secondary"><i class="bi bi-download"></i></a>
-    </div>
-  </div>
-  {% endfor %}
-</div>
-{% endif %}
-
-{% if not books and not links and not audiobooks and not manga and not files %}
+{% if not books and not links and not audiobooks and not manga %}
 <div class="text-center py-5">
   <i class="bi bi-search display-1 text-muted"></i>
   <h5 class="mt-3 text-muted">Ничего не найдено</h5>

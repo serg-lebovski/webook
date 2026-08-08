@@ -152,62 +152,6 @@
     </div>
     {% endif %}
 
-    {% if inc.file_folder_shares %}
-    <h5 class="text-muted text-uppercase fw-semibold mb-3 small"><i class="bi bi-folder me-1"></i>Папки с файлами</h5>
-    <div class="row g-3 mb-5">
-      {% for s in inc.file_folder_shares %}
-      {% set fol = inc.file_folders.get(s.resource_id) %}
-      {% if fol %}
-      <div class="col-sm-6 col-md-4 col-lg-3">
-        <a href="/shared/files-folder/{{ s.id }}" class="text-decoration-none">
-          <div class="card h-100">
-            <div class="card-body">
-              <h6 class="card-title mb-1"><i class="bi bi-folder-fill text-warning me-1"></i>{{ fol.name }}</h6>
-            </div>
-            <div class="card-footer py-1 px-3 text-muted" style="font-size:.72rem">
-              от {{ s.owner.username }} · осталось
-              <span class="cd" data-exp="{{ s.expires_at.isoformat() }}Z"></span>
-            </div>
-          </div>
-        </a>
-      </div>
-      {% endif %}
-      {% endfor %}
-    </div>
-    {% endif %}
-
-    {% if inc.file_shares %}
-    <h5 class="text-muted text-uppercase fw-semibold mb-3 small"><i class="bi bi-file-earmark me-1"></i>Файлы</h5>
-    <div class="row g-3 mb-5">
-      {% for s in inc.file_shares %}
-      {% set f = inc.files.get(s.resource_id) %}
-      {% if f %}
-      <div class="col-6 col-sm-4 col-md-3 col-lg-2">
-        <div class="card h-100">
-          {% if f.is_image %}
-          <a href="/shared/file/{{ s.id }}/view" target="_blank" rel="noopener">
-            <img src="/shared/file/{{ s.id }}/view" class="card-img-top" style="height:110px;object-fit:cover" alt="">
-          </a>
-          {% else %}
-          <a href="/shared/file/{{ s.id }}/{{ 'view' if f.previewable else 'download' }}" target="_blank" rel="noopener"
-             class="d-flex align-items-center justify-content-center text-secondary" style="height:110px">
-            <i class="bi bi-{{ f.icon }}" style="font-size:2.4rem"></i>
-          </a>
-          {% endif %}
-          <div class="card-body p-2">
-            <div class="small fw-semibold text-truncate" title="{{ f.original_name }}">{{ f.original_name }}</div>
-            <div class="text-muted" style="font-size:.7rem">{{ f.size_human }}</div>
-          </div>
-          <div class="card-footer py-1 px-2 text-muted" style="font-size:.7rem">
-            от {{ s.owner.username }} · <span class="cd" data-exp="{{ s.expires_at.isoformat() }}Z"></span>
-          </div>
-        </div>
-      </div>
-      {% endif %}
-      {% endfor %}
-    </div>
-    {% endif %}
-
     {% if inc.manga_shares %}
     <h5 class="text-muted text-uppercase fw-semibold mb-3 small"><i class="bi bi-images me-1"></i>Манга</h5>
     <div class="row g-3 mb-5">
@@ -355,54 +299,6 @@
           <button type="submit" class="btn btn-sm btn-outline-danger" title="Отозвать доступ">
             <i class="bi bi-x-lg"></i>
           </button>
-        </form>
-      </div>
-      {% endif %}
-      {% endfor %}
-    </div>
-    {% endif %}
-
-    {% if out.file_folder_shares %}
-    <h5 class="text-muted text-uppercase fw-semibold mb-3 small"><i class="bi bi-folder me-1"></i>Папки с файлами</h5>
-    <div class="list-group mb-5">
-      {% for s in out.file_folder_shares %}
-      {% set fol = out.file_folders.get(s.resource_id) %}
-      {% if fol %}
-      <div class="list-group-item d-flex align-items-center gap-3 py-2">
-        <i class="bi bi-folder-fill text-warning fs-5"></i>
-        <div class="flex-grow-1 min-width-0">
-          <a href="/files?folder={{ fol.id }}" class="fw-semibold text-decoration-none text-body">{{ fol.name }}</a>
-          <div class="text-muted small">
-            <i class="bi bi-person me-1"></i>{{ s.shared_with.username }}
-            <span class="ms-2">осталось <span class="cd" data-exp="{{ s.expires_at.isoformat() }}Z"></span></span>
-          </div>
-        </div>
-        <form method="post" action="/files/share/{{ s.id }}/revoke">
-          <button type="submit" class="btn btn-sm btn-outline-danger" title="Отозвать доступ"><i class="bi bi-x-lg"></i></button>
-        </form>
-      </div>
-      {% endif %}
-      {% endfor %}
-    </div>
-    {% endif %}
-
-    {% if out.file_shares %}
-    <h5 class="text-muted text-uppercase fw-semibold mb-3 small"><i class="bi bi-file-earmark me-1"></i>Файлы</h5>
-    <div class="list-group mb-5">
-      {% for s in out.file_shares %}
-      {% set f = out.files.get(s.resource_id) %}
-      {% if f %}
-      <div class="list-group-item d-flex align-items-center gap-3 py-2">
-        <i class="bi bi-{{ f.icon }} fs-5 text-secondary"></i>
-        <div class="flex-grow-1 min-width-0">
-          <a href="/files/{{ f.id }}/download" class="fw-semibold text-decoration-none text-body text-truncate d-block">{{ f.original_name }}</a>
-          <div class="text-muted small">
-            <i class="bi bi-person me-1"></i>{{ s.shared_with.username }}
-            <span class="ms-2">осталось <span class="cd" data-exp="{{ s.expires_at.isoformat() }}Z"></span></span>
-          </div>
-        </div>
-        <form method="post" action="/files/share/{{ s.id }}/revoke">
-          <button type="submit" class="btn btn-sm btn-outline-danger" title="Отозвать доступ"><i class="bi bi-x-lg"></i></button>
         </form>
       </div>
       {% endif %}

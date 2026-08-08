@@ -9,7 +9,7 @@ from app.database import SessionLocal
 from app.models import (  # noqa: F401 — регистрация всех мапперов SQLAlchemy
     user, shelf, author, series, book, link, site_settings, share,
     read_progress, login_attempt, tag, highlight, feed, audiobook, series_tier,
-    stored_file, manga, collection,
+    manga, collection,
 )
 from app.models.link import Link
 from app.services import search_service

@@ -29,7 +29,6 @@ services:
       - ./files:/app/files
       - ./links:/app/links
       - ./audiobooks:/app/audiobooks
-      - ./userfiles:/app/userfiles
       - ./manga:/app/manga
       - ./logs:/app/logs
       - ./backups:/app/backups:ro

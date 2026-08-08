@@ -161,10 +161,6 @@
             <span class="badge bg-primary rounded-pill">{{ stats.articles }}</span>
           </li>
           <li class="list-group-item d-flex justify-content-between align-items-center">
-            <span><i class="bi bi-folder2-open me-2 text-secondary"></i>Файлов</span>
-            <span class="badge bg-primary rounded-pill">{{ stats.files }}</span>
-          </li>
-          <li class="list-group-item d-flex justify-content-between align-items-center">
             <span><i class="bi bi-bookshelf me-2 text-secondary"></i>Полок</span>
             <span class="badge bg-primary rounded-pill">{{ stats.shelves }}</span>
           </li>
@@ -206,6 +202,20 @@
         </p>
         <a href="/tags" class="btn btn-outline-secondary">
           <i class="bi bi-tags me-1"></i>Управление тегами
+        </a>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header fw-semibold">
+        <i class="bi bi-files me-1"></i>Дубликаты книг
+      </div>
+      <div class="card-body">
+        <p class="text-muted small mb-3">
+          Поиск книг-дублей (совпадают название и автор) с возможностью убрать лишние копии в корзину.
+        </p>
+        <a href="/books/duplicates" class="btn btn-outline-secondary">
+          <i class="bi bi-files me-1"></i>Найти дубликаты
         </a>
       </div>
     </div>

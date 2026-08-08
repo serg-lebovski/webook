@@ -43,7 +43,7 @@ LOG_VIEW_FILES = {
 
 def _get_system_info() -> dict:
     from app.config import (DATABASE_URL, BOOKS_DIR, COVERS_DIR, LINKS_CONTENT_DIR,
-                            AUDIOBOOKS_DIR, FILES_DIR, MANGA_DIR, BACKUPS_DIR)
+                            AUDIOBOOKS_DIR, MANGA_DIR, BACKUPS_DIR)
 
     db_type = "PostgreSQL" if DATABASE_URL.startswith("postgresql") else "SQLite"
 
@@ -72,10 +72,9 @@ def _get_system_info() -> dict:
     covers_bytes = dir_size_bytes(COVERS_DIR)
     links_bytes = dir_size_bytes(LINKS_CONTENT_DIR)
     audiobooks_bytes = dir_size_bytes(AUDIOBOOKS_DIR)
-    files_bytes = dir_size_bytes(FILES_DIR)
     manga_bytes = dir_size_bytes(MANGA_DIR)
     content_bytes = (books_bytes + covers_bytes + links_bytes
-                     + audiobooks_bytes + files_bytes + manga_bytes)
+                     + audiobooks_bytes + manga_bytes)
 
     try:
         check_path = BOOKS_DIR if BOOKS_DIR.exists() else BOOKS_DIR.parent
@@ -113,13 +112,11 @@ def _get_system_info() -> dict:
         "covers_dir": str(COVERS_DIR),
         "links_dir": str(LINKS_CONTENT_DIR),
         "audiobooks_dir": str(AUDIOBOOKS_DIR),
-        "files_dir": str(FILES_DIR),
         "manga_dir": str(MANGA_DIR),
         "books_bytes": books_bytes,
         "covers_bytes": covers_bytes,
         "links_bytes": links_bytes,
         "audiobooks_bytes": audiobooks_bytes,
-        "files_bytes": files_bytes,
         "manga_bytes": manga_bytes,
         "content_bytes": content_bytes,
         "disk_total": disk.total,
@@ -210,9 +207,6 @@ def admin_page(
     _require_admin(user)
     users = db.query(User).order_by(User.created_at).all()
     allow_registration = get_setting(db, "allow_registration", "false") == "true"
-    from app.services.settings_service import get_max_file_mb, get_user_quota_mb
-    max_file_mb = get_max_file_mb(db)
-    user_quota_mb = get_user_quota_mb(db)
     steam_api_key = get_setting(db, "steam_api_key", "")
     system = _get_system_info()
     bans = (
@@ -226,8 +220,6 @@ def admin_page(
         "user": user,
         "users": users,
         "allow_registration": allow_registration,
-        "max_file_mb": max_file_mb,
-        "user_quota_mb": user_quota_mb,
         "steam_api_key": steam_api_key,
         "success": success,
         "error": None,
@@ -242,8 +234,6 @@ def admin_page(
 def update_admin_settings(
     request: Request,
     allow_registration: str = Form("off"),
-    max_file_mb: str = Form(""),
-    user_quota_mb: str = Form(""),
     steam_api_key: str = Form(""),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -252,16 +242,6 @@ def update_admin_settings(
     value = "true" if allow_registration == "on" else "false"
     set_setting(db, "allow_registration", value)
     set_setting(db, "steam_api_key", steam_api_key.strip())
-    try:
-        mb = int(max_file_mb)
-        if mb > 0:
-            set_setting(db, "max_file_mb", str(mb))
-    except (TypeError, ValueError):
-        pass
-    try:
-        set_setting(db, "user_quota_mb", str(max(0, int(user_quota_mb))))
-    except (TypeError, ValueError):
-        pass
     return RedirectResponse("/admin?success=settings", status_code=302)
 
 
@@ -498,14 +478,6 @@ def _purge_user_data(uid: int, db: Session):
     # 9. series tiers (личный тир-лист)
     from app.models.series_tier import SeriesTier
     db.query(SeriesTier).filter_by(user_id=uid).delete(synchronize_session=False)
-
-    # 11. файловая шара: файлы (+ файлы на диске) и папки
-    from app.models.stored_file import StoredFile, FileFolder
-    from app.config import FILES_DIR
-    for f in db.query(StoredFile).filter_by(user_id=uid).all():
-        (FILES_DIR / f.stored_name).unlink(missing_ok=True)
-        db.delete(f)
-    db.query(FileFolder).filter_by(user_id=uid).delete(synchronize_session=False)
 
     # 12. манга: каталоги на диске + строки (главы каскадом)
     from app.models.manga import Manga

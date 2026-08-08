@@ -58,10 +58,4 @@
 </div>
 {% endif %}
 
-{% if files %}
-<h5 class="text-muted text-uppercase fw-semibold mb-2 small"><i class="bi bi-folder2-open me-1"></i>Файлы</h5>
-<div class="list-group mb-4">
-  {% for f in files %}{{ row('file', f.id, f.icon, f.original_name, f.size_human) }}{% endfor %}
-</div>
-{% endif %}
 {% endblock %}

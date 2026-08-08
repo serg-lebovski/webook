@@ -58,10 +58,12 @@
 <body>
 {% set path = request.url.path if request else '' %}
 {% set is_dash = path in ('/', '/dashboard') %}
-{% set is_lib = path.startswith('/books') or path.startswith('/shelves') or path.startswith('/authors') or path.startswith('/series') or path.startswith('/manga') or path.startswith('/collections') or path.startswith('/tier-list') or path.startswith('/audiobooks') %}
+{% set is_books = path.startswith('/books') or path.startswith('/shelves') or path.startswith('/authors') or path.startswith('/series') or path.startswith('/audiobooks') %}
+{% set is_manga = path.startswith('/manga') %}
+{% set is_collections = path.startswith('/collections') %}
+{% set is_tierlist = path.startswith('/tier-list') %}
 {% set is_articles = path.startswith('/links') %}
 {% set is_games = path.startswith('/games') %}
-{% set is_files = path.startswith('/files') %}
 {% set is_feeds = path.startswith('/feeds') %}
 
 <div class="app-shell d-flex">
@@ -81,25 +83,20 @@
             <i class="bi bi-speedometer2"></i>Дашборд</a>
         </li>
         <li class="nav-item">
-          <a class="nav-link {% if is_lib %}active{% endif %}" data-bs-toggle="collapse"
-             href="#libMenu" role="button" aria-expanded="{{ 'true' if is_lib else 'false' }}">
-            <i class="bi bi-book"></i>Библиотека
-            <i class="bi bi-chevron-down ms-auto small"></i>
-          </a>
-          <div class="collapse {% if is_lib %}show{% endif %}" id="libMenu">
-            <ul class="nav flex-column submenu">
-              <li><a class="nav-link" href="/books"><i class="bi bi-collection"></i>Все</a></li>
-              <li><a class="nav-link" href="/shelves"><i class="bi bi-bookshelf"></i>Полки</a></li>
-              <li><a class="nav-link" href="/books?favorite=1"><i class="bi bi-heart-fill text-danger"></i>Избранное</a></li>
-              <li><a class="nav-link" href="/books?reading=1"><i class="bi bi-bookmark-check text-warning"></i>Хочу прочитать</a></li>
-              <li><a class="nav-link" href="/books?type=audio"><i class="bi bi-headphones"></i>Аудиокниги</a></li>
-              <li><a class="nav-link" href="/manga"><i class="bi bi-images"></i>Манга</a></li>
-              <li><a class="nav-link" href="/collections"><i class="bi bi-collection-play"></i>Подборки</a></li>
-              <li><a class="nav-link" href="/tier-list"><i class="bi bi-bar-chart-steps"></i>Тир-лист циклов</a></li>
-              <li><a class="nav-link" href="/books/duplicates"><i class="bi bi-files"></i>Дубликаты</a></li>
-              <li><a class="nav-link" href="/books/upload"><i class="bi bi-cloud-upload"></i>Загрузить</a></li>
-            </ul>
-          </div>
+          <a class="nav-link {% if is_books %}active{% endif %}" href="/books">
+            <i class="bi bi-book"></i>Книги</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link {% if is_manga %}active{% endif %}" href="/manga">
+            <i class="bi bi-images"></i>Манга</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link {% if is_collections %}active{% endif %}" href="/collections">
+            <i class="bi bi-collection-play"></i>Подборки</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link {% if is_tierlist %}active{% endif %}" href="/tier-list">
+            <i class="bi bi-bar-chart-steps"></i>Тир-лист циклов</a>
         </li>
         <li class="nav-item">
           <a class="nav-link {% if is_games %}active{% endif %}" href="/games">
@@ -108,10 +105,6 @@
         <li class="nav-item">
           <a class="nav-link {% if is_articles %}active{% endif %}" href="/links">
             <i class="bi bi-bookmarks"></i>Статьи</a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link {% if is_files %}active{% endif %}" href="/files">
-            <i class="bi bi-folder2-open"></i>Файлы</a>
         </li>
         <li class="nav-item">
           <a class="nav-link {% if is_feeds %}active{% endif %}" href="/feeds">
@@ -134,11 +127,15 @@
       <form class="flex-grow-1" role="search" action="/search" method="get" style="max-width: 560px;">
         <div class="input-group">
           <span class="input-group-text bg-body"><i class="bi bi-search"></i></span>
-          <input class="form-control" type="search" name="q" placeholder="Поиск по книгам, статьям, файлам…" aria-label="Поиск">
+          <input class="form-control" type="search" name="q" placeholder="Поиск по книгам, статьям…" aria-label="Поиск">
         </div>
       </form>
 
-      <div class="dropdown ms-auto">
+      <a href="/books/upload" class="btn btn-primary d-flex align-items-center gap-1 ms-auto" title="Загрузить">
+        <i class="bi bi-cloud-upload"></i><span class="d-none d-sm-inline">Загрузить</span>
+      </a>
+
+      <div class="dropdown">
         <a class="btn btn-light dropdown-toggle d-flex align-items-center gap-2" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
           <i class="bi bi-person-circle"></i><span class="d-none d-sm-inline">{{ user.username }}</span>
         </a>

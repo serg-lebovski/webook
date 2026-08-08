@@ -1,36 +1,55 @@
 {% extends "base.html" %}
 {% block title %}Полки — WeBook{% endblock %}
+
+{% block head %}
+<style>
+  .shelves-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:1rem; }
+  .shelves-grid .shelf-cell { border:1px solid var(--bs-border-color); border-radius:.5rem; padding:1rem; display:flex; flex-direction:column; height:100%; }
+  .shelves-grid .shelf-body { flex:1 1 auto; }
+  .shelves-grid .shelf-name { font-weight:600; font-size:1.1rem; display:block; }
+  .shelves-grid .shelf-desc { color:var(--bs-secondary-color); font-size:.85rem; margin-top:.35rem; }
+  .shelves-grid .shelf-actions { display:flex; gap:.5rem; margin-top:.75rem; }
+
+  .shelves-list { display:flex; flex-direction:column; gap:.4rem; }
+  .shelves-list .shelf-cell { display:flex; align-items:center; gap:.75rem; border:1px solid var(--bs-border-color); border-radius:.4rem; padding:.5rem .75rem; }
+  .shelves-list .shelf-desc { display:none; }
+  .shelves-list .shelf-body { flex:1 1 auto; min-width:0; }
+  .shelves-list .shelf-name { font-weight:600; }
+  .shelves-list .shelf-actions { display:flex; gap:.4rem; margin-left:auto; flex:none; }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-  <h2><i class="bi bi-bookshelf me-2"></i>Мои полки</h2>
-  <a href="/shelves/new" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>Новая полка</a>
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+  <h2 class="mb-0"><i class="bi bi-bookshelf me-2"></i>Мои полки</h2>
+  <div class="d-flex gap-2">
+    {% if shelves %}
+    <div class="btn-group btn-group-sm" role="group" aria-label="Вид">
+      <button type="button" class="btn btn-outline-secondary" id="viewGrid" title="Сетка"><i class="bi bi-grid-3x3-gap"></i></button>
+      <button type="button" class="btn btn-outline-secondary" id="viewList" title="Список"><i class="bi bi-list-ul"></i></button>
+    </div>
+    {% endif %}
+    <a href="/shelves/new" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>Новая полка</a>
+  </div>
 </div>
 
 {% if shelves %}
-<div class="row g-4">
+<div id="shelvesContainer" class="shelves-grid">
   {% for shelf in shelves %}
-  <div class="col-sm-6 col-md-4 col-lg-3">
-    <div class="card h-100">
-      <div class="card-body">
-        <h5 class="card-title">
-          <a href="/shelves/{{ shelf.id }}" class="text-decoration-none text-dark">
-            <i class="bi bi-bookshelf text-primary me-1"></i>{{ shelf.name }}
-          </a>
-        </h5>
-        {% if shelf.description %}
-        <p class="card-text text-muted small">{{ shelf.description }}</p>
-        {% endif %}
-        <p class="card-text">
-          <small class="text-muted">{{ shelf.books | length }} книг</small>
-        </p>
-      </div>
-      <div class="card-footer bg-transparent d-flex gap-2">
-        <a href="/shelves/{{ shelf.id }}" class="btn btn-sm btn-outline-primary flex-fill">Открыть</a>
-        <a href="/shelves/{{ shelf.id }}/edit" class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil"></i></a>
-        <form action="/shelves/{{ shelf.id }}/delete" method="post" onsubmit="return confirm('Удалить полку «{{ shelf.name }}»?')">
-          <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
-        </form>
-      </div>
+  <div class="shelf-cell">
+    <div class="shelf-body">
+      <a href="/shelves/{{ shelf.id }}" class="text-decoration-none text-body shelf-name">
+        <i class="bi bi-bookshelf text-primary me-1"></i>{{ shelf.name }}
+      </a>
+      {% if shelf.description %}<div class="shelf-desc">{{ shelf.description }}</div>{% endif %}
+      <div class="small text-muted mt-1">{{ shelf.books | length }} книг</div>
+    </div>
+    <div class="shelf-actions">
+      <a href="/shelves/{{ shelf.id }}" class="btn btn-sm btn-outline-primary">Открыть</a>
+      <a href="/shelves/{{ shelf.id }}/edit" class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil"></i></a>
+      <form action="/shelves/{{ shelf.id }}/delete" method="post" onsubmit="return confirm('Удалить полку «{{ shelf.name }}»?')">
+        <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+      </form>
     </div>
   </div>
   {% endfor %}
@@ -43,4 +62,24 @@
   <a href="/shelves/new" class="btn btn-primary mt-2">Создать полку</a>
 </div>
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    var c = document.getElementById('shelvesContainer');
+    var gBtn = document.getElementById('viewGrid'), lBtn = document.getElementById('viewList');
+    if (!c) return;
+    function apply(v) {
+      var list = v === 'list';
+      c.classList.toggle('shelves-list', list);
+      c.classList.toggle('shelves-grid', !list);
+      gBtn.classList.toggle('active', !list);
+      lBtn.classList.toggle('active', list);
+    }
+    apply(localStorage.getItem('shelves_view') || 'grid');
+    gBtn.addEventListener('click', function () { localStorage.setItem('shelves_view', 'grid'); apply('grid'); });
+    lBtn.addEventListener('click', function () { localStorage.setItem('shelves_view', 'list'); apply('list'); });
+  })();
+</script>
 {% endblock %}
