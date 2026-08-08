@@ -6,7 +6,7 @@ import tempfile
 import zipfile
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Form, Request, UploadFile, File
+from fastapi import APIRouter, Depends, Form, Request, UploadFile, File, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, Response, FileResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
@@ -18,6 +18,8 @@ from app.models.book import Book
 from app.models.shelf import Shelf
 from app.models.link import Link
 from app.services.auth_service import hash_password, verify_password, create_access_token
+from app.services import update_service
+from app.logging_config import auth_log
 
 router = APIRouter(prefix="/settings")
 templates = Jinja2Templates(directory="app/templates")
@@ -65,13 +67,28 @@ def settings_page(
     db: Session = Depends(get_db),
 ):
     stats = _get_stats(db, user)
+    update = update_service.read_state() if user.is_admin else None
     return templates.TemplateResponse("settings.html", {
         "request": request,
         "user": user,
         "stats": stats,
         "success": success,
         "error": None,
+        "update": update,
     })
+
+
+@router.post("/update")
+def trigger_update(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Запросить обновление из репозитория (только администратор)."""
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Только для администраторов")
+    try:
+        update_service.trigger()
+        auth_log.info("update requested by %s", user.username)
+        return RedirectResponse("/settings?success=update_queued", status_code=302)
+    except Exception:
+        return RedirectResponse("/settings?error=update_failed", status_code=302)
 
 
 @router.post("/profile")
