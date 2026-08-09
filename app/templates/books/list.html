@@ -45,13 +45,16 @@
 </div>
 
 {% if type != 'audio' %}
-<div class="shelf-chips mb-3">
-  <a href="/books?{{ all_shelf_qs }}" class="btn btn-sm chip {% if not shelf_id %}btn-primary{% else %}btn-outline-secondary{% endif %}">Все полки</a>
+<h6 class="text-uppercase text-muted fw-semibold small mb-2"><i class="bi bi-bookshelf me-1"></i>Полки</h6>
+<div class="shelf-chips mb-4">
+  <a href="/books?{{ all_shelf_qs }}" class="btn btn-sm chip {% if not shelf_id %}btn-primary{% else %}btn-outline-secondary{% endif %}"><i class="bi bi-collection me-1"></i>Все полки</a>
   {% for sc in shelf_chips %}
-  <a href="/books?{{ sc.qs }}" class="btn btn-sm chip {% if shelf_id == sc.id %}btn-primary{% else %}btn-outline-secondary{% endif %}">{{ sc.name }}</a>
+  <a href="/books?{{ sc.qs }}" class="btn btn-sm chip {% if shelf_id == sc.id %}btn-primary{% else %}btn-outline-secondary{% endif %}"><i class="bi bi-bookshelf me-1"></i>{{ sc.name }}</a>
   {% endfor %}
   <a href="/shelves" class="btn btn-sm btn-outline-secondary chip" title="Управление полками"><i class="bi bi-gear"></i></a>
 </div>
+
+<h6 class="text-uppercase text-muted fw-semibold small mb-2"><i class="bi bi-book me-1"></i>Книги</h6>
 {% endif %}
 
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
