@@ -171,26 +171,6 @@ def update_steam(
     return RedirectResponse("/settings?success=steam", status_code=302)
 
 
-def _make_icon_png(size: int) -> bytes:
-    """Generate a minimal solid blue (#2563eb) PNG for extension icons."""
-    import struct, zlib as _zlib
-    r, g, b = 37, 99, 235
-    scanline = b'\x00' + bytes([r, g, b] * size)
-    raw = scanline * size
-
-    def chunk(tag: bytes, data: bytes) -> bytes:
-        crc = struct.pack('>I', _zlib.crc32(tag + data) & 0xFFFFFFFF)
-        return struct.pack('>I', len(data)) + tag + data + crc
-
-    ihdr = struct.pack('>IIBBBBB', size, size, 8, 2, 0, 0, 0)
-    return (
-        b'\x89PNG\r\n\x1a\n'
-        + chunk(b'IHDR', ihdr)
-        + chunk(b'IDAT', _zlib.compress(raw, 9))
-        + chunk(b'IEND', b'')
-    )
-
-
 def _safe_filename(s: str, max_len: int = 180) -> str:
     return re.sub(r'[<>:"/\\|?*\x00-\x1f]', '_', s).strip()[:max_len]
 
@@ -293,12 +273,49 @@ def extension_download(user: User = Depends(get_current_user)):
             if src.exists():
                 zf.writestr(fname, src.read_text(encoding="utf-8"))
         for size in (16, 48, 128):
-            zf.writestr(f"icons/icon{size}.png", _make_icon_png(size))
+            src = ext_dir / "icons" / f"icon{size}.png"
+            if src.exists():
+                zf.writestr(f"icons/icon{size}.png", src.read_bytes())
     buf.seek(0)
     return Response(
         content=buf.read(),
         media_type="application/zip",
         headers={"Content-Disposition": 'attachment; filename="webook-extension.zip"'},
+    )
+
+
+@router.get("/extension/reg/{browser}")
+def extension_install_reg(
+    browser: str,
+    request: Request,
+    user: User = Depends(get_current_user),
+):
+    """.reg-файл: политика ExtensionSettings ставит расширение автоматически
+    (без zip / Load unpacked), используя /extension/updates.xml + /extension/webook.crx."""
+    from app.routers.pwa import EXTENSION_ID
+    host = request.url.hostname or "localhost"
+    update_url = f"http://{host}:8000/extension/updates.xml"
+    if browser == "yandex":
+        key_path = r"SOFTWARE\Policies\Yandex\YandexBrowser"
+        fname = "webook-extension-yandex.reg"
+    elif browser == "chrome":
+        key_path = r"SOFTWARE\Policies\Google\Chrome"
+        fname = "webook-extension-chrome.reg"
+    else:
+        raise HTTPException(404)
+    settings_json = (
+        '{"' + EXTENSION_ID + '":{"installation_mode":"normal_installed","update_url":"' + update_url + '"}}'
+    )
+    escaped = settings_json.replace('\\', '\\\\').replace('"', '\\"')
+    reg = (
+        "Windows Registry Editor Version 5.00\r\n\r\n"
+        f"[HKEY_LOCAL_MACHINE\\{key_path}]\r\n"
+        f'"ExtensionSettings"="{escaped}"\r\n'
+    )
+    return Response(
+        content=reg.encode("utf-8"),
+        media_type="text/plain",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
     )
 
 

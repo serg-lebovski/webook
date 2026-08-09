@@ -3,17 +3,23 @@
 Все маршруты публичные (без авторизации) — иначе браузер не сможет
 зарегистрировать SW и показать «Установить приложение» на странице логина.
 """
+import json
 import struct
 import zlib
+from pathlib import Path
 
-from fastapi import APIRouter
-from fastapi.responses import JSONResponse, Response
+from fastapi import APIRouter, Request
+from fastapi.responses import JSONResponse, PlainTextResponse, Response
 
 router = APIRouter()
 
 THEME_COLOR = "#212529"   # как у тёмного навбара
 BG_COLOR = "#f8f9fa"
 ICON_RGB = (37, 99, 235)  # #2563eb
+
+# ID вычисляется из открытого ключа подписи (extension/webook-extension-signing-key.pem,
+# хранится вне репозитория) — стабилен, пока ключ не меняется. См. static/webook.crx.
+EXTENSION_ID = "kbccpofjafdhlhhiejddeoapcnkooebh"
 
 
 def _png_from_rgb(size: int, raw: bytearray) -> bytes:
@@ -152,3 +158,39 @@ self.addEventListener('fetch', (e) => {
 def service_worker():
     return Response(content=_SW_JS, media_type="application/javascript",
                     headers={"Cache-Control": "no-cache"})
+
+
+def _extension_version() -> str:
+    try:
+        data = json.loads((Path("extension") / "manifest.json").read_text(encoding="utf-8"))
+        return data.get("version", "1.0.0")
+    except OSError:
+        return "1.0.0"
+
+
+@router.get("/extension/webook.crx")
+def extension_crx():
+    """Подписанный .crx — читает Chrome/Yandex при автоустановке через политику
+    ExtensionSettings (см. /settings). Публичный маршрут: фоновый апдейтер браузера
+    ходит сюда без cookie/сессии."""
+    crx = Path("static") / "webook.crx"
+    if not crx.exists():
+        return PlainTextResponse("not built", status_code=404)
+    return Response(content=crx.read_bytes(), media_type="application/x-chrome-extension",
+                    headers={"Cache-Control": "no-cache"})
+
+
+@router.get("/extension/updates.xml")
+def extension_updates(request: Request):
+    """Omaha update-манифест для ExtensionSettings.update_url. Публичный, без авторизации."""
+    host = request.url.hostname or "localhost"
+    codebase = f"http://{host}:8000/extension/webook.crx"
+    xml = (
+        "<?xml version='1.0' encoding='UTF-8'?>\n"
+        "<gupdate xmlns='http://www.google.com/update2/response' protocol='2.0'>\n"
+        f"  <app appid='{EXTENSION_ID}'>\n"
+        f"    <updatecheck codebase='{codebase}' version='{_extension_version()}' />\n"
+        "  </app>\n"
+        "</gupdate>\n"
+    )
+    return Response(content=xml, media_type="application/xml", headers={"Cache-Control": "no-cache"})

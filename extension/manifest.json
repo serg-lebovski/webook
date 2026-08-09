@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "WeBook",
-  "version": "1.0",
+  "version": "1.0.0",
   "description": "Сохраняйте ссылки на статьи в свою библиотеку WeBook",
   "permissions": ["activeTab", "storage"],
   "icons": {

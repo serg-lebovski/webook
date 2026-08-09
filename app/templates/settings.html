@@ -211,16 +211,49 @@
           Плагин для Chrome, Yandex Browser и Firefox. Позволяет сохранять ссылки
           на статьи прямо из браузера, не открывая WeBook.
         </p>
-        <ol class="small text-muted mb-3 ps-3">
-          <li>Скачайте ZIP-архив ниже</li>
-          <li>Распакуйте в любую папку</li>
-          <li><strong>Chrome / Яндекс:</strong> откройте <code>chrome://extensions</code>, включите «Режим разработчика», нажмите «Загрузить распакованное»</li>
-          <li><strong>Firefox:</strong> откройте <code>about:debugging</code> → «Этот Firefox» → «Загрузить временное дополнение» → выберите <code>manifest.json</code></li>
-          <li>При первом открытии плагина введите адрес сервера, логин и пароль</li>
-        </ol>
-        <a href="/settings/extension/download" class="btn btn-outline-secondary">
-          <i class="bi bi-download me-1"></i>Скачать расширение
-        </a>
+
+        <div class="mb-3">
+          <div class="fw-semibold small mb-1">Chrome</div>
+          <p class="text-muted small mb-2">
+            Скачайте .reg-файл и запустите его двойным кликом (потребуется подтверждение
+            администратора), затем полностью закройте и снова откройте Chrome — расширение
+            установится само, без «режима разработчика» и без zip.
+          </p>
+          <a href="/settings/extension/reg/chrome" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-download me-1"></i>webook-extension-chrome.reg
+          </a>
+        </div>
+
+        <div class="mb-3">
+          <div class="fw-semibold small mb-1">Yandex Browser</div>
+          <p class="text-muted small mb-2">Так же: .reg-файл → запуск от администратора → перезапуск браузера.</p>
+          <a href="/settings/extension/reg/yandex" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-download me-1"></i>webook-extension-yandex.reg
+          </a>
+        </div>
+
+        <div class="mb-3">
+          <div class="fw-semibold small mb-1">Firefox</div>
+          <p class="text-muted small mb-2">
+            Откройте <code>about:debugging</code> → «Этот Firefox» → «Загрузить временное дополнение» →
+            выберите <code>manifest.json</code> из ZIP-архива ниже. Временное дополнение живёт до
+            перезапуска Firefox — постоянная подписанная версия появится отдельно.
+          </p>
+        </div>
+
+        <details class="small">
+          <summary class="text-muted" style="cursor:pointer">Ручная установка / другие браузеры (ZIP)</summary>
+          <ol class="text-muted mt-2 mb-2 ps-3">
+            <li>Скачайте ZIP-архив ниже и распакуйте в любую папку</li>
+            <li><strong>Chrome / Яндекс:</strong> <code>chrome://extensions</code> → «Режим разработчика» → «Загрузить распакованное»</li>
+            <li><strong>Firefox:</strong> <code>about:debugging</code> → «Этот Firefox» → «Загрузить временное дополнение» → <code>manifest.json</code></li>
+          </ol>
+          <a href="/settings/extension/download" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-download me-1"></i>Скачать ZIP
+          </a>
+        </details>
+
+        <p class="text-muted small mt-3 mb-0">При первом открытии плагина введите адрес сервера, логин и пароль.</p>
       </div>
     </div>
 
