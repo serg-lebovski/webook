@@ -23,6 +23,8 @@ from app.logging_config import auth_log
 
 router = APIRouter(prefix="/settings")
 templates = Jinja2Templates(directory="app/templates")
+templates.env.globals["UPDATE_IN_PROGRESS_STATES"] = update_service.IN_PROGRESS_STATES
+templates.env.globals["UPDATE_STAGE_LABELS"] = update_service.STAGE_LABELS
 
 
 def _get_stats(db: Session, user: User) -> dict:
@@ -76,12 +78,13 @@ def settings_page(
 
 @router.post("/update")
 def trigger_update(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Запросить обновление из репозитория (только администратор)."""
+    """Запросить проверку обновлений (только администратор): host-watcher проверит
+    origin/master и, если есть новые коммиты, сам обновится."""
     if not user.is_admin:
         raise HTTPException(status_code=403, detail="Только для администраторов")
     try:
-        update_service.trigger()
-        auth_log.info("update requested by %s", user.username)
+        update_service.trigger_check()
+        auth_log.info("update check requested by %s", user.username)
         return RedirectResponse("/settings?success=update_queued", status_code=302)
     except Exception:
         return RedirectResponse("/settings?error=update_failed", status_code=302)

@@ -3,7 +3,7 @@ import shutil
 import tempfile
 from datetime import datetime
 from fastapi import APIRouter, Depends, Form, Request, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from starlette.background import BackgroundTask
@@ -31,6 +31,8 @@ def _humanbytes(n) -> str:
 
 
 templates.env.filters["humanbytes"] = _humanbytes
+templates.env.globals["UPDATE_IN_PROGRESS_STATES"] = update_service.IN_PROGRESS_STATES
+templates.env.globals["UPDATE_STAGE_LABELS"] = update_service.STAGE_LABELS
 
 LOG_VIEW_FILES = {
     "errors": "errors.log",
@@ -137,14 +139,33 @@ def _require_admin(user: User):
 
 @router.post("/update")
 def trigger_update(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Запросить обновление: пишем файл-триггер, host-watcher выполнит git pull + rebuild."""
+    """Запросить проверку обновлений: пишем файл-триггер, host-watcher проверит
+    origin/master и, если есть новые коммиты, сам обновится."""
     _require_admin(user)
     try:
-        update_service.trigger()
-        auth_log.info("update requested by %s", user.username)
+        update_service.trigger_check()
+        auth_log.info("update check requested by %s", user.username)
         return RedirectResponse("/admin?success=update_queued", status_code=302)
     except Exception:
         return RedirectResponse("/admin?error=update_failed", status_code=302)
+
+
+@router.get("/update/status")
+def update_status(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """JSON-статус для живого поллинга прогресса обновления (JS на странице)."""
+    _require_admin(user)
+    state = update_service.read_state()
+    stage = None
+    if state["status"]:
+        stage = update_service.STAGE_LABELS.get(state["status"]["state"], state["status"]["state"])
+    return JSONResponse({
+        "status": state["status"],
+        "available": state["available"],
+        "version": state["version"],
+        "queued": state["queued"],
+        "in_progress": bool(state["status"] and state["status"]["state"] in update_service.IN_PROGRESS_STATES),
+        "stage_label": stage,
+    })
 
 
 def _cleanup(path: str):

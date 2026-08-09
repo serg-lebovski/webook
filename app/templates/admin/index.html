@@ -33,8 +33,8 @@
 </div>
 {% elif success == 'update_queued' %}
 <div class="alert alert-info alert-dismissible fade show">
-  <i class="bi bi-arrow-repeat me-1"></i>Обновление запущено. Сервер скачает свежий код и пересоберётся —
-  это займёт ~1–2 минуты, в это время сайт ненадолго станет недоступен. Обновите страницу через минуту.
+  <i class="bi bi-arrow-repeat me-1"></i>Проверка обновлений запущена. Если найдутся новые коммиты, сервер сам
+  скачает код и пересоберётся — прогресс появится ниже.
   <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
 </div>
 {% endif %}
@@ -88,28 +88,7 @@
           <i class="bi bi-journal-text me-1"></i>Логи сервера
         </a>
         <hr>
-        <div class="fw-semibold small mb-1"><i class="bi bi-arrow-repeat me-1"></i>Обновление приложения</div>
-        {% if update.version %}
-        <p class="text-muted small mb-2">
-          Текущая версия: <code>{{ update.version.commit }}</code>
-          {% if update.version.message %}— {{ update.version.message }}{% endif %}<br>
-          {% if update.version.date %}<span class="text-muted">от {{ update.version.date[:10] }}</span>{% endif %}
-        </p>
-        {% else %}
-        <p class="text-muted small mb-2">Версия пока не определена (обновите один раз, чтобы зафиксировать).</p>
-        {% endif %}
-        {% if update.status and update.status.state in ['queued','updating'] or update.queued %}
-        <div class="alert alert-warning py-2 small mb-2">
-          <span class="spinner-border spinner-border-sm me-1"></span>Обновление выполняется… сайт скоро перезапустится.
-        </div>
-        {% elif update.status and update.status.state == 'error' %}
-        <div class="alert alert-danger py-2 small mb-2">Последнее обновление завершилось ошибкой (см. <code>update/update.log</code> на сервере).</div>
-        {% endif %}
-        <form method="post" action="/admin/update"
-              onsubmit="return confirm('Скачать последнюю версию из репозитория и пересобрать сервер? Сайт ненадолго станет недоступен.')">
-          <button class="btn btn-primary btn-sm"><i class="bi bi-cloud-download me-1"></i>Обновить из репозитория</button>
-        </form>
-        <div class="form-text">Берёт свежий код из ветки <code>master</code> на GitHub и пересобирает контейнер.</div>
+        {% include "admin/_update_card.html" %}
         <hr>
         <div class="fw-semibold small mb-1"><i class="bi bi-hdd-stack me-1"></i>Резервное копирование сервера</div>
         <p class="text-muted small mb-2">

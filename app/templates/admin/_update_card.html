@@ -1,0 +1,112 @@
+{# Ожидает в контексте: update (update_service.read_state()), UPDATE_IN_PROGRESS_STATES, UPDATE_STAGE_LABELS.
+   Опционально: update_action (URL формы, по умолчанию /admin/update), update_show_heading (по умолчанию true). #}
+{% if update_show_heading | default(true) %}
+<div class="fw-semibold small mb-1"><i class="bi bi-arrow-repeat me-1"></i>Обновление приложения</div>
+{% endif %}
+
+<p class="text-muted small mb-2" id="updVersion">
+  {% if update.version %}
+  Текущая версия: <code>{{ update.version.commit }}</code>
+  {% if update.version.message %}— {{ update.version.message }}{% endif %}<br>
+  {% if update.version.date %}<span class="text-muted">от {{ update.version.date[:10] }}</span>{% endif %}
+  {% else %}
+  Версия пока не определена (запустите проверку один раз, чтобы зафиксировать).
+  {% endif %}
+</p>
+
+<p class="small mb-2" id="updAvail">
+  {% if update.available and update.available.has_update %}
+  <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-circle me-1"></i>Доступно обновление</span>
+  <span class="text-muted">— <code>{{ update.available.remote_commit }}</code>{% if update.available.remote_message %} {{ update.available.remote_message }}{% endif %}</span>
+  {% elif update.available %}
+  <span class="badge bg-success"><i class="bi bi-check2 me-1"></i>Установлена актуальная версия</span>
+  {% else %}
+  <span class="text-muted">Проверка обновлений ещё не выполнялась.</span>
+  {% endif %}
+  {% if update.available and update.available.checked_at %}
+  <br><span class="text-muted" style="font-size:.75rem">проверено {{ update.available.checked_at[:16].replace('T', ' ') }}</span>
+  {% endif %}
+</p>
+
+{% set in_progress = (update.status and update.status.state in UPDATE_IN_PROGRESS_STATES) or update.queued %}
+<div id="updProgress" class="alert alert-warning py-2 small mb-2 {% if not in_progress %}d-none{% endif %}">
+  <span class="spinner-border spinner-border-sm me-1"></span><span id="updStageText">{% if update.status %}{{ UPDATE_STAGE_LABELS.get(update.status.state, update.status.state) }}{% else %}Выполняется…{% endif %}</span>
+</div>
+<div id="updError" class="alert alert-danger py-2 small mb-2 {% if not (update.status and update.status.state == 'error') %}d-none{% endif %}">
+  Последнее обновление завершилось ошибкой (см. <code>update/update.log</code> на сервере).
+</div>
+
+<form method="post" action="{{ update_action | default('/admin/update') }}" id="updCheckForm"
+      onsubmit="return confirm('Проверить обновления на GitHub? Если найдутся новые коммиты, сервер сам скачает код и пересоберётся — сайт ненадолго станет недоступен.')">
+  <button class="btn btn-primary btn-sm" id="updCheckBtn" {% if in_progress %}disabled{% endif %}>
+    <i class="bi bi-arrow-repeat me-1"></i>Проверить обновления
+  </button>
+</form>
+<div class="form-text">Сравнивает с веткой <code>master</code> на GitHub; при наличии новых коммитов обновляется автоматически. Также проверяет сам раз в час.</div>
+
+<script>
+(function () {
+  var box = document.getElementById('updProgress');
+  var stageText = document.getElementById('updStageText');
+  var errBox = document.getElementById('updError');
+  var availBox = document.getElementById('updAvail');
+  var versionBox = document.getElementById('updVersion');
+  var btn = document.getElementById('updCheckBtn');
+  var timer = null;
+
+  function fmtDate(iso) {
+    return iso ? iso.slice(0, 16).replace('T', ' ') : '';
+  }
+
+  function renderAvail(a) {
+    if (!availBox) return;
+    if (!a) {
+      availBox.innerHTML = '<span class="text-muted">Проверка обновлений ещё не выполнялась.</span>';
+      return;
+    }
+    var html;
+    if (a.has_update) {
+      html = '<span class="badge bg-warning text-dark"><i class="bi bi-exclamation-circle me-1"></i>Доступно обновление</span> ' +
+             '<span class="text-muted">— <code>' + (a.remote_commit || '') + '</code>' +
+             (a.remote_message ? ' ' + a.remote_message : '') + '</span>';
+    } else {
+      html = '<span class="badge bg-success"><i class="bi bi-check2 me-1"></i>Установлена актуальная версия</span>';
+    }
+    if (a.checked_at) {
+      html += '<br><span class="text-muted" style="font-size:.75rem">проверено ' + fmtDate(a.checked_at) + '</span>';
+    }
+    availBox.innerHTML = html;
+  }
+
+  function renderVersion(v) {
+    if (!versionBox || !v) return;
+    versionBox.innerHTML = 'Текущая версия: <code>' + v.commit + '</code>' +
+      (v.message ? ' — ' + v.message : '') + '<br>' +
+      (v.date ? '<span class="text-muted">от ' + v.date.slice(0, 10) + '</span>' : '');
+  }
+
+  function poll() {
+    fetch('/admin/update/status', {credentials: 'same-origin'})
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.in_progress) {
+          box.classList.remove('d-none');
+          stageText.textContent = data.stage_label || 'Выполняется…';
+          errBox.classList.add('d-none');
+          if (btn) btn.disabled = true;
+          if (!timer) timer = setInterval(poll, 3000);
+        } else {
+          box.classList.add('d-none');
+          if (btn) btn.disabled = false;
+          if (timer) { clearInterval(timer); timer = null; }
+          errBox.classList.toggle('d-none', !(data.status && data.status.state === 'error'));
+          renderVersion(data.version);
+        }
+        renderAvail(data.available);
+      })
+      .catch(function () {});
+  }
+
+  poll();
+})();
+</script>
