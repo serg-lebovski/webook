@@ -1,2 +1,4 @@
 # Шелл-скрипты всегда с LF, чтобы корректно исполнялись на Linux-сервере
 *.sh text eol=lf
+static/webook.apk filter=lfs diff=lfs merge=lfs -text
+static/webook.crx filter=lfs diff=lfs merge=lfs -text
