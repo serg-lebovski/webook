@@ -19,9 +19,8 @@ services:
     build: .
     container_name: webook
     restart: unless-stopped
-    # Прямой HTTP-порт. Caddy проксирует HTTPS поверх него.
-    # Для максимальной безопасности можно закомментировать публикацию портов,
-    # тогда приложение будет доступно только через Caddy (HTTPS).
+    # Прямой HTTP-порт. HTTPS/домен обслуживает внешний reverse-proxy
+    # (например, Nginx Proxy Manager), проксируя сюда по HTTP.
     ports:
       - "${APP_PORT:-8000}:8000"
     volumes:
@@ -38,20 +37,3 @@ services:
     depends_on:
       db:
         condition: service_healthy
-
-  caddy:
-    image: caddy:2-alpine
-    container_name: webook-caddy
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - ./caddy_data:/data
-      - ./caddy_config:/config
-    environment:
-      SITE_ADDRESS: ${SITE_ADDRESS:-localhost}
-      ACME_EMAIL: ${ACME_EMAIL:-admin@example.com}
-    depends_on:
-      - app

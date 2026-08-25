@@ -13,7 +13,7 @@ BAN_DURATION = timedelta(days=2)     # длительность бана
 
 
 def client_ip(request: Request) -> str:
-    """Реальный IP клиента с учётом reverse-proxy (Caddy ставит X-Forwarded-For)."""
+    """Реальный IP клиента с учётом reverse-proxy (ставит X-Forwarded-For)."""
     xff = request.headers.get("x-forwarded-for")
     if xff:
         return xff.split(",")[0].strip()
