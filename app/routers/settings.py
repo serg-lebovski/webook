@@ -31,11 +31,15 @@ def _get_stats(db: Session, user: User) -> dict:
     """Статистика и занятое место по всему контенту пользователя (счёт из БД)."""
     from sqlalchemy import func
     from app.models.audiobook import Audiobook, AudiobookTrack
+    from app.config import LINKS_CONTENT_DIR
 
     uid = user.id
 
     def _sum(col, *filters):
         return int(db.query(func.coalesce(func.sum(col), 0)).filter(*filters).scalar() or 0)
+
+    def _mb(n):
+        return round(n / 1024 / 1024, 1)
 
     books_count = db.query(Book).filter_by(user_id=uid, deleted_at=None).count()
     articles_count = db.query(Link).filter_by(user_id=uid, deleted_at=None).count()
@@ -46,14 +50,25 @@ def _get_stats(db: Session, user: User) -> dict:
     audio_bytes = _sum(AudiobookTrack.file_size,
                        AudiobookTrack.audiobook_id == Audiobook.id, Audiobook.user_id == uid,
                        Audiobook.deleted_at.is_(None))
-    storage_bytes = books_bytes + audio_bytes
+
+    articles_bytes = 0
+    link_ids = db.query(Link.id).filter_by(user_id=uid, deleted_at=None).all()
+    for (lid,) in link_ids:
+        content_path = LINKS_CONTENT_DIR / f"{lid}.txt"
+        if content_path.exists():
+            articles_bytes += content_path.stat().st_size
+
+    storage_bytes = books_bytes + audio_bytes + articles_bytes
 
     return {
         "books": books_count,
         "articles": articles_count,
         "audiobooks": audiobooks_count,
         "shelves": shelves_count,
-        "storage_mb": round(storage_bytes / 1024 / 1024, 1),
+        "books_mb": _mb(books_bytes),
+        "audiobooks_mb": _mb(audio_bytes),
+        "articles_mb": _mb(articles_bytes),
+        "storage_mb": _mb(storage_bytes),
     }
 
 

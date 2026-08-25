@@ -132,15 +132,24 @@
         <ul class="list-group list-group-flush">
           <li class="list-group-item d-flex justify-content-between align-items-center">
             <span><i class="bi bi-journals me-2 text-secondary"></i>Книг</span>
-            <span class="badge bg-primary rounded-pill">{{ stats.books }}</span>
+            <span>
+              <span class="badge bg-primary rounded-pill">{{ stats.books }}</span>
+              <span class="text-muted small ms-2">{{ stats.books_mb }} МБ</span>
+            </span>
           </li>
           <li class="list-group-item d-flex justify-content-between align-items-center">
             <span><i class="bi bi-headphones me-2 text-secondary"></i>Аудиокниг</span>
-            <span class="badge bg-primary rounded-pill">{{ stats.audiobooks }}</span>
+            <span>
+              <span class="badge bg-primary rounded-pill">{{ stats.audiobooks }}</span>
+              <span class="text-muted small ms-2">{{ stats.audiobooks_mb }} МБ</span>
+            </span>
           </li>
           <li class="list-group-item d-flex justify-content-between align-items-center">
             <span><i class="bi bi-bookmarks me-2 text-secondary"></i>Статей</span>
-            <span class="badge bg-primary rounded-pill">{{ stats.articles }}</span>
+            <span>
+              <span class="badge bg-primary rounded-pill">{{ stats.articles }}</span>
+              <span class="text-muted small ms-2">{{ stats.articles_mb }} МБ</span>
+            </span>
           </li>
           <li class="list-group-item d-flex justify-content-between align-items-center">
             <span><i class="bi bi-bookshelf me-2 text-secondary"></i>Полок</span>
@@ -148,7 +157,7 @@
           </li>
           <li class="list-group-item d-flex justify-content-between align-items-center">
             <span><i class="bi bi-hdd me-2 text-secondary"></i>Занято контентом</span>
-            <span class="text-muted">{{ stats.storage_mb }} МБ</span>
+            <span class="fw-semibold">{{ stats.storage_mb }} МБ</span>
           </li>
         </ul>
       </div>
