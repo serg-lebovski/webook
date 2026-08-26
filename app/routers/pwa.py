@@ -151,6 +151,29 @@ self.addEventListener('fetch', (e) => {
     }
   })());
 });
+
+self.addEventListener('push', (e) => {
+  let data = {};
+  try { data = e.data ? e.data.json() : {}; } catch (_) {}
+  const title = data.title || 'WeBook';
+  const options = {
+    body: data.body || '',
+    icon: '/icons/icon-192.png',
+    badge: '/icons/icon-192.png',
+    data: { url: data.url || '/dashboard' },
+  };
+  e.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  const url = (e.notification.data && e.notification.data.url) || '/dashboard';
+  e.waitUntil((async () => {
+    const all = await clients.matchAll({ type: 'window' });
+    for (const c of all) { if (c.url.includes(url) && 'focus' in c) return c.focus(); }
+    if (clients.openWindow) return clients.openWindow(url);
+  })());
+});
 """.lstrip()
 
 

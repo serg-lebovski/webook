@@ -14,7 +14,7 @@ from app.database import init_db
 from app.dependencies import get_current_user
 from app.logging_config import setup_logging, access_log, actions_log, error_log, db_log
 from app.services.security_service import client_ip
-from app.routers import auth, shelves, authors, series, books, opds, settings, links, admin, share, shared, dashboard, api, search, tags, highlights, feeds, pwa, audiobooks, tier_list, trash, manga, collections, stats, games, bookmarks
+from app.routers import auth, shelves, authors, series, books, opds, settings, links, admin, share, shared, dashboard, api, search, tags, highlights, feeds, pwa, audiobooks, tier_list, trash, manga, collections, stats, games, bookmarks, push
 
 app = FastAPI(title=APP_TITLE, docs_url=None, redoc_url=None)
 
@@ -76,6 +76,7 @@ app.include_router(search.router)
 app.include_router(tags.router)
 app.include_router(highlights.router)
 app.include_router(bookmarks.router)
+app.include_router(push.router)
 app.include_router(feeds.router)
 app.include_router(pwa.router)
 app.include_router(audiobooks.router)

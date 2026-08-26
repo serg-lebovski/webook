@@ -68,6 +68,13 @@ def refresh_feed(feed: Feed, db: Session) -> int:
     db.commit()
     if new_count:
         actions_log.info("feed refresh: %s new from %s (user_id=%s)", new_count, feed.url, feed.user_id)
+        try:
+            from app.services import push_service
+            title = feed.title or feed.url
+            body = f"Новых статей: {new_count} — «{title}»"
+            push_service.send_to_user(db, feed.user_id, "Новые статьи", body, url="/feeds")
+        except Exception:
+            pass
     return new_count
 
 

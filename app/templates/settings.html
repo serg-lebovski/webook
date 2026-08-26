@@ -49,6 +49,23 @@
 {% endif %}
 <div class="row g-4">
 
+  <!-- Push-уведомления -->
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header fw-semibold"><i class="bi bi-bell me-1"></i>Уведомления</div>
+      <div class="card-body">
+        <p class="text-muted small mb-2">
+          Браузерные уведомления о новых статьях в подписках и напоминание не прерывать серию чтения.
+        </p>
+        <div class="form-check form-switch mb-0">
+          <input class="form-check-input" type="checkbox" role="switch" id="pushToggle">
+          <label class="form-check-label" for="pushToggle" id="pushLabel">Включить уведомления</label>
+        </div>
+        <div class="form-text mt-1" id="pushHint"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- Steam -->
   <div class="col-lg-6">
     <div class="card h-100">
@@ -401,6 +418,61 @@ function copyOpds() {
     document.getElementById('restoreLabel').innerHTML =
       '<span class="spinner-border spinner-border-sm me-1"></span>Восстановление…';
   });
+})();
+
+// Push-уведомления: подписка/отписка браузера
+(function () {
+  const toggle = document.getElementById('pushToggle');
+  const hint = document.getElementById('pushHint');
+  if (!toggle) return;
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    toggle.disabled = true;
+    hint.textContent = 'Браузер не поддерживает push-уведомления.';
+    return;
+  }
+
+  function urlBase64ToUint8Array(base64) {
+    const padding = '='.repeat((4 - base64.length % 4) % 4);
+    const raw = atob((base64 + padding).replace(/-/g, '+').replace(/_/g, '/'));
+    return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+  }
+
+  async function refresh() {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    toggle.checked = !!sub;
+  }
+
+  toggle.addEventListener('change', async function () {
+    const reg = await navigator.serviceWorker.ready;
+    if (toggle.checked) {
+      const perm = await Notification.requestPermission();
+      if (perm !== 'granted') { toggle.checked = false; hint.textContent = 'Разрешение на уведомления не выдано.'; return; }
+      const r = await fetch('/push/public-key');
+      const { key } = await r.json();
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(key),
+      });
+      await fetch('/push/subscribe', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(sub.toJSON()),
+      });
+      hint.textContent = 'Уведомления включены.';
+    } else {
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) {
+        await fetch('/push/unsubscribe', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ endpoint: sub.endpoint }),
+        });
+        await sub.unsubscribe();
+      }
+      hint.textContent = 'Уведомления выключены.';
+    }
+  });
+
+  refresh().catch(() => {});
 })();
 </script>
 {% endblock %}
