@@ -204,7 +204,7 @@
     {% endif %}
 
     {% if book.description %}
-    <div class="card bg-light border-0">
+    <div class="card bg-body-tertiary border-0">
       <div class="card-body">
         <h6 class="text-muted text-uppercase fw-semibold mb-2">Описание</h6>
         <p class="mb-0" style="white-space: pre-line">{{ book.description }}</p>
@@ -237,7 +237,7 @@
         {% endif %}
         <div class="card-body p-2">
           {% if b.series_order %}<p class="card-text small text-muted mb-0">№{{ b.series_order | int }}</p>{% endif %}
-          <p class="card-text small fw-semibold text-dark">{{ b.title }}</p>
+          <p class="card-text small fw-semibold text-body">{{ b.title }}</p>
         </div>
       </div>
     </a>

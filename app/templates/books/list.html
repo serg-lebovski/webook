@@ -23,7 +23,7 @@
   .lib-list .lib-badges { margin-left:auto; display:flex; gap:.3rem; flex-wrap:wrap; flex:none; padding-left:.5rem; }
 
   .lib-title, .lib-author { overflow:hidden; text-overflow:ellipsis; }
-  .lib-cover-ph { display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg,#667eea,#764ba2); color:#fff; }
+  .lib-cover-ph { display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg,var(--accent-grad-from),var(--accent-grad-to)); color:#fff; }
   .lib-grid .lib-cover-ph { font-size:2rem; }
 
   .shelf-chips { display:flex; gap:.4rem; overflow-x:auto; padding-bottom:.3rem; }
@@ -133,15 +133,15 @@
         {% if it.author %}<div class="lib-author">{{ it.author }}</div>{% endif %}
         <div class="lib-badges">
           {% if it.kind == 'book' %}
-          {% if it.fmt %}<span class="badge bg-secondary" style="font-size:.6rem">{{ it.fmt }}</span>{% endif %}
-          {% if it.is_favorite %}<span class="badge bg-danger" style="font-size:.6rem"><i class="bi bi-heart-fill"></i></span>{% endif %}
-          {% if it.is_read %}<span class="badge bg-success" style="font-size:.6rem"><i class="bi bi-check2"></i></span>{% endif %}
-          {% if it.in_reading_list %}<span class="badge bg-warning text-dark" style="font-size:.6rem" title="Хочу прочитать"><i class="bi bi-bookmark-check-fill"></i></span>{% endif %}
-          {% if it.rating %}<span class="badge bg-warning text-dark" style="font-size:.6rem"><i class="bi bi-star-fill"></i> {{ it.rating }}</span>{% endif %}
+          {% if it.fmt %}<span class="badge bg-secondary text-2xs">{{ it.fmt }}</span>{% endif %}
+          {% if it.is_favorite %}<span class="badge bg-danger text-2xs"><i class="bi bi-heart-fill"></i></span>{% endif %}
+          {% if it.is_read %}<span class="badge bg-success text-2xs"><i class="bi bi-check2"></i></span>{% endif %}
+          {% if it.in_reading_list %}<span class="badge bg-warning text-dark text-2xs" title="Хочу прочитать"><i class="bi bi-bookmark-check-fill"></i></span>{% endif %}
+          {% if it.rating %}<span class="badge bg-warning text-dark text-2xs"><i class="bi bi-star-fill"></i> {{ it.rating }}</span>{% endif %}
           {% else %}
-          <span class="badge bg-dark" style="font-size:.6rem"><i class="bi bi-headphones me-1"></i>аудио</span>
-          <span class="badge bg-secondary" style="font-size:.6rem">{{ it.chapters }} гл.</span>
-          {% if it.is_finished %}<span class="badge bg-success" style="font-size:.6rem"><i class="bi bi-check2"></i></span>{% endif %}
+          <span class="badge bg-dark text-2xs"><i class="bi bi-headphones me-1"></i>аудио</span>
+          <span class="badge bg-secondary text-2xs">{{ it.chapters }} гл.</span>
+          {% if it.is_finished %}<span class="badge bg-success text-2xs"><i class="bi bi-check2"></i></span>{% endif %}
           {% endif %}
         </div>
       </div>
@@ -260,7 +260,7 @@
       <div class="lib-body">
         <div class="lib-title text-body">{{ book.title }}</div>
         <div class="lib-author">{{ book.author.name }}</div>
-        <div class="lib-badges"><span class="badge bg-info text-dark" style="font-size:.6rem"><i class="bi bi-share me-1"></i>чужая</span></div>
+        <div class="lib-badges"><span class="badge bg-info text-dark text-2xs"><i class="bi bi-share me-1"></i>чужая</span></div>
       </div>
     </a>
   </div>

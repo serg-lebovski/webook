@@ -254,7 +254,7 @@
         {% if book.cover_path %}
         <img src="/books/{{ book.id }}/cover" alt="" style="width:36px;height:54px;object-fit:cover;border-radius:3px;flex-shrink:0">
         {% else %}
-        <div style="width:36px;height:54px;border-radius:3px;background:linear-gradient(135deg,#667eea,#764ba2);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+        <div style="width:36px;height:54px;border-radius:3px;background:linear-gradient(135deg,var(--accent-grad-from),var(--accent-grad-to));display:flex;align-items:center;justify-content:center;flex-shrink:0">
           <i class="bi bi-book text-white small"></i>
         </div>
         {% endif %}
