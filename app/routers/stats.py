@@ -65,13 +65,8 @@ def _streaks(days: set) -> tuple[int, int]:
     return current, best
 
 
-@router.get("/stats", response_class=HTMLResponse)
-def stats_page(
-    request: Request,
-    year: int = 0,
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
+def _build_stats(db: Session, user: User, year: int) -> dict:
+    """Считает все агрегаты за год для страницы статистики и карточки «итогов года»."""
     now = datetime.utcnow()
     sel_year = year or now.year
     y_start = datetime(sel_year, 1, 1)
@@ -156,9 +151,7 @@ def stats_page(
     # Список годов, по которым есть данные (для переключателя)
     years = sorted({d.year for d in days} | {now.year}, reverse=True)
 
-    return templates.TemplateResponse("stats.html", {
-        "request": request,
-        "user": user,
+    return {
         "sel_year": sel_year,
         "years": years,
         "books_count": len(books_year),
@@ -178,4 +171,26 @@ def stats_page(
         "current_streak": current_streak,
         "best_streak": best_streak,
         "active_days": len([d for d in days if d.year == sel_year]),
-    })
+    }
+
+
+@router.get("/stats", response_class=HTMLResponse)
+def stats_page(
+    request: Request,
+    year: int = 0,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ctx = _build_stats(db, user, year)
+    return templates.TemplateResponse("stats.html", {"request": request, "user": user, **ctx})
+
+
+@router.get("/stats/{year}/card", response_class=HTMLResponse)
+def stats_year_card(
+    request: Request,
+    year: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ctx = _build_stats(db, user, year)
+    return templates.TemplateResponse("stats/card.html", {"request": request, "user": user, **ctx})
