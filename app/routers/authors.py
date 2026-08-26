@@ -7,6 +7,8 @@ from app.dependencies import get_db, get_current_user
 from app.models.author import Author
 from app.models.user import User
 from app.services.book_service import save_cover_file, delete_file
+from app.services.isbn_service import download_cover
+from app.services import openlibrary_service
 from app.config import COVERS_DIR
 
 router = APIRouter(prefix="/authors")
@@ -112,6 +114,25 @@ async def edit_author(
         delete_file(author.photo_path, COVERS_DIR)
         author.photo_path = save_cover_file(data, suffix)
     db.commit()
+    return RedirectResponse(f"/authors/{author_id}", status_code=302)
+
+
+@router.post("/{author_id}/enrich")
+def enrich_author(author_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Подтягивает биографию/фото автора из Open Library (best-effort, без ключа)."""
+    author = db.query(Author).filter(Author.id == author_id).first()
+    if not author:
+        return RedirectResponse("/authors", status_code=302)
+    info = openlibrary_service.fetch_author_info(author.name)
+    if info:
+        if info["bio"] and not author.bio:
+            author.bio = info["bio"][:4000]
+        if info["photo_url"] and not author.photo_path:
+            data = download_cover(info["photo_url"])
+            if data:
+                delete_file(author.photo_path, COVERS_DIR)
+                author.photo_path = save_cover_file(data, ".jpg")
+        db.commit()
     return RedirectResponse(f"/authors/{author_id}", status_code=302)
 
 

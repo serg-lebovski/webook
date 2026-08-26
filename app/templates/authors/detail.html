@@ -33,6 +33,13 @@
         <a href="/authors/{{ author.id }}/edit" class="btn btn-sm btn-outline-secondary">
           <i class="bi bi-pencil"></i>
         </a>
+        {% if not author.bio or not author.photo_path %}
+        <form method="post" action="/authors/{{ author.id }}/enrich">
+          <button class="btn btn-sm btn-outline-primary" title="Подтянуть биографию и фото из Open Library">
+            <i class="bi bi-magic me-1"></i>Open Library
+          </button>
+        </form>
+        {% endif %}
       </div>
     </div>
     {% if author.bio %}
@@ -75,7 +82,7 @@
           <div class="cover-placeholder"><i class="bi bi-book"></i></div>
           {% endif %}
           <div class="card-body p-2">
-            <p class="card-text small fw-semibold mb-0 text-dark">{{ book.title }}</p>
+            <p class="card-text small fw-semibold mb-0 text-body">{{ book.title }}</p>
             {% if book.series_order %}<p class="card-text small text-muted">№{{ book.series_order | int }}</p>{% endif %}
           </div>
         </div>
@@ -101,7 +108,7 @@
           <div class="cover-placeholder"><i class="bi bi-book"></i></div>
           {% endif %}
           <div class="card-body p-2">
-            <p class="card-text small fw-semibold text-dark">{{ book.title }}</p>
+            <p class="card-text small fw-semibold text-body">{{ book.title }}</p>
           </div>
         </div>
       </a>
