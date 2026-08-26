@@ -677,6 +677,44 @@ def toggle_reading_list(book_id: int, next: str = Form(""), user: User = Depends
     return RedirectResponse(_safe_next(next, book_id), status_code=302)
 
 
+@router.post("/{book_id}/convert")
+def convert_book(book_id: int, target_format: str = Form(...),
+                  user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Создаёт новую книгу — результат конвертации формата — рядом с исходной
+    (сам файл-источник не трогаем, как и при импорте/дублировании)."""
+    from app.services import convert_service
+
+    book = _own_book(book_id, user, db)
+    target_format = target_format.lower()
+    if target_format not in convert_service.targets_for(book.file_format) or not book.file_path:
+        return RedirectResponse(f"/books/{book_id}?convert_error=1", status_code=302)
+
+    src_path = BOOKS_DIR / book.file_path
+    if not src_path.exists():
+        return RedirectResponse(f"/books/{book_id}?convert_error=1", status_code=302)
+
+    try:
+        data = convert_service.convert(
+            book.file_format, target_format, src_path.read_bytes(),
+            book.title, book.author.name if book.author else "",
+        )
+        new_path = save_book_file(data, f".{target_format}")
+    except Exception:
+        return RedirectResponse(f"/books/{book_id}?convert_error=1", status_code=302)
+
+    new_book = Book(
+        title=book.title, author_id=book.author_id, series_id=book.series_id,
+        series_order=book.series_order, shelf_id=book.shelf_id, user_id=user.id,
+        description=book.description, file_path=new_path, file_format=target_format,
+        file_size=len(data), language=book.language, published_year=book.published_year,
+        in_reading_list=book.in_reading_list,
+    )
+    db.add(new_book)
+    db.commit()
+    db.refresh(new_book)
+    return RedirectResponse(f"/books/{new_book.id}", status_code=302)
+
+
 @router.post("/bulk")
 def books_bulk(
     action: str = Form(...),

@@ -20,6 +20,9 @@
   </ol>
 </nav>
 {% endif %}
+{% if request.query_params.get('convert_error') %}
+<div class="alert alert-warning"><i class="bi bi-exclamation-triangle me-1"></i>Не удалось сконвертировать книгу.</div>
+{% endif %}
 
 <div class="row g-4">
   <!-- Обложка -->
@@ -179,6 +182,20 @@
         <ul class="dropdown-menu">
           <li><a class="dropdown-item" href="/books/{{ book.id }}/edit">
             <i class="bi bi-pencil me-2"></i>Изменить</a></li>
+          {% if book.file_format in ('fb2', 'epub') %}
+          <li><hr class="dropdown-divider"></li>
+          <li><h6 class="dropdown-header">Конвертировать в</h6></li>
+          {% for fmt in ('epub', 'fb2', 'pdf') %}
+          {% if fmt != book.file_format %}
+          <li>
+            <form action="/books/{{ book.id }}/convert" method="post">
+              <input type="hidden" name="target_format" value="{{ fmt }}">
+              <button type="submit" class="dropdown-item"><i class="bi bi-arrow-repeat me-2"></i>{{ fmt | upper }}</button>
+            </form>
+          </li>
+          {% endif %}
+          {% endfor %}
+          {% endif %}
           <li><hr class="dropdown-divider"></li>
           <li>
             <form action="/books/{{ book.id }}/delete" method="post"

@@ -1,11 +1,29 @@
 """Parse metadata and covers from epub/fb2/pdf files."""
 import io
+import os
+import tempfile
 import uuid
+from contextlib import contextmanager
 from html import escape
 from pathlib import Path
 from typing import Optional
 
 from app.config import BOOKS_DIR, COVERS_DIR
+
+
+@contextmanager
+def _epub_tmp_path(data: bytes):
+    """ebooklib 0.18's read_epub() only accepts a real path/directory (it calls
+    os.path.isdir() on it unconditionally) — it cannot read from a BytesIO, so
+    in-memory bytes must be spooled to a temp file first."""
+    fd, path = tempfile.mkstemp(suffix=".epub")
+    os.close(fd)
+    try:
+        with open(path, "wb") as f:
+            f.write(data)
+        yield path
+    finally:
+        os.unlink(path)
 
 
 def save_upload(data: bytes, suffix: str, dest_dir: Path) -> str:
@@ -20,7 +38,8 @@ def extract_epub(data: bytes) -> dict:
         import ebooklib
         from ebooklib import epub
 
-        book = epub.read_epub(io.BytesIO(data))
+        with _epub_tmp_path(data) as path:
+            book = epub.read_epub(path)
         meta: dict = {
             "title": "",
             "author": "",
@@ -196,8 +215,12 @@ def extract_epub_text(data: bytes) -> list:
         import ebooklib
         from ebooklib import epub
 
-        book = epub.read_epub(io.BytesIO(data))
-        docs = {it.get_id(): it for it in book.get_items_of_type(ebooklib.ITEM_DOCUMENT)}
+        with _epub_tmp_path(data) as path:
+            book = epub.read_epub(path)
+        docs = {
+            it.get_id(): it for it in book.get_items_of_type(ebooklib.ITEM_DOCUMENT)
+            if not isinstance(it, epub.EpubNav)  # оглавление, не текст книги
+        }
         ordered = []
         for idref, _ in (book.spine or []):
             it = docs.pop(idref, None)
