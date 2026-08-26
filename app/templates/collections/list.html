@@ -3,10 +3,61 @@
 {% block content %}
 <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
   <h2 class="mb-0"><i class="bi bi-collection-play me-2"></i>Подборки</h2>
-  <form method="post" action="/collections" class="d-flex gap-2">
-    <input name="name" class="form-control form-control-sm" placeholder="Новая подборка" required style="max-width:220px">
-    <button class="btn btn-primary btn-sm text-nowrap"><i class="bi bi-plus-lg me-1"></i>Создать</button>
-  </form>
+  <button class="btn btn-primary btn-sm text-nowrap" type="button" data-bs-toggle="collapse" data-bs-target="#newColForm">
+    <i class="bi bi-plus-lg me-1"></i>Создать
+  </button>
+</div>
+
+<div class="collapse mb-3" id="newColForm">
+  <div class="card card-body">
+    <form method="post" action="/collections" class="row g-2">
+      <div class="col-md-4">
+        <input name="name" class="form-control form-control-sm" placeholder="Название подборки" required>
+      </div>
+      <div class="col-md-8 d-flex align-items-center gap-2">
+        <div class="form-check form-switch mb-0">
+          <input class="form-check-input" type="checkbox" role="switch" name="is_smart" value="1" id="isSmartNew"
+                 data-bs-toggle="collapse" data-bs-target="#smartRuleNew">
+          <label class="form-check-label small" for="isSmartNew">Умная (по правилу)</label>
+        </div>
+      </div>
+      <div class="col-12 collapse" id="smartRuleNew">
+        <div class="row g-2 align-items-end border-top pt-2 mt-1">
+          <div class="col-auto">
+            <label class="form-label small text-muted mb-1">Тип</label>
+            <select name="rule_type" class="form-select form-select-sm">
+              {% for t in ['book', 'link', 'audiobook', 'manga'] %}
+              <option value="{{ t }}">{{ {'book': 'Книга', 'link': 'Статья', 'audiobook': 'Аудиокнига', 'manga': 'Манга'}[t] }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-auto">
+            <label class="form-label small text-muted mb-1">Тег</label>
+            <input name="rule_tag" class="form-control form-control-sm" placeholder="любой" style="width:140px">
+          </div>
+          <div class="col-auto">
+            <label class="form-label small text-muted mb-1">Прочитано</label>
+            <select name="rule_is_read" class="form-select form-select-sm">
+              <option value="">любое</option>
+              <option value="true">да</option>
+              <option value="false">нет</option>
+            </select>
+          </div>
+          <div class="col-auto">
+            <label class="form-label small text-muted mb-1">Избранное</label>
+            <select name="rule_favorite" class="form-select form-select-sm">
+              <option value="">любое</option>
+              <option value="true">да</option>
+              <option value="false">нет</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="col-12">
+        <button class="btn btn-primary btn-sm"><i class="bi bi-check-lg me-1"></i>Создать подборку</button>
+      </div>
+    </form>
+  </div>
 </div>
 
 {% if collections %}
@@ -25,7 +76,10 @@
           {% endif %}
         </div>
         <div class="card-body p-2">
-          <div class="fw-semibold text-truncate">{{ d.c.name }}</div>
+          <div class="fw-semibold text-truncate">
+            {% if d.c.is_smart %}<i class="bi bi-magic text-primary me-1" title="Умная подборка"></i>{% endif %}
+            {{ d.c.name }}
+          </div>
           <div class="text-muted small">{{ d.count }} элемент(ов)</div>
         </div>
       </div>

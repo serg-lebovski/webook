@@ -9,9 +9,15 @@
 </nav>
 
 <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
-  <h2 class="mb-0">{{ collection.name }} <span class="text-muted fs-6">· {{ items|length }}</span></h2>
+  <h2 class="mb-0">
+    {% if collection.is_smart %}<i class="bi bi-magic text-primary me-1" title="Умная подборка"></i>{% endif %}
+    {{ collection.name }} <span class="text-muted fs-6">· {{ items|length }}</span>
+  </h2>
   <div class="d-flex gap-2">
     <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#renc"><i class="bi bi-pencil me-1"></i>Переименовать</button>
+    {% if collection.is_smart %}
+    <button class="btn btn-sm btn-outline-primary" data-bs-toggle="collapse" data-bs-target="#ruleForm"><i class="bi bi-magic me-1"></i>Правило</button>
+    {% endif %}
     <form method="post" action="/collections/{{ collection.id }}/delete" onsubmit="return confirm('Удалить подборку? Содержимое (книги/манга и т.д.) не удалится.')">
       <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash me-1"></i>Удалить</button>
     </form>
@@ -24,6 +30,47 @@
     <button class="btn btn-sm btn-primary">Сохранить</button>
   </form>
 </div>
+
+{% if collection.is_smart %}
+<div class="collapse mb-3" id="ruleForm">
+  <div class="card card-body">
+    <form method="post" action="/collections/{{ collection.id }}/smart" class="row g-2 align-items-end">
+      <input type="hidden" name="is_smart" value="1">
+      <div class="col-auto">
+        <label class="form-label small text-muted mb-1">Тип</label>
+        <select name="rule_type" class="form-select form-select-sm">
+          {% for t in types %}
+          <option value="{{ t }}" {% if rule.resource_type == t %}selected{% endif %}>{{ type_label[t] }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-auto">
+        <label class="form-label small text-muted mb-1">Тег</label>
+        <input name="rule_tag" class="form-control form-control-sm" value="{{ rule.tag or '' }}" placeholder="любой" style="width:140px">
+      </div>
+      <div class="col-auto">
+        <label class="form-label small text-muted mb-1">Прочитано</label>
+        <select name="rule_is_read" class="form-select form-select-sm">
+          <option value="" {% if rule.is_read is none %}selected{% endif %}>любое</option>
+          <option value="true" {% if rule.is_read == true %}selected{% endif %}>да</option>
+          <option value="false" {% if rule.is_read == false %}selected{% endif %}>нет</option>
+        </select>
+      </div>
+      <div class="col-auto">
+        <label class="form-label small text-muted mb-1">Избранное</label>
+        <select name="rule_favorite" class="form-select form-select-sm">
+          <option value="" {% if rule.favorite is none %}selected{% endif %}>любое</option>
+          <option value="true" {% if rule.favorite == true %}selected{% endif %}>да</option>
+          <option value="false" {% if rule.favorite == false %}selected{% endif %}>нет</option>
+        </select>
+      </div>
+      <div class="col-auto">
+        <button class="btn btn-sm btn-primary"><i class="bi bi-check-lg me-1"></i>Сохранить правило</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
 
 {% if items %}
 <div class="row g-3">
@@ -41,11 +88,13 @@
           <div class="text-muted text-truncate" style="font-size:.7rem">{{ it.label }}{% if it.subtitle %} · {{ it.subtitle }}{% endif %}</div>
         </div>
       </a>
+      {% if not collection.is_smart %}
       <div class="card-footer p-1 text-center">
         <form method="post" action="/collections/{{ collection.id }}/items/{{ it.item_id }}/delete">
           <button class="btn btn-sm btn-outline-danger py-0 w-100" title="Убрать из подборки"><i class="bi bi-x-lg"></i></button>
         </form>
       </div>
+      {% endif %}
     </div>
   </div>
   {% endfor %}

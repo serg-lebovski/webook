@@ -46,6 +46,8 @@ def _migrate_db():
             "ALTER TABLE audiobooks ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS steam_profile_url VARCHAR DEFAULT ''",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS steam_id VARCHAR DEFAULT ''",
+            "ALTER TABLE collections ADD COLUMN IF NOT EXISTS is_smart BOOLEAN NOT NULL DEFAULT FALSE",
+            "ALTER TABLE collections ADD COLUMN IF NOT EXISTS rule_json TEXT",
             # Полнотекстовый поиск по статьям (PostgreSQL FTS)
             "ALTER TABLE links ADD COLUMN IF NOT EXISTS content_tsv tsvector",
             "CREATE INDEX IF NOT EXISTS ix_links_content_tsv ON links USING gin(content_tsv)",
@@ -72,6 +74,8 @@ def _migrate_db():
             "ALTER TABLE audiobooks ADD COLUMN deleted_at DATETIME",
             "ALTER TABLE users ADD COLUMN steam_profile_url VARCHAR DEFAULT ''",
             "ALTER TABLE users ADD COLUMN steam_id VARCHAR DEFAULT ''",
+            "ALTER TABLE collections ADD COLUMN is_smart INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE collections ADD COLUMN rule_json TEXT",
         ]
         backfill_expires = (
             "UPDATE shares SET expires_at = datetime(created_at, '+7 days') WHERE expires_at IS NULL"

@@ -1,4 +1,6 @@
 """Коллекции/подборки: произвольные списки из любого контента."""
+import json
+
 from fastapi import APIRouter, Depends, Form, Request, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
@@ -11,12 +13,61 @@ from app.models.book import Book
 from app.models.audiobook import Audiobook
 from app.models.manga import Manga
 from app.models.link import Link
+from app.models.tag import Tag
 
 router = APIRouter(prefix="/collections")
 templates = Jinja2Templates(directory="app/templates")
 
 _TYPES = ("book", "audiobook", "manga", "link")
 _TYPE_LABEL = {"book": "Книга", "audiobook": "Аудиокнига", "manga": "Манга", "link": "Статья"}
+
+
+def _rule_of(c: Collection) -> dict:
+    try:
+        return json.loads(c.rule_json) if c.rule_json else {}
+    except Exception:
+        return {}
+
+
+def _tri(v: str):
+    """'' -> None, 'true' -> True, 'false' -> False (для select-фильтров правила)."""
+    return {"true": True, "false": False}.get(v)
+
+
+def _smart_ids(rule: dict, user: User, db: Session) -> list[tuple[str, int]]:
+    """Возвращает [(resource_type, id), ...] по правилу умной подборки."""
+    rtype = rule.get("resource_type")
+    if rtype not in _TYPES:
+        return []
+    tag = (rule.get("tag") or "").strip()
+    is_read = rule.get("is_read")
+    favorite = rule.get("favorite")
+
+    if rtype == "book":
+        q = db.query(Book.id).filter(Book.user_id == user.id, Book.deleted_at.is_(None))
+        if tag:
+            q = q.filter(Book.tags.any(Tag.name == tag))
+        if is_read is not None:
+            q = q.filter(Book.is_read == bool(is_read))
+        if favorite is not None:
+            q = q.filter(Book.is_favorite == bool(favorite))
+        return [("book", i) for (i,) in q.all()]
+    if rtype == "link":
+        q = db.query(Link.id).filter(Link.user_id == user.id, Link.deleted_at.is_(None))
+        if tag:
+            q = q.filter(Link.tags.any(Tag.name == tag))
+        if is_read is not None:
+            q = q.filter(Link.is_read == bool(is_read))
+        return [("link", i) for (i,) in q.all()]
+    if rtype == "audiobook":
+        q = db.query(Audiobook.id).filter(Audiobook.user_id == user.id, Audiobook.deleted_at.is_(None))
+        return [("audiobook", i) for (i,) in q.all()]
+    if rtype == "manga":
+        q = db.query(Manga.id).filter(Manga.user_id == user.id)
+        if favorite is not None:
+            q = q.filter(Manga.is_favorite == bool(favorite))
+        return [("manga", i) for (i,) in q.all()]
+    return []
 
 
 def _own(collection_id: int, user: User, db: Session) -> Collection:
@@ -61,29 +112,83 @@ def collections_list(request: Request, user: User = Depends(get_current_user), d
     cols = db.query(Collection).filter_by(user_id=user.id).order_by(Collection.name).all()
     data = []
     for c in cols:
-        covers = []
-        for it in c.items:
-            r = _resolve(it.resource_type, it.resource_id, user, db)
-            if r and r["cover"]:
-                covers.append(r["cover"])
-            if len(covers) >= 4:
-                break
-        data.append({"c": c, "count": len(c.items), "covers": covers})
+        if c.is_smart:
+            ids = _smart_ids(_rule_of(c), user, db)
+            count = len(ids)
+            covers = []
+            for rtype, rid in ids:
+                r = _resolve(rtype, rid, user, db)
+                if r and r["cover"]:
+                    covers.append(r["cover"])
+                if len(covers) >= 4:
+                    break
+        else:
+            covers = []
+            for it in c.items:
+                r = _resolve(it.resource_type, it.resource_id, user, db)
+                if r and r["cover"]:
+                    covers.append(r["cover"])
+                if len(covers) >= 4:
+                    break
+            count = len(c.items)
+        data.append({"c": c, "count": count, "covers": covers})
     return templates.TemplateResponse("collections/list.html", {
         "request": request, "user": user, "collections": data,
     })
 
 
 @router.post("")
-def create_collection(name: str = Form(...), user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def create_collection(
+    name: str = Form(...),
+    is_smart: str = Form(""),
+    rule_type: str = Form(""),
+    rule_tag: str = Form(""),
+    rule_is_read: str = Form(""),
+    rule_favorite: str = Form(""),
+    user: User = Depends(get_current_user), db: Session = Depends(get_db),
+):
     name = name.strip()
     if not name:
         return RedirectResponse("/collections", status_code=302)
     c = Collection(user_id=user.id, name=name[:150])
+    if is_smart and rule_type in _TYPES:
+        c.is_smart = True
+        c.rule_json = json.dumps({
+            "resource_type": rule_type,
+            "tag": rule_tag.strip(),
+            "is_read": _tri(rule_is_read),
+            "favorite": _tri(rule_favorite),
+        })
     db.add(c)
     db.commit()
     db.refresh(c)
     return RedirectResponse(f"/collections/{c.id}", status_code=302)
+
+
+@router.post("/{collection_id}/smart")
+def set_smart_rule(
+    collection_id: int,
+    is_smart: str = Form(""),
+    rule_type: str = Form(""),
+    rule_tag: str = Form(""),
+    rule_is_read: str = Form(""),
+    rule_favorite: str = Form(""),
+    user: User = Depends(get_current_user), db: Session = Depends(get_db),
+):
+    c = _own(collection_id, user, db)
+    if is_smart and rule_type in _TYPES:
+        c.is_smart = True
+        c.rule_json = json.dumps({
+            "resource_type": rule_type,
+            "tag": rule_tag.strip(),
+            "is_read": _tri(rule_is_read),
+            "favorite": _tri(rule_favorite),
+        })
+    else:
+        c.is_smart = False
+        c.rule_json = None
+    db.commit()
+    return RedirectResponse(f"/collections/{collection_id}", status_code=302)
 
 
 @router.get("/list.json")
@@ -148,14 +253,22 @@ async def create_with(request: Request, user: User = Depends(get_current_user), 
 def collection_detail(collection_id: int, request: Request,
                       user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     c = _own(collection_id, user, db)
+    rule = _rule_of(c)
     items = []
-    for it in c.items:
-        r = _resolve(it.resource_type, it.resource_id, user, db)
-        if r:
-            r["item_id"] = it.id
-            items.append(r)
+    if c.is_smart:
+        for rtype, rid in _smart_ids(rule, user, db):
+            r = _resolve(rtype, rid, user, db)
+            if r:
+                items.append(r)
+    else:
+        for it in c.items:
+            r = _resolve(it.resource_type, it.resource_id, user, db)
+            if r:
+                r["item_id"] = it.id
+                items.append(r)
     return templates.TemplateResponse("collections/detail.html", {
         "request": request, "user": user, "collection": c, "items": items,
+        "rule": rule, "types": _TYPES, "type_label": _TYPE_LABEL,
     })
 
 

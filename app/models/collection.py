@@ -1,7 +1,7 @@
 """Коллекции/подборки: именованные списки из любого контента."""
 from datetime import datetime
 
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, ForeignKey
 from sqlalchemy.orm import relationship
 
 from app.database import Base
@@ -15,6 +15,8 @@ class Collection(Base):
     name = Column(String, nullable=False)
     description = Column(Text, default="")
     created_at = Column(DateTime, default=datetime.utcnow)
+    is_smart = Column(Boolean, nullable=False, default=False)
+    rule_json = Column(Text, nullable=True)
 
     items = relationship("CollectionItem", back_populates="collection",
                          cascade="all, delete-orphan", order_by="CollectionItem.id")
