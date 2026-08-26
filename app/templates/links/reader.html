@@ -107,6 +107,18 @@
     </div>
 
     <span class="ms-auto d-flex gap-2">
+      <div class="dropdown">
+        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" id="bmBtn">
+          <i class="bi bi-bookmark-star me-1"></i>Закладки
+        </button>
+        <div class="dropdown-menu dropdown-menu-end p-2" style="min-width:260px" id="bmMenu">
+          <div class="d-flex gap-1 mb-2">
+            <input type="text" id="bmLabel" placeholder="Название (необязательно)" class="form-control form-control-sm">
+            <button class="btn btn-sm btn-primary" id="bmAdd"><i class="bi bi-plus-lg"></i></button>
+          </div>
+          <div id="bmList" class="small"></div>
+        </div>
+      </div>
       <a href="{{ link.url }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary">
         <i class="bi bi-box-arrow-up-right me-1"></i>Открыть оригинал
       </a>
@@ -185,6 +197,49 @@
       navigator.sendBeacon(`/links/${LINK_ID}/progress`,
         new Blob([JSON.stringify({ progress: frac() })], { type: 'application/json' }));
     }
+  });
+})();
+
+// ── Закладки (именованные позиции прокрутки) ──────────────────────────
+(function () {
+  const LINK_ID = {{ link.id }};
+  const listEl = document.getElementById('bmList');
+  const labelInput = document.getElementById('bmLabel');
+  if (!listEl) return;
+
+  function render(items) {
+    if (!items.length) { listEl.innerHTML = '<p class="text-muted mb-0">Закладок пока нет.</p>'; return; }
+    listEl.innerHTML = items.map(function (b) {
+      const label = b.label || ('Закладка от ' + b.created_at);
+      return '<div class="d-flex align-items-center gap-2 mb-2">' +
+        '<button type="button" class="btn btn-sm btn-outline-secondary flex-grow-1 text-start text-truncate bm-go" data-loc="' + b.location + '">' +
+        '<i class="bi bi-bookmark-fill me-1"></i>' + label + '</button>' +
+        '<button type="button" class="btn btn-sm btn-outline-danger bm-del" data-id="' + b.id + '"><i class="bi bi-x"></i></button>' +
+        '</div>';
+    }).join('');
+    listEl.querySelectorAll('.bm-go').forEach(function (b) {
+      b.addEventListener('click', function () { window.scrollTo(0, parseInt(b.dataset.loc, 10) || 0); });
+    });
+    listEl.querySelectorAll('.bm-del').forEach(function (b) {
+      b.addEventListener('click', function (e) {
+        e.stopPropagation();
+        fetch('/bookmarks/' + b.dataset.id + '/delete', { method: 'POST' }).then(load);
+      });
+    });
+  }
+
+  function load() {
+    fetch('/bookmarks/list?resource_type=link&resource_id=' + LINK_ID)
+      .then(function (r) { return r.ok ? r.json() : []; })
+      .then(render).catch(function () {});
+  }
+  document.getElementById('bmMenu').addEventListener('click', function (e) { e.stopPropagation(); });
+  document.getElementById('bmBtn').addEventListener('click', load);
+  document.getElementById('bmAdd').addEventListener('click', function () {
+    fetch('/bookmarks', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ resource_type: 'link', resource_id: LINK_ID, location: String(window.scrollY), label: labelInput.value.trim() })
+    }).then(function () { labelInput.value = ''; load(); });
   });
 })();
 

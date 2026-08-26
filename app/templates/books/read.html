@@ -144,6 +144,7 @@
   <span class="badge bg-secondary font-monospace">{{ book.file_format | upper }}</span>
   {% if book.file_format in ("epub", "fb2") %}
   <a href="#" id="ttsBtn" title="Озвучка"><i class="bi bi-volume-up fs-5"></i></a>
+  <a href="#" id="bmBtn" title="Закладки"><i class="bi bi-bookmark-star fs-5"></i></a>
   <a href="#" id="setBtn" title="Настройки чтения"><i class="bi bi-fonts fs-5"></i></a>
   {% endif %}
   <a href="/books/{{ book.id }}/download" title="Скачать файл"><i class="bi bi-download fs-5"></i></a>
@@ -177,6 +178,20 @@
       <button data-theme="dark">Тёмная</button>
     </div>
   </div>
+</div>
+{% endif %}
+
+{% if book.file_format in ("epub", "fb2") %}
+<div class="set-panel" id="bmPanel">
+  <div class="set-row mb-2">
+    <label class="mb-0">Новая закладка</label>
+    <div class="d-flex gap-1" style="flex:1">
+      <input type="text" id="bmLabel" placeholder="Название (необязательно)"
+             class="form-control form-control-sm" style="max-width:220px">
+      <button class="btn btn-sm btn-primary" id="bmAdd"><i class="bi bi-plus-lg"></i></button>
+    </div>
+  </div>
+  <div id="bmList" class="small"></div>
 </div>
 {% endif %}
 
@@ -303,8 +318,13 @@ window.RS = (function () {
     if (window.RS) window.RS.apply();
   });
 
+  var lastCfi = saved || null;
+  window.__bmGetLocation = function () { return lastCfi; };
+  window.__bmGoTo = function (loc) { rendition.display(loc); };
+
   var saveTimer;
   rendition.on("relocated", function (loc) {
+    lastCfi = loc.start.cfi;
     localStorage.setItem(KEY, loc.start.cfi);
     clearTimeout(saveTimer);
     saveTimer = setTimeout(function () {
@@ -390,6 +410,9 @@ window.RS = (function () {
   var saved = serverProgress || localStorage.getItem(KEY);
   if (saved) el.scrollTop = parseInt(saved, 10);
 
+  window.__bmGetLocation = function () { return String(el.scrollTop); };
+  window.__bmGoTo = function (loc) { el.scrollTop = parseInt(loc, 10) || 0; };
+
   var saveTimer;
   el.addEventListener("scroll", function () {
     clearTimeout(saveTimer);
@@ -412,6 +435,61 @@ window.RS = (function () {
   var el = document.getElementById('fb2-content');
   if (el && window.WebookHighlighter) {
     WebookHighlighter.init({ container: el, resourceType: 'book', resourceId: {{ book.id }} });
+  }
+})();
+</script>
+{% endif %}
+
+{% if book.file_format in ("epub", "fb2") %}
+<script>
+// ── Закладки (именованные позиции, отдельно от автопозиции чтения) ──
+(function () {
+  var BOOK_ID = {{ book.id }};
+  var btn = document.getElementById("bmBtn"), panel = document.getElementById("bmPanel");
+  var listEl = document.getElementById("bmList"), labelInput = document.getElementById("bmLabel");
+
+  function render(items) {
+    if (!items.length) { listEl.innerHTML = '<p class="text-muted mb-0">Закладок пока нет.</p>'; return; }
+    listEl.innerHTML = items.map(function (b) {
+      var label = b.label || ("Закладка от " + b.created_at);
+      return '<div class="d-flex align-items-center gap-2 mb-2">' +
+        '<button type="button" class="btn btn-sm btn-outline-secondary flex-grow-1 text-start text-truncate bm-go" data-loc="' + encodeURIComponent(b.location) + '">' +
+        '<i class="bi bi-bookmark-fill me-1"></i>' + label + '</button>' +
+        '<button type="button" class="btn btn-sm btn-outline-danger bm-del" data-id="' + b.id + '"><i class="bi bi-x"></i></button>' +
+        '</div>';
+    }).join("");
+    listEl.querySelectorAll(".bm-go").forEach(function (b) {
+      b.addEventListener("click", function () {
+        if (window.__bmGoTo) window.__bmGoTo(decodeURIComponent(b.dataset.loc));
+        panel.classList.remove("open");
+      });
+    });
+    listEl.querySelectorAll(".bm-del").forEach(function (b) {
+      b.addEventListener("click", function () {
+        fetch("/bookmarks/" + b.dataset.id + "/delete", { method: "POST" }).then(load);
+      });
+    });
+  }
+
+  function load() {
+    fetch("/bookmarks/list?resource_type=book&resource_id=" + BOOK_ID)
+      .then(function (r) { return r.ok ? r.json() : []; })
+      .then(render).catch(function () {});
+  }
+
+  if (btn && panel) {
+    btn.addEventListener("click", function (e) { e.preventDefault(); panel.classList.toggle("open"); if (panel.classList.contains("open")) load(); });
+    document.addEventListener("click", function (e) {
+      if (!panel.contains(e.target) && e.target !== btn && !btn.contains(e.target)) panel.classList.remove("open");
+    });
+    document.getElementById("bmAdd").addEventListener("click", function () {
+      var loc = window.__bmGetLocation ? window.__bmGetLocation() : null;
+      if (!loc) return;
+      fetch("/bookmarks", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resource_type: "book", resource_id: BOOK_ID, location: loc, label: labelInput.value.trim() })
+      }).then(function () { labelInput.value = ""; load(); });
+    });
   }
 })();
 </script>
