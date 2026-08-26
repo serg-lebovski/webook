@@ -229,6 +229,10 @@ def admin_page(
     users = db.query(User).order_by(User.created_at).all()
     allow_registration = get_setting(db, "allow_registration", "false") == "true"
     steam_api_key = get_setting(db, "steam_api_key", "")
+    s3_endpoint = get_setting(db, "s3_endpoint", "")
+    s3_bucket = get_setting(db, "s3_bucket", "")
+    s3_access_key = get_setting(db, "s3_access_key", "")
+    s3_secret_key = get_setting(db, "s3_secret_key", "")
     system = _get_system_info()
     bans = (
         db.query(IpBan)
@@ -242,6 +246,10 @@ def admin_page(
         "users": users,
         "allow_registration": allow_registration,
         "steam_api_key": steam_api_key,
+        "s3_endpoint": s3_endpoint,
+        "s3_bucket": s3_bucket,
+        "s3_access_key": s3_access_key,
+        "s3_secret_key": s3_secret_key,
         "success": success,
         "error": None,
         "system": system,
@@ -256,6 +264,10 @@ def update_admin_settings(
     request: Request,
     allow_registration: str = Form("off"),
     steam_api_key: str = Form(""),
+    s3_endpoint: str = Form(""),
+    s3_bucket: str = Form(""),
+    s3_access_key: str = Form(""),
+    s3_secret_key: str = Form(""),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -263,6 +275,11 @@ def update_admin_settings(
     value = "true" if allow_registration == "on" else "false"
     set_setting(db, "allow_registration", value)
     set_setting(db, "steam_api_key", steam_api_key.strip())
+    set_setting(db, "s3_endpoint", s3_endpoint.strip())
+    set_setting(db, "s3_bucket", s3_bucket.strip())
+    set_setting(db, "s3_access_key", s3_access_key.strip())
+    if s3_secret_key.strip():
+        set_setting(db, "s3_secret_key", s3_secret_key.strip())
     return RedirectResponse("/admin?success=settings", status_code=302)
 
 

@@ -18,6 +18,12 @@
   <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
 </div>
 {% endif %}
+{% if success == 'cloud_backup' %}
+<div class="alert alert-success alert-dismissible fade show" role="alert">
+  <i class="bi bi-cloud-check me-1"></i>Резервная копия загружена в облако.
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
 {% if success == 'update_queued' %}
 <div class="alert alert-info alert-dismissible fade show" role="alert">
   <i class="bi bi-arrow-repeat me-1"></i>Обновление запущено. Сервер скачает свежий код и пересоберётся —
@@ -308,6 +314,21 @@
         </button>
         <div class="form-text mt-2">Большой архив может готовиться несколько секунд — дождитесь начала загрузки.</div>
         <iframe id="backupFrame" title="backup" style="display:none"></iframe>
+
+        {% if cloud_backup_configured %}
+        <hr class="my-3">
+        <form method="post" action="/settings/backup/cloud">
+          <button type="submit" class="btn btn-outline-secondary">
+            <i class="bi bi-cloud-upload me-1"></i>Сохранить копию в облако
+          </button>
+        </form>
+        {% if cloud_backup_last %}
+        <div class="form-text mt-2">
+          Последняя облачная копия: {{ cloud_backup_last.at[:16].replace('T', ' ') }}
+          ({{ (cloud_backup_last.size / 1024 / 1024) | round(1) }} МБ)
+        </div>
+        {% endif %}
+        {% endif %}
       </div>
     </div>
 

@@ -79,6 +79,31 @@
               Пользователи указывают свою ссылку на профиль в своих настройках.
             </div>
           </div>
+          <hr>
+          <label class="form-label small fw-semibold"><i class="bi bi-cloud me-1"></i>Облачное хранилище для бэкапов (S3-совместимое)</label>
+          <div class="row g-2 mb-2">
+            <div class="col-md-6">
+              <input type="text" class="form-control form-control-sm" autocomplete="off"
+                     name="s3_endpoint" value="{{ s3_endpoint }}"
+                     placeholder="Endpoint URL (пусто — обычный AWS S3)">
+            </div>
+            <div class="col-md-6">
+              <input type="text" class="form-control form-control-sm" autocomplete="off"
+                     name="s3_bucket" value="{{ s3_bucket }}" placeholder="Bucket">
+            </div>
+            <div class="col-md-6">
+              <input type="text" class="form-control form-control-sm" autocomplete="off"
+                     name="s3_access_key" value="{{ s3_access_key }}" placeholder="Access key">
+            </div>
+            <div class="col-md-6">
+              <input type="password" class="form-control form-control-sm" autocomplete="new-password"
+                     name="s3_secret_key" placeholder="{% if s3_secret_key %}••••••••(оставьте пустым, чтобы не менять){% else %}Secret key{% endif %}">
+            </div>
+          </div>
+          <div class="form-text mb-3">
+            Позволяет пользователям сохранять резервную копию своей библиотеки в облако
+            (страница «Настройки» → «Резервная копия»). Работает с AWS S3, MinIO, Backblaze B2 и т.п.
+          </div>
           <button type="submit" class="btn btn-primary btn-sm">
             <i class="bi bi-floppy me-1"></i>Сохранить
           </button>

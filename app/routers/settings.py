@@ -76,9 +76,11 @@ def _get_stats(db: Session, user: User) -> dict:
 def settings_page(
     request: Request,
     success: str = "",
+    error: str = "",
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    from app.services import cloud_backup_service
     stats = _get_stats(db, user)
     update = update_service.read_state() if user.is_admin else None
     return templates.TemplateResponse("settings.html", {
@@ -86,9 +88,30 @@ def settings_page(
         "user": user,
         "stats": stats,
         "success": success,
-        "error": None,
+        "error": error or None,
         "update": update,
+        "cloud_backup_configured": cloud_backup_service.is_configured(db),
+        "cloud_backup_last": cloud_backup_service.last_backup_info(db, user.id),
     })
+
+
+@router.post("/backup/cloud")
+def backup_cloud(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Собирает тот же ZIP, что и /settings/backup, и грузит его в настроенное
+    администратором S3-совместимое хранилище вместо отдачи браузеру."""
+    from app.services import archive_service, cloud_backup_service
+    fd, tmp_path = tempfile.mkstemp(prefix="webook_cloudbackup_", suffix=".zip")
+    os.close(fd)
+    try:
+        archive_service.export_user(user, db, tmp_path)
+        ok, msg = cloud_backup_service.upload_backup(db, user, tmp_path)
+    finally:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+    if ok:
+        return RedirectResponse("/settings?success=cloud_backup", status_code=302)
+    from urllib.parse import quote
+    return RedirectResponse(f"/settings?error={quote(msg)}", status_code=302)
 
 
 @router.post("/update")
