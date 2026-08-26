@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Импорт из Goodreads — WeBook{% endblock %}
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/books">Библиотека</a></li>
+    <li class="breadcrumb-item"><a href="/books/upload">Загрузить</a></li>
+    <li class="breadcrumb-item active">Импорт из Goodreads</li>
+  </ol>
+</nav>
+
+<h2 class="mb-4"><i class="bi bi-file-earmark-arrow-up me-2"></i>Импорт из Goodreads / LibraryThing</h2>
+
+{% if result %}
+<div class="alert alert-success">
+  <i class="bi bi-check-circle me-1"></i>
+  Готово: добавлено <strong>{{ result.imported }}</strong> из {{ result.total }} книг
+  {% if result.skipped %}(пропущено дубликатов: {{ result.skipped }}){% endif %}.
+  <a href="/books" class="alert-link ms-2">Перейти в библиотеку →</a>
+</div>
+{% endif %}
+
+<div class="card" style="max-width:640px">
+  <div class="card-body">
+    <p class="text-muted small">
+      Экспортируйте библиотеку на
+      <a href="https://www.goodreads.com/review/import" target="_blank" rel="noopener">goodreads.com/review/import</a>
+      (кнопка «Export Library») и загрузите полученный CSV-файл сюда. Книги добавятся без файла —
+      как в «Хочу прочитать» — на полку «{{ 'Импорт из Goodreads' }}», с оценкой, годом и статусом
+      прочтения, если они были в файле; при наличии ISBN дополнительно подтянутся обложка и описание.
+      Уже добавленные книги (по названию и автору) пропускаются.
+    </p>
+    <form method="post" action="/books/import-csv" enctype="multipart/form-data" class="d-flex gap-2">
+      <input type="file" name="file" accept=".csv" class="form-control" required>
+      <button class="btn btn-primary text-nowrap"><i class="bi bi-upload me-1"></i>Импортировать</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

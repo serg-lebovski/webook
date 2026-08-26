@@ -417,6 +417,24 @@ def isbn_lookup(isbn: str = "", user: User = Depends(get_current_user)):
     return JSONResponse({"ok": True, "meta": meta})
 
 
+@router.get("/import-csv", response_class=HTMLResponse)
+def import_csv_form(request: Request, user: User = Depends(get_current_user)):
+    return templates.TemplateResponse("books/import_csv.html", {"request": request, "user": user, "result": None})
+
+
+@router.post("/import-csv", response_class=HTMLResponse)
+async def import_csv(
+    request: Request,
+    file: UploadFile = File(...),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    from app.services.csv_import_service import import_goodreads_csv
+    data = await file.read()
+    result = import_goodreads_csv(db, user, data, _get_or_create_author, _get_or_create_shelf)
+    return templates.TemplateResponse("books/import_csv.html", {"request": request, "user": user, "result": result})
+
+
 @router.post("/isbn-import")
 def isbn_import(isbn: str = Form(...), shelf: str = Form(""),
                 user: User = Depends(get_current_user), db: Session = Depends(get_db)):
