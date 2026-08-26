@@ -15,6 +15,18 @@
     .page-wrap { position:relative; }
     .page-num { position:absolute; top:6px; right:10px; background:rgba(0,0,0,.5); color:#fff;
                 font-size:.7rem; padding:1px 7px; border-radius:10px; }
+
+    /* Разворот: две страницы в ряд, справа налево (манга-конвенция) */
+    .pages.mode-spread { display:grid; grid-template-columns:1fr 1fr; direction:rtl; max-width:100%; }
+    .pages.mode-spread .page-wrap { direction:ltr; }
+    .pages.mode-spread .page-num { right:auto; left:10px; }
+
+    /* RTL: постраничная горизонтальная лента, пролистывание вправо-налево */
+    .pages.mode-rtl { display:flex; flex-direction:row-reverse; overflow-x:auto; max-width:100%;
+                       height:calc(100vh - 52px); scroll-snap-type:x mandatory; }
+    .pages.mode-rtl .page-wrap { flex:0 0 100%; scroll-snap-align:start; display:flex;
+                                  align-items:center; justify-content:center; height:100%; }
+    .pages.mode-rtl .page-wrap img { width:auto; height:100%; max-width:100%; object-fit:contain; }
   </style>
 </head>
 <body>
@@ -33,6 +45,7 @@
   </select>
   <span class="text-secondary small" id="pageIndicator">1 / {{ page_count }}</span>
   <div class="ms-auto d-flex gap-1">
+    <button class="btn btn-sm btn-outline-light" id="modeBtn" title="Режим чтения"><i class="bi bi-book" id="modeIcon"></i> <span id="modeLabel" class="d-none d-md-inline">Вебтун</span></button>
     <button class="btn btn-sm btn-outline-light" id="fitBtn" title="Во всю ширину"><i class="bi bi-arrows-fullscreen"></i></button>
     {% if prev_id %}<a href="{{ read_base }}{{ prev_id }}" class="btn btn-sm btn-outline-light" title="Пред. глава"><i class="bi bi-chevron-left"></i></a>{% endif %}
     {% if next_id %}<a href="{{ read_base }}{{ next_id }}" class="btn btn-sm btn-primary" title="След. глава"><i class="bi bi-chevron-right"></i></a>{% endif %}
@@ -76,6 +89,36 @@
   fitBtn.addEventListener('click', function () {
     pagesEl.classList.toggle('fit-width');
     localStorage.setItem('manga_fit', pagesEl.classList.contains('fit-width') ? '1' : '0');
+  });
+
+  // режим чтения: вебтун (вертикальная лента) / RTL (постранично) / разворот
+  const MODES = {
+    webtoon: { cls: '', icon: 'bi-book', label: 'Вебтун' },
+    rtl: { cls: 'mode-rtl', icon: 'bi-arrow-left-right', label: 'RTL' },
+    spread: { cls: 'mode-spread', icon: 'bi-columns-gap', label: 'Разворот' },
+  };
+  const MODE_ORDER = ['webtoon', 'rtl', 'spread'];
+  const modeBtn = document.getElementById('modeBtn');
+  const modeIcon = document.getElementById('modeIcon');
+  const modeLabel = document.getElementById('modeLabel');
+  function applyMode(mode, scrollToCurrent) {
+    Object.values(MODES).forEach(m => { if (m.cls) pagesEl.classList.remove(m.cls); });
+    const m = MODES[mode] || MODES.webtoon;
+    if (m.cls) pagesEl.classList.add(m.cls);
+    modeIcon.className = 'bi ' + m.icon;
+    modeLabel.textContent = m.label;
+    if (mode === 'rtl' && scrollToCurrent) {
+      const target = document.querySelector('.page-wrap[data-page="' + current + '"]');
+      if (target) target.scrollIntoView({ block: 'nearest', inline: 'start' });
+    }
+  }
+  let currentMode = localStorage.getItem('manga_mode') || 'webtoon';
+  if (!MODES[currentMode]) currentMode = 'webtoon';
+  applyMode(currentMode, false);
+  modeBtn.addEventListener('click', function () {
+    currentMode = MODE_ORDER[(MODE_ORDER.indexOf(currentMode) + 1) % MODE_ORDER.length];
+    localStorage.setItem('manga_mode', currentMode);
+    applyMode(currentMode, true);
   });
 
   // индикатор + сохранение позиции (только если задан progress_url)
