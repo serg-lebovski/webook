@@ -17,10 +17,25 @@
     <label class="form-label fw-semibold"><i class="bi bi-upc-scan me-1"></i>Добавить по ISBN</label>
     <div class="input-group" style="max-width:520px">
       <input type="text" id="isbnInput" class="form-control" placeholder="ISBN-10 или ISBN-13 (напр. 9785001234567)">
+      <button class="btn btn-outline-secondary d-none" type="button" id="isbnScanBtn" title="Сканировать штрихкод камерой"><i class="bi bi-upc-scan"></i></button>
       <button class="btn btn-outline-primary" type="button" id="isbnLookupBtn"><i class="bi bi-search me-1"></i>Найти</button>
     </div>
     <div id="isbnResult" class="mt-2"></div>
     <div class="form-text">Подтянет название, автора, год и обложку из Open Library. Книга добавится в «Хочу прочитать» — файл можно прикрепить позже.</div>
+  </div>
+</div>
+
+<div class="modal fade" id="scanModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content bg-dark">
+      <div class="modal-header border-secondary">
+        <h6 class="modal-title text-light"><i class="bi bi-upc-scan me-1"></i>Наведите камеру на штрихкод</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-0">
+        <video id="scanVideo" style="width:100%;display:block" playsinline muted></video>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -125,6 +140,50 @@
   }
   btn.addEventListener('click', lookup);
   inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); lookup(); } });
+
+  // ── Сканирование штрихкода камерой (нативный BarcodeDetector, без библиотек) ──
+  const scanBtn = document.getElementById('isbnScanBtn');
+  if ('BarcodeDetector' in window) {
+    scanBtn.classList.remove('d-none');
+    const modalEl = document.getElementById('scanModal');
+    const modal = new bootstrap.Modal(modalEl);
+    const video = document.getElementById('scanVideo');
+    let stream = null, rafId = null, detector = null;
+
+    async function startScan() {
+      try {
+        detector = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a'] });
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        video.srcObject = stream;
+        await video.play();
+        modal.show();
+        tick();
+      } catch (e) {
+        box.innerHTML = '<span class="text-danger small">Камера недоступна</span>';
+      }
+    }
+    async function tick() {
+      if (!stream) return;
+      try {
+        const codes = await detector.detect(video);
+        if (codes.length) {
+          inp.value = codes[0].rawValue;
+          stopScan();
+          lookup();
+          return;
+        }
+      } catch (e) {}
+      rafId = requestAnimationFrame(tick);
+    }
+    function stopScan() {
+      if (rafId) cancelAnimationFrame(rafId);
+      if (stream) stream.getTracks().forEach(t => t.stop());
+      stream = null;
+      modal.hide();
+    }
+    scanBtn.addEventListener('click', startScan);
+    modalEl.addEventListener('hidden.bs.modal', stopScan);
+  }
 })();
 
 const BOOK_EXT = ['epub', 'fb2', 'pdf'];
