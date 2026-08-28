@@ -107,7 +107,7 @@ def icon_png(size: int):
 
 
 _SW_JS = """
-const CACHE = 'webook-v2';
+const CACHE = 'webook-v3';
 
 self.addEventListener('install', () => self.skipWaiting());
 
@@ -125,16 +125,20 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(req.url);
   if (url.origin !== location.origin) return;
 
-  // Кэш статики и иконок: cache-first
+  // Кэш статики и иконок: stale-while-revalidate — отдаём закешированное
+  // сразу (быстро), но всегда обновляем кэш в фоне, чтобы после деплоя
+  // новых CSS/JS они не застревали в кэше навсегда (как было с cache-first).
   if (url.pathname.startsWith('/static') ||
       url.pathname.startsWith('/icons') ||
       url.pathname === '/manifest.webmanifest') {
     e.respondWith((async () => {
-      const cached = await caches.match(req);
-      if (cached) return cached;
-      const res = await fetch(req);
-      try { (await caches.open(CACHE)).put(req, res.clone()); } catch (_) {}
-      return res;
+      const cache = await caches.open(CACHE);
+      const cached = await cache.match(req);
+      const network = fetch(req).then((res) => {
+        try { cache.put(req, res.clone()); } catch (_) {}
+        return res;
+      }).catch(() => cached);
+      return cached || network;
     })());
     return;
   }
