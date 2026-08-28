@@ -3,14 +3,18 @@
 
 {% block head %}
 <style>
-  .lib-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(108px,1fr)); gap:.85rem; }
+  .lib-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(148px,1fr)); gap:1.4rem 1.1rem; }
   .lib-grid .lib-cell { position:relative; }
-  .lib-grid .bulk-check { position:absolute; top:5px; left:5px; z-index:2; width:1.1rem; height:1.1rem; }
+  .lib-grid .bulk-check { position:absolute; top:8px; left:8px; z-index:2; width:1.1rem; height:1.1rem; }
   .lib-grid .lib-link { display:block; text-decoration:none; }
-  .lib-grid .lib-cover { width:100%; aspect-ratio:2/3; border-radius:4px; object-fit:cover; box-shadow:0 2px 8px rgba(0,0,0,.15); }
-  .lib-grid .lib-title { font-size:.8rem; font-weight:600; margin-top:.35rem; line-height:1.2; }
-  .lib-grid .lib-author { font-size:.72rem; color:var(--bs-secondary-color); }
-  .lib-grid .lib-badges { margin-top:.2rem; display:flex; gap:.25rem; flex-wrap:wrap; }
+  .lib-grid .lib-cover {
+    width:100%; aspect-ratio:2/3; border-radius:var(--radius); object-fit:cover; box-shadow:var(--shadow-sm);
+    transition:transform .18s ease, box-shadow .18s ease;
+  }
+  .lib-grid .lib-cell:hover .lib-cover { transform:translateY(-4px) scale(1.015); box-shadow:var(--shadow-lift); }
+  .lib-grid .lib-title { font-size:.88rem; font-weight:600; margin-top:.55rem; line-height:1.25; }
+  .lib-grid .lib-author { font-size:.78rem; color:var(--bs-secondary-color); }
+  .lib-grid .lib-badges { margin-top:.3rem; display:flex; gap:.25rem; flex-wrap:wrap; }
 
   .lib-list { display:flex; flex-direction:column; gap:.4rem; }
   .lib-list .lib-cell { display:flex; align-items:center; gap:.6rem; border:1px solid var(--bs-border-color); border-radius:.4rem; padding:.35rem .6rem; }
@@ -25,9 +29,6 @@
   .lib-title, .lib-author { overflow:hidden; text-overflow:ellipsis; }
   .lib-cover-ph { display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg,var(--accent-grad-from),var(--accent-grad-to)); color:#fff; }
   .lib-grid .lib-cover-ph { font-size:2rem; }
-
-  .shelf-chips { display:flex; gap:.4rem; overflow-x:auto; padding-bottom:.3rem; }
-  .shelf-chips .chip { flex:none; white-space:nowrap; }
 
   .lib-actions { display:none; }
   .lib-list .lib-cell .lib-actions {
@@ -45,16 +46,13 @@
 </div>
 
 {% if type != 'audio' %}
-<h6 class="text-uppercase text-muted fw-semibold small mb-2"><i class="bi bi-bookshelf me-1"></i>Полки</h6>
-<div class="shelf-chips mb-4">
-  <a href="/books?{{ all_shelf_qs }}" class="btn btn-sm chip {% if not shelf_id %}btn-primary{% else %}btn-outline-secondary{% endif %}"><i class="bi bi-collection me-1"></i>Все полки</a>
+<div class="pill-row mb-4">
+  <a href="/books?{{ all_shelf_qs }}" class="pill {% if not shelf_id %}active{% endif %}"><i class="bi bi-collection me-1"></i>Все полки</a>
   {% for sc in shelf_chips %}
-  <a href="/books?{{ sc.qs }}" class="btn btn-sm chip {% if shelf_id == sc.id %}btn-primary{% else %}btn-outline-secondary{% endif %}"><i class="bi bi-bookshelf me-1"></i>{{ sc.name }}</a>
+  <a href="/books?{{ sc.qs }}" class="pill {% if shelf_id == sc.id %}active{% endif %}"><i class="bi bi-bookshelf me-1"></i>{{ sc.name }}</a>
   {% endfor %}
-  <a href="/shelves" class="btn btn-sm btn-outline-secondary chip" title="Управление полками"><i class="bi bi-gear"></i></a>
+  <a href="/shelves" class="pill" title="Управление полками"><i class="bi bi-gear"></i></a>
 </div>
-
-<h6 class="text-uppercase text-muted fw-semibold small mb-2"><i class="bi bi-book me-1"></i>Книги</h6>
 {% endif %}
 
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">

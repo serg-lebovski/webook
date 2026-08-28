@@ -84,41 +84,22 @@
 
 {% if continue_reading %}
 <!-- Продолжить чтение -->
-<div class="card mb-4">
-  <div class="card-header fw-semibold">
-    <i class="bi bi-play-circle me-1"></i>Продолжить чтение
-  </div>
-  <div class="card-body">
-    <div class="row g-3">
-      {% for it in continue_reading %}
-      <div class="col-6 col-md-4 col-lg-3">
-        <a href="{{ it.url }}" class="text-decoration-none">
-          <div class="card h-100">
-            <div class="d-flex">
-              {% if it.cover_url %}
-              <img src="{{ it.cover_url }}" alt="{{ it.title }}"
-                   style="width:48px;height:68px;object-fit:cover;border-radius:.35rem 0 0 .35rem;flex:0 0 auto">
-              {% else %}
-              <div class="d-flex align-items-center justify-content-center bg-body-secondary"
-                   style="width:48px;height:68px;border-radius:.35rem 0 0 .35rem;flex:0 0 auto">
-                <i class="bi {{ 'bi-journal-text' if it.kind == 'link' else 'bi-book' }} text-muted"></i>
-              </div>
-              {% endif %}
-              <div class="p-2 overflow-hidden">
-                <p class="card-text small fw-semibold mb-1 text-body text-truncate">{{ it.title }}</p>
-                <div class="progress" style="height:6px">
-                  <div class="progress-bar {{ 'bg-info' if it.kind == 'link' else 'bg-success' }}"
-                       style="width:{{ it.pct }}%"></div>
-                </div>
-                <span class="text-muted text-2xs">{{ it.pct }}%</span>
-              </div>
-            </div>
-          </div>
-        </a>
-      </div>
-      {% endfor %}
+<div class="hrow-section"><h3><i class="bi bi-play-circle me-2"></i>Продолжить чтение</h3></div>
+<div class="hrow mb-5">
+  {% for it in continue_reading %}
+  <a href="{{ it.url }}" class="tile">
+    {% if it.cover_url %}
+    <img src="{{ it.cover_url }}" class="tile-cover" alt="{{ it.title }}">
+    {% else %}
+    <div class="cover-placeholder"><i class="bi {{ 'bi-journal-text' if it.kind == 'link' else 'bi-book' }}"></i></div>
+    {% endif %}
+    <div class="progress mt-2" style="height:4px">
+      <div class="progress-bar {{ 'bg-info' if it.kind == 'link' else 'bg-success' }}" style="width:{{ it.pct }}%"></div>
     </div>
-  </div>
+    <div class="tile-title mt-1">{{ it.title }}</div>
+    <div class="tile-sub">{{ it.pct }}%</div>
+  </a>
+  {% endfor %}
 </div>
 {% endif %}
 
@@ -239,35 +220,23 @@
 
 {% if recommendations %}
 <!-- Что почитать дальше -->
-<div class="card mb-4">
-  <div class="card-header fw-semibold">
-    <i class="bi bi-lightbulb me-1"></i>Что почитать дальше
-    <span class="text-muted fw-normal small">— из вашей библиотеки</span>
-  </div>
-  <div class="card-body">
-    <div class="row g-3">
-      {% for rec in recommendations %}
-      {% set book = rec.book %}
-      <div class="col-6 col-md-4 col-lg-2">
-        <a href="/books/{{ book.id }}" class="text-decoration-none">
-          <div class="card h-100">
-            {% if book.cover_path %}
-            <img src="/books/{{ book.id }}/cover" class="book-cover" alt="{{ book.title }}">
-            {% else %}
-            <div class="cover-placeholder"><i class="bi bi-book"></i></div>
-            {% endif %}
-            <div class="card-body p-2">
-              <p class="card-text small fw-semibold mb-1 text-body">{{ book.title }}</p>
-              <p class="card-text text-muted text-2xs" style="line-height:1.2">
-                <i class="bi bi-lightbulb-fill text-warning me-1"></i>{{ rec.reason }}
-              </p>
-            </div>
-          </div>
-        </a>
-      </div>
-      {% endfor %}
-    </div>
-  </div>
+<div class="hrow-section">
+  <h3><i class="bi bi-lightbulb me-2"></i>Что почитать дальше</h3>
+  <span class="text-muted small">из вашей библиотеки</span>
+</div>
+<div class="hrow mb-5">
+  {% for rec in recommendations %}
+  {% set book = rec.book %}
+  <a href="/books/{{ book.id }}" class="tile">
+    {% if book.cover_path %}
+    <img src="/books/{{ book.id }}/cover" class="tile-cover" alt="{{ book.title }}">
+    {% else %}
+    <div class="cover-placeholder"><i class="bi bi-book"></i></div>
+    {% endif %}
+    <div class="tile-title">{{ book.title }}</div>
+    <div class="tile-sub"><i class="bi bi-lightbulb-fill text-warning me-1"></i>{{ rec.reason }}</div>
+  </a>
+  {% endfor %}
 </div>
 {% endif %}
 

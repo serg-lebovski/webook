@@ -136,6 +136,33 @@ def _accessible_book(book_id: int, user: User, db: Session) -> Book:
     return book
 
 
+def _books_shelves_landing(request: Request, user: User, db: Session) -> HTMLResponse:
+    """Экран выбора полки — стартовый вид «Книг» (см. books_list): показывает
+    сначала полки + псевдо-полки (Избранное/Хочу прочитать/Аудио), а не сразу
+    все книги списком."""
+    shelves = db.query(Shelf).filter(Shelf.user_id == user.id).order_by(Shelf.sort_order, Shelf.name).all()
+    shelves_data = []
+    for s in shelves:
+        cover_books = (
+            db.query(Book).filter(Book.shelf_id == s.id, Book.user_id == user.id,
+                                   Book.deleted_at.is_(None), Book.cover_path.isnot(None))
+            .order_by(Book.added_at.desc()).limit(4).all()
+        )
+        covers = [f"/books/{b.id}/cover" for b in cover_books]
+        count = _user_books(db, user).filter(Book.shelf_id == s.id).count()
+        shelves_data.append({"id": s.id, "name": s.name, "covers": covers, "count": count})
+
+    favorite_count = _user_books(db, user).filter(Book.is_favorite == True).count()
+    reading_count = _user_books(db, user).filter(Book.in_reading_list == True).count()
+    audio_count = db.query(Audiobook).filter(
+        Audiobook.user_id == user.id, Audiobook.deleted_at.is_(None)).count()
+
+    return templates.TemplateResponse("books/shelves_landing.html", {
+        "request": request, "user": user, "shelves": shelves_data,
+        "favorite_count": favorite_count, "reading_count": reading_count, "audio_count": audio_count,
+    })
+
+
 @router.get("", response_class=HTMLResponse)
 def books_list(
     request: Request,
@@ -154,6 +181,9 @@ def books_list(
     from app.models.tag import Tag
 
     type_ = type if type in ("all", "book", "audio") else "all"
+    no_filters = not any((shelf_id, author_id, q, tag, favorite, reading, sort)) and type_ == "all"
+    if no_filters and page == 1:
+        return _books_shelves_landing(request, user, db)
     book_only_filter = bool(shelf_id or author_id or tag or favorite or reading or sort)
     if type_ == "audio":
         include_books, include_audio = False, True
