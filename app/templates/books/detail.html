@@ -120,6 +120,19 @@
         <i class="bi bi-book-open me-1"></i>Читать
       </a>
       {% endif %}
+      {% if book.file_format in ("epub", "fb2") %}
+      <div class="dropdown d-inline">
+        <button class="btn btn-outline-primary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+          <i class="bi bi-people me-1"></i>Читать вместе
+        </button>
+        <ul class="dropdown-menu">
+          <li><a class="dropdown-item" href="#" onclick="return syncReadCreate({{ book.id }})">
+            <i class="bi bi-plus-circle me-2"></i>Создать комнату</a></li>
+          <li><a class="dropdown-item" href="/books/{{ book.id }}/sync">
+            <i class="bi bi-box-arrow-in-right me-2"></i>Присоединиться по коду</a></li>
+        </ul>
+      </div>
+      {% endif %}
       {% if book.file_format %}
       <a href="/books/{{ book.id }}/download" class="btn btn-success">
         <i class="bi bi-download me-1"></i>Скачать {{ book.file_format | upper }}
@@ -278,4 +291,16 @@ function copyShare() {
 }
 </script>
 {% endif %}
+<script>
+function syncReadCreate(bookId) {
+  fetch('/books/' + bookId + '/sync/create', {method: 'POST'})
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (!data.ok) { alert(data.message || 'Не удалось создать комнату'); return; }
+      window.location.href = '/books/' + bookId + '/sync/' + data.code + '?lead=1';
+    })
+    .catch(function () { alert('Ошибка запроса'); });
+  return false;
+}
+</script>
 {% endblock %}

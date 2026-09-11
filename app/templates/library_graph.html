@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}Граф связей — WeBook{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+<style>
+  #graphWrap { position: relative; width: 100%; height: calc(100vh - 220px); min-height: 420px;
+    border-radius: var(--radius); border: 1px solid var(--bs-border-color); background: var(--bs-tertiary-bg); overflow: hidden; }
+  #graphSvg { width: 100%; height: 100%; cursor: grab; }
+  #graphSvg:active { cursor: grabbing; }
+  .graph-node circle { stroke: #fff; stroke-width: 1.5px; cursor: pointer; }
+  .graph-node text { font-size: 10px; fill: var(--bs-body-color); pointer-events: none; }
+  .graph-link { stroke: var(--bs-border-color); stroke-opacity: .6; }
+  .graph-tooltip {
+    position: absolute; pointer-events: none; background: var(--bs-body-bg); border: 1px solid var(--bs-border-color);
+    border-radius: var(--radius-sm); padding: .4rem .6rem; font-size: .8rem; box-shadow: var(--shadow-md); display: none; z-index: 10;
+  }
+  #graphEmpty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-4">
+  <div>
+    <h2 class="mb-0"><i class="bi bi-diagram-3 me-2"></i>Граф связей библиотеки</h2>
+    <p class="text-muted mb-0 small">Книги, связанные общим автором, серией или темами (тегами)</p>
+  </div>
+  <a href="/stats" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>К статистике</a>
+</div>
+
+<div id="graphWrap">
+  <svg id="graphSvg"></svg>
+  <div id="graphEmpty" class="text-muted d-none">
+    <div class="text-center">
+      <i class="bi bi-diagram-3 display-4"></i>
+      <p class="mt-2 mb-0">Недостаточно данных для графа — добавьте книги с авторами/сериями/тегами</p>
+    </div>
+  </div>
+</div>
+<div class="graph-tooltip" id="graphTooltip"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var wrap = document.getElementById('graphWrap');
+  var svgEl = document.getElementById('graphSvg');
+  var tooltip = document.getElementById('graphTooltip');
+  var empty = document.getElementById('graphEmpty');
+
+  fetch('/library-graph/data.json').then(function (r) { return r.json(); }).then(function (data) {
+    if (!data.nodes || !data.nodes.length || !data.edges || !data.edges.length) {
+      empty.classList.remove('d-none');
+      return;
+    }
+    var width = wrap.clientWidth, height = wrap.clientHeight;
+    var svg = d3.select(svgEl).attr('viewBox', [0, 0, width, height]);
+    var g = svg.append('g');
+
+    svg.call(d3.zoom().scaleExtent([0.2, 4]).on('zoom', function (e) { g.attr('transform', e.transform); }));
+
+    var degree = {};
+    data.edges.forEach(function (e) {
+      degree[e.source] = (degree[e.source] || 0) + 1;
+      degree[e.target] = (degree[e.target] || 0) + 1;
+    });
+
+    var sim = d3.forceSimulation(data.nodes)
+      .force('link', d3.forceLink(data.edges).id(function (d) { return d.id; }).distance(70).strength(0.35))
+      .force('charge', d3.forceManyBody().strength(-140))
+      .force('center', d3.forceCenter(width / 2, height / 2))
+      .force('collide', d3.forceCollide(18));
+
+    var link = g.append('g').selectAll('line').data(data.edges).join('line')
+      .attr('class', 'graph-link')
+      .attr('stroke-width', function (d) { return Math.min(4, 1 + d.weight / 3); });
+
+    var node = g.append('g').selectAll('g').data(data.nodes).join('g')
+      .attr('class', 'graph-node')
+      .call(d3.drag()
+        .on('start', function (e, d) { if (!e.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+        .on('drag', function (e, d) { d.fx = e.x; d.fy = e.y; })
+        .on('end', function (e, d) { if (!e.active) sim.alphaTarget(0); d.fx = null; d.fy = null; }));
+
+    node.append('circle')
+      .attr('r', function (d) { return 6 + Math.min(10, (degree[d.id] || 0)); })
+      .attr('fill', 'var(--accent)');
+
+    node.append('text')
+      .attr('dy', function (d) { return -(9 + Math.min(10, (degree[d.id] || 0))); })
+      .attr('text-anchor', 'middle')
+      .text(function (d) { return d.title.length > 18 ? d.title.slice(0, 17) + '…' : d.title; });
+
+    node.on('click', function (e, d) { window.location.href = d.url; })
+      .on('mousemove', function (e, d) {
+        tooltip.style.display = 'block';
+        tooltip.style.left = (e.offsetX + 16) + 'px';
+        tooltip.style.top = (e.offsetY + 8) + 'px';
+        tooltip.innerHTML = '<strong>' + d.title + '</strong>' + (d.author ? '<br><span class="text-muted">' + d.author + '</span>' : '');
+      })
+      .on('mouseleave', function () { tooltip.style.display = 'none'; });
+
+    sim.on('tick', function () {
+      link.attr('x1', function (d) { return d.source.x; }).attr('y1', function (d) { return d.source.y; })
+          .attr('x2', function (d) { return d.target.x; }).attr('y2', function (d) { return d.target.y; });
+      node.attr('transform', function (d) { return 'translate(' + d.x + ',' + d.y + ')'; });
+    });
+  }).catch(function () {
+    empty.classList.remove('d-none');
+  });
+})();
+</script>
+{% endblock %}

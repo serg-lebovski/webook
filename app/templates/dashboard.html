@@ -6,11 +6,12 @@
 {% endblock %}
 
 {% block content %}
-<div class="d-flex align-items-center mb-4">
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
   <div>
     <h2 class="mb-0">Добро пожаловать, {{ user.username }}</h2>
     <p class="text-muted mb-0 small">Ваша библиотека</p>
   </div>
+  <button type="button" class="btn btn-outline-secondary btn-sm" onclick="bookRoulette()"><i class="bi bi-dice-5 me-1"></i>Рулетка</button>
 </div>
 
 {% if expiring_shares %}
@@ -98,6 +99,27 @@
     </div>
     <div class="tile-title mt-1">{{ it.title }}</div>
     <div class="tile-sub">{{ it.pct }}%</div>
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if paused_reading %}
+<!-- Полка на паузе -->
+<div class="hrow-section"><h3><i class="bi bi-pause-circle me-2"></i>Полка на паузе</h3></div>
+<div class="hrow mb-5">
+  {% for it in paused_reading %}
+  <a href="{{ it.url }}" class="tile">
+    {% if it.cover_url %}
+    <img src="{{ it.cover_url }}" class="tile-cover" alt="{{ it.title }}">
+    {% else %}
+    <div class="cover-placeholder"><i class="bi {{ 'bi-journal-text' if it.kind == 'link' else 'bi-book' }}"></i></div>
+    {% endif %}
+    <div class="progress mt-2" style="height:4px">
+      <div class="progress-bar bg-warning" style="width:{{ it.pct }}%"></div>
+    </div>
+    <div class="tile-title mt-1">{{ it.title }}</div>
+    <div class="tile-sub">Брошено на {{ it.pct }}%</div>
   </a>
   {% endfor %}
 </div>

@@ -8,8 +8,12 @@ import struct
 import zlib
 from pathlib import Path
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, PlainTextResponse, Response
+from sqlalchemy.orm import Session
+
+from app.dependencies import get_db, get_current_user
+from app.models.user import User
 
 router = APIRouter()
 
@@ -185,6 +189,20 @@ self.addEventListener('notificationclick', (e) => {
 def service_worker():
     return Response(content=_SW_JS, media_type="application/javascript",
                     headers={"Cache-Control": "no-cache"})
+
+
+@router.get("/pwa/splash.png")
+def pwa_splash(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Коллаж из обложек текущего пользователя — заставка при запуске PWA.
+
+    В отличие от остальных ручек в этом файле, требует авторизации: коллаж
+    персональный (свои обложки), same-origin cookie-аутентификация работает как обычно."""
+    from app.services.splash_service import generate_collage
+    data = generate_collage(db, user.id)
+    if not data:
+        return PlainTextResponse("no covers", status_code=404)
+    return Response(content=data, media_type="image/png",
+                    headers={"Cache-Control": "private, max-age=3600"})
 
 
 def _extension_version() -> str:

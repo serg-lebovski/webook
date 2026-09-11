@@ -490,6 +490,23 @@ def isbn_import(isbn: str = Form(...), shelf: str = Form(""),
     return RedirectResponse(f"/books/{book.id}", status_code=302)
 
 
+@router.get("/roulette/pick")
+def roulette_pick(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Взвешенный случайный выбор книги «что почитать» — см. reco_service.pick_random."""
+    from app.services import reco_service
+    book = reco_service.pick_random(db, user.id)
+    if not book:
+        return JSONResponse({"ok": False, "message": "Нет непрочитанных книг для выбора"}, status_code=404)
+    return JSONResponse({
+        "ok": True,
+        "id": book.id,
+        "title": book.title,
+        "author": book.author.name if book.author else "",
+        "cover_url": f"/books/{book.id}/cover" if book.cover_path else None,
+        "url": f"/books/{book.id}",
+    })
+
+
 def _dup_key(title: str) -> str:
     return re.sub(r"\s+", " ", (title or "").strip().lower())
 

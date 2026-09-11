@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Читаем вместе — {{ book.title }}{% endblock %}
+
+{% block head %}
+<style>
+  #syncParas { max-width: 760px; margin: 0 auto; line-height: 1.7; }
+  #syncParas p { padding: .3rem .5rem; border-radius: var(--radius-sm); transition: background .2s ease; }
+  #syncParas p.sync-current { background: rgba(var(--accent-rgb), .18); }
+  {% if is_lead %}#syncParas p { cursor: pointer; }
+  #syncParas p:hover { background: var(--bs-tertiary-bg); }{% endif %}
+  #syncBar { position: sticky; top: 0; z-index: 5; background: var(--bs-body-bg); border-bottom: 1px solid var(--bs-border-color); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="syncBar" class="d-flex align-items-center justify-content-between flex-wrap gap-2 py-2 mb-3">
+  <div>
+    <span class="badge {% if is_lead %}bg-primary{% else %}bg-secondary{% endif %} me-2">
+      {% if is_lead %}Вы ведёте{% else %}Следуете за ведущим{% endif %}
+    </span>
+    <span class="text-muted small">Комната: <strong>{{ code }}</strong></span>
+    <span id="syncStatus" class="text-muted small ms-2">подключение…</span>
+  </div>
+  <a href="/books/{{ book.id }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-x-lg me-1"></i>Выйти</a>
+</div>
+
+<div id="syncParas">
+  {% for p in paragraphs %}
+  <p data-i="{{ loop.index0 }}">{{ p }}</p>
+  {% endfor %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var isLead = {{ 'true' if is_lead else 'false' }};
+  var code = {{ code | tojson }};
+  var statusEl = document.getElementById('syncStatus');
+  var current = null;
+
+  function setCurrent(i) {
+    if (current !== null) {
+      var prev = document.querySelector('#syncParas p[data-i="' + current + '"]');
+      if (prev) prev.classList.remove('sync-current');
+    }
+    current = i;
+    var el = document.querySelector('#syncParas p[data-i="' + i + '"]');
+    if (el) {
+      el.classList.add('sync-current');
+      el.scrollIntoView({behavior: 'smooth', block: 'center'});
+    }
+  }
+
+  var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  var ws = new WebSocket(proto + '//' + location.host + '/ws/sync/' + code);
+
+  ws.onopen = function () { statusEl.textContent = 'подключено'; };
+  ws.onclose = function () { statusEl.textContent = 'соединение прервано'; };
+  ws.onerror = function () { statusEl.textContent = 'ошибка соединения'; };
+  ws.onmessage = function (ev) {
+    try {
+      var data = JSON.parse(ev.data);
+      if (typeof data.index === 'number') setCurrent(data.index);
+    } catch (e) {}
+  };
+
+  if (isLead) {
+    document.getElementById('syncParas').addEventListener('click', function (e) {
+      var p = e.target.closest('p[data-i]');
+      if (!p) return;
+      var i = parseInt(p.getAttribute('data-i'), 10);
+      setCurrent(i);
+      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({index: i}));
+    });
+  }
+})();
+</script>
+{% endblock %}

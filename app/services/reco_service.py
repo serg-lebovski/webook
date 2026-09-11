@@ -7,6 +7,7 @@
   • присутствие в списке «Хочу прочитать» / избранном.
 Чисто по локальным данным, без внешних сервисов.
 """
+import random
 from collections import defaultdict
 
 from sqlalchemy.orm import Session
@@ -14,7 +15,8 @@ from sqlalchemy.orm import Session
 from app.models.book import Book
 
 
-def recommend(db: Session, user_id: int, limit: int = 6) -> list[dict]:
+def _score_candidates(db: Session, user_id: int) -> list[tuple[int, Book, str]]:
+    """Скоринг непрочитанных книг пользователя. Возвращает (score, book, reason)."""
     books = (
         db.query(Book)
         .filter(Book.user_id == user_id, Book.deleted_at.is_(None))
@@ -81,11 +83,26 @@ def recommend(db: Session, user_id: int, limit: int = 6) -> list[dict]:
         if b.is_favorite:
             score += 1
 
-        if score > 0:
-            scored.append((score, b, reasons[0] if reasons else "Из вашей библиотеки"))
+        scored.append((score, b, reasons[0] if reasons else "Из вашей библиотеки"))
 
+    return scored
+
+
+def recommend(db: Session, user_id: int, limit: int = 6) -> list[dict]:
+    scored = [c for c in _score_candidates(db, user_id) if c[0] > 0]
     scored.sort(key=lambda x: (x[0], x[1].added_at or x[1].id), reverse=True)
     return [
         {"book": b, "reason": reason, "score": score}
         for score, b, reason in scored[:limit]
     ]
+
+
+def pick_random(db: Session, user_id: int) -> Book | None:
+    """Взвешенный случайный выбор книги «что почитать» — книги с бОльшим скорингом
+    выпадают чаще, но любая непрочитанная книга имеет ненулевой шанс (пол score=1)."""
+    scored = _score_candidates(db, user_id)
+    if not scored:
+        return None
+    population = [b for _, b, _ in scored]
+    weights = [max(score, 1) for score, _, _ in scored]
+    return random.choices(population, weights=weights, k=1)[0]

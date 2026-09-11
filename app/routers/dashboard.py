@@ -118,6 +118,66 @@ def _continue_reading(db: Session, user_id: int, limit: int = 8) -> list:
     return items[:limit]
 
 
+def _paused_reading(db: Session, user_id: int, limit: int = 8) -> list:
+    """Книги и статьи, открытые давно и заброшенные на середине — «полка на паузе»."""
+    stale_before = datetime.utcnow() - timedelta(days=30)
+    items = []
+
+    rows = (
+        db.query(ReadProgress, Book)
+        .join(Book, Book.id == ReadProgress.book_id)
+        .filter(
+            ReadProgress.user_id == user_id,
+            Book.user_id == user_id,
+            Book.deleted_at.is_(None),
+            Book.is_read == False,
+            ReadProgress.percentage > 0.05,
+            ReadProgress.percentage < 0.80,
+            ReadProgress.updated_at < stale_before,
+        )
+        .order_by(ReadProgress.updated_at.asc())
+        .limit(limit)
+        .all()
+    )
+    for rp, b in rows:
+        items.append({
+            "kind": "book",
+            "title": b.title,
+            "url": f"/books/{b.id}/read",
+            "cover_url": f"/books/{b.id}/cover" if b.cover_path else None,
+            "pct": round((rp.percentage or 0) * 100),
+            "updated": rp.updated_at or datetime.min,
+        })
+
+    links = (
+        db.query(Link)
+        .filter(
+            Link.user_id == user_id,
+            Link.deleted_at.is_(None),
+            Link.is_read == False,
+            Link.read_progress > 0.05,
+            Link.read_progress < 0.80,
+            Link.progress_updated_at.isnot(None),
+            Link.progress_updated_at < stale_before,
+        )
+        .order_by(Link.progress_updated_at.asc())
+        .limit(limit)
+        .all()
+    )
+    for l in links:
+        items.append({
+            "kind": "link",
+            "title": l.title,
+            "url": f"/links/{l.id}/read",
+            "cover_url": None,
+            "pct": round((l.read_progress or 0) * 100),
+            "updated": l.progress_updated_at or datetime.min,
+        })
+
+    items.sort(key=lambda x: x["updated"])
+    return items[:limit]
+
+
 def _reading_stats(db: Session, user_id: int, goal: int) -> dict:
     """Статистика за текущий год + серия чтения (подряд идущие дни с активностью)."""
     now = datetime.utcnow()
@@ -221,11 +281,13 @@ def dashboard(
     from app.services import reco_service
     recommendations = reco_service.recommend(db, user.id, limit=6)
     continue_reading = _continue_reading(db, user.id)
+    paused_reading = _paused_reading(db, user.id)
 
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
         "user": user,
         "continue_reading": continue_reading,
+        "paused_reading": paused_reading,
         "recommendations": recommendations,
         "books_total": books_total,
         "books_read": books_read,

@@ -51,6 +51,7 @@ def _migrate_db():
             # Полнотекстовый поиск по статьям (PostgreSQL FTS)
             "ALTER TABLE links ADD COLUMN IF NOT EXISTS content_tsv tsvector",
             "CREATE INDEX IF NOT EXISTS ix_links_content_tsv ON links USING gin(content_tsv)",
+            "ALTER TABLE links ADD COLUMN IF NOT EXISTS progress_updated_at TIMESTAMP",
         ]
         backfill_expires = (
             "UPDATE shares SET expires_at = created_at + INTERVAL '7 days' WHERE expires_at IS NULL"
@@ -76,6 +77,7 @@ def _migrate_db():
             "ALTER TABLE users ADD COLUMN steam_id VARCHAR DEFAULT ''",
             "ALTER TABLE collections ADD COLUMN is_smart INTEGER NOT NULL DEFAULT 0",
             "ALTER TABLE collections ADD COLUMN rule_json TEXT",
+            "ALTER TABLE links ADD COLUMN progress_updated_at DATETIME",
         ]
         backfill_expires = (
             "UPDATE shares SET expires_at = datetime(created_at, '+7 days') WHERE expires_at IS NULL"

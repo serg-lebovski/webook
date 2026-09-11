@@ -295,6 +295,7 @@ async def save_link_progress(
     except (TypeError, ValueError):
         p = 0.0
     link.read_progress = min(1.0, max(0.0, p))
+    link.progress_updated_at = datetime.utcnow()
     db.commit()
     return JSONResponse({"ok": True})
 
