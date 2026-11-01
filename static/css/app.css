@@ -121,7 +121,10 @@ body {
 
 .app-sidebar {
   width: 272px;
-  background: var(--sidebar-bg);
+  /* !important: Bootstrap .offcanvas-lg на ≥992px ставит background-color:
+     transparent!important — без этого в светлой теме белый текст меню
+     оказывается на светлом фоне страницы. */
+  background: var(--sidebar-bg) !important;
   color: var(--sidebar-text);
 }
 @media (min-width: 992px) {

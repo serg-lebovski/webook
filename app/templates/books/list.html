@@ -89,6 +89,7 @@
     <select name="sort" class="form-select form-select-sm">
       <option value="">По названию</option>
       <option value="rating" {% if sort == 'rating' %}selected{% endif %}>По оценке</option>
+      <option value="added" {% if sort == 'added' %}selected{% endif %}>Сначала новые</option>
     </select>
   </div>
   <div class="col-auto">

@@ -5,3 +5,4 @@ __pycache__/
 *.pyo
 # Android-проект собирается отдельно; в образ нужен только static/webook.apk
 android/
+staging/

@@ -1,5 +1,25 @@
 {% extends "base.html" %}
 {% block title %}Загрузить — WeBook{% endblock %}
+{% block head %}
+<style>
+  .up-drop { display:block; border:2px dashed var(--bs-border-color); border-radius: var(--radius); padding: 1.6rem 1rem;
+             text-align:center; cursor:pointer; transition: border-color .15s, background .15s; margin:0; }
+  .up-drop:hover, .up-drop.is-over { border-color: var(--accent); background: rgba(var(--accent-rgb), .06); }
+  .up-drop i { color: var(--accent); }
+  .up-card { transition: opacity .15s; }
+  .up-card:hover { transform:none; }
+  .up-card.is-off { opacity:.55; }
+  .up-card.is-dup { border-color: var(--bs-warning-border-subtle); }
+  .up-cover { width:64px; height:96px; object-fit:cover; border-radius: var(--radius-sm); box-shadow: var(--shadow-sm); font-size:1.4rem; }
+  .up-lbl { font-size:.72rem; color: var(--bs-secondary-color); margin-bottom:.1rem; }
+  .up-orig { font-size:.72rem; color: var(--bs-success-text-emphasis); margin-top:.15rem; }
+  .up-desc summary { cursor:pointer; }
+  .min-w-0 { min-width:0; }
+  .up-commit { position: sticky; bottom: 0; z-index: 10; margin-top: 1rem; padding: .75rem 1rem;
+               background: var(--bs-body-bg); border:1px solid var(--bs-border-color); border-radius: var(--radius);
+               box-shadow: 0 -6px 18px rgba(0,0,0,.08); }
+</style>
+{% endblock %}
 {% block content %}
 <nav aria-label="breadcrumb" class="mb-3">
   <ol class="breadcrumb">
@@ -44,13 +64,24 @@
 
 <div class="card mb-4">
   <div class="card-body">
-    <label class="form-label fw-semibold">Выберите файлы</label>
-    <input type="file" id="fileInput" class="form-control" multiple
-           accept=".epub,.fb2,.pdf,.mp3,.m4a,.m4b,.ogg,.oga,.opus,.aac,.flac,.wav,.webm">
-    <div class="form-text">
-      Книги (epub, fb2, pdf) — каждый файл станет отдельной книгой, можно загрузить сразу несколько.
-      Аудиофайлы — одной аудиокнигой (главами). <strong>Обязательно только название</strong>;
-      автора, полку и цикл можно указать сейчас или позже.
+    <label for="fileInput" id="dropZone" class="up-drop">
+      <i class="bi bi-cloud-arrow-up fs-1 d-block mb-1"></i>
+      <span class="fw-semibold">Перетащите файлы сюда или нажмите, чтобы выбрать</span>
+      <span class="d-block small text-muted mt-1">
+        Книги: <b>epub, fb2, pdf</b> и <b>zip-архивы</b> с ними (в т.ч. <code>*.fb2.zip</code> и архив из нескольких книг) ·
+        аудио: mp3, m4a, m4b, ogg, flac… — одной аудиокнигой
+      </span>
+      <input type="file" id="fileInput" class="d-none" multiple
+             accept=".epub,.fb2,.pdf,.zip,.mp3,.m4a,.m4b,.ogg,.oga,.opus,.aac,.flac,.wav,.webm">
+    </label>
+    <div class="d-flex flex-wrap gap-3 align-items-center mt-3 small">
+      <div class="form-check form-switch m-0">
+        <input class="form-check-input" type="checkbox" id="optTranslate" checked>
+        <label class="form-check-label" for="optTranslate">
+          Английские названия переводить, транслит — в кириллицу
+        </label>
+      </div>
+      <span class="text-muted">Название, автор, цикл и № тома, год, жанры и аннотация берутся из самой книги.</span>
     </div>
   </div>
 </div>
@@ -59,34 +90,45 @@
 <datalist id="seriesList">{% for s in series_all %}<option value="{{ s.name }}"></option>{% endfor %}</datalist>
 <datalist id="shelvesList">{% for s in shelves %}<option value="{{ s.name }}"></option>{% endfor %}</datalist>
 
+<!-- Очередь разбора -->
+<div id="queueSection" class="card mb-3 d-none">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span class="fw-semibold"><i class="bi bi-hourglass-split me-1"></i>Разбор файлов</span>
+    <span class="small text-muted" id="queueSummary"></span>
+  </div>
+  <ul class="list-group list-group-flush small" id="queueList"></ul>
+</div>
+
 <!-- Книги -->
-<div id="bookSection" class="card mb-4 d-none">
-  <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
-    <span class="fw-semibold"><i class="bi bi-journals me-1"></i>Книги (<span id="bookCount">0</span>)</span>
-    <button type="button" class="btn btn-sm btn-primary book-submit">
-      <i class="bi bi-cloud-upload me-1"></i>Загрузить книги
+<div id="bookSection" class="d-none">
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+    <h5 class="m-0"><i class="bi bi-journals me-1"></i>Книги к загрузке <span class="badge text-bg-secondary" id="bookCount">0</span></h5>
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+      <div class="input-group input-group-sm" style="width:auto">
+        <span class="input-group-text"><i class="bi bi-bookshelf"></i></span>
+        <input id="shelfAll" class="form-control" list="shelvesList" placeholder="Полка для всех" style="max-width:180px">
+        <button class="btn btn-outline-secondary" type="button" id="shelfAllBtn">Применить</button>
+      </div>
+      <div class="btn-group btn-group-sm">
+        <button class="btn btn-outline-secondary" type="button" id="checkAll">Выбрать все</button>
+        <button class="btn btn-outline-secondary" type="button" id="checkNone">Снять</button>
+      </div>
+    </div>
+  </div>
+  <div id="bookCards" class="vstack gap-2"></div>
+</div>
+
+<div id="commitBar" class="up-commit d-none">
+  <div class="d-flex align-items-center gap-3 flex-wrap">
+    <span class="small" id="commitInfo"></span>
+    <div class="progress flex-grow-1 d-none" id="commitProgress" style="height:6px;min-width:120px">
+      <div class="progress-bar progress-bar-striped progress-bar-animated" style="width:100%"></div>
+    </div>
+    <button type="button" class="btn btn-success ms-auto" id="commitBtn">
+      <i class="bi bi-check2-circle me-1"></i>Сохранить в библиотеку
     </button>
   </div>
-  <div class="table-responsive">
-    <table class="table table-sm align-middle mb-0">
-      <thead class="small text-muted">
-        <tr>
-          <th style="min-width:130px">Файл</th>
-          <th style="min-width:200px">Название *</th>
-          <th style="min-width:150px">Автор</th>
-          <th style="min-width:150px">Цикл</th>
-          <th style="width:64px">№</th>
-          <th style="min-width:130px">Полка</th>
-        </tr>
-      </thead>
-      <tbody id="bookRows"></tbody>
-    </table>
-  </div>
-  <div class="card-footer text-end">
-    <button type="button" class="btn btn-sm btn-primary book-submit">
-      <i class="bi bi-cloud-upload me-1"></i>Загрузить книги
-    </button>
-  </div>
+  <div class="small text-danger mt-1" id="commitErr"></div>
 </div>
 
 <!-- Аудиокнига -->
@@ -189,55 +231,277 @@
   }
 })();
 
-const BOOK_EXT = ['epub', 'fb2', 'pdf'];
+let committing = false;
+const BOOK_EXT = ['epub', 'fb2', 'pdf', 'zip'];
 const fileInput = document.getElementById('fileInput');
-let bookFiles = [], audioFiles = [];
+let audioFiles = [];
+const cards = new Map();          // token -> {card, el}
+const queue = [];                 // файлы, ждущие разбора
+let activeUploads = 0;
+const MAX_PARALLEL = 2;
 
 function ext(n) { return (n.split('.').pop() || '').toLowerCase(); }
 function stripExt(n) { return n.replace(/\.[^.]+$/, ''); }
-function esc(s) { return s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function fmtSize(b) { return b > 1048576 ? (b / 1048576).toFixed(1) + ' МБ' : Math.max(1, Math.round(b / 1024)) + ' КБ'; }
+function fmtOrder(v) { return v == null || v === '' ? '' : (Number.isInteger(+v) ? String(+v) : String(v)); }
 
-fileInput.addEventListener('change', function () {
-  bookFiles = []; audioFiles = [];
-  Array.from(fileInput.files).forEach(f => {
-    if (BOOK_EXT.includes(ext(f.name))) bookFiles.push(f); else audioFiles.push(f);
+// ── опция перевода (запоминаем) ──
+const optTranslate = document.getElementById('optTranslate');
+try { if (localStorage.getItem('upload_translate') === '0') optTranslate.checked = false; } catch (e) {}
+optTranslate.addEventListener('change', () => { try { localStorage.setItem('upload_translate', optTranslate.checked ? '1' : '0'); } catch (e) {} });
+
+// ── выбор / drag&drop ──
+function takeFiles(list) {
+  const books = [];
+  const newAudio = [];
+  Array.from(list).forEach(f => { (BOOK_EXT.includes(ext(f.name)) ? books : newAudio).push(f); });
+  if (newAudio.length) { audioFiles = audioFiles.concat(newAudio); renderAudio(); }
+  books.forEach(enqueue);
+  document.getElementById('emptyHint').classList.add('d-none');
+}
+fileInput.addEventListener('change', () => { takeFiles(fileInput.files); fileInput.value = ''; });
+const dz = document.getElementById('dropZone');
+['dragenter', 'dragover'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.add('is-over'); }));
+['dragleave', 'drop'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.remove('is-over'); }));
+dz.addEventListener('drop', e => { if (e.dataTransfer && e.dataTransfer.files) takeFiles(e.dataTransfer.files); });
+
+// ── очередь разбора ──
+function enqueue(f) {
+  const li = document.createElement('li');
+  li.className = 'list-group-item d-flex align-items-center gap-2';
+  li.innerHTML =
+    '<i class="bi ' + (ext(f.name) === 'zip' ? 'bi-file-zip' : 'bi-file-earmark-text') + ' text-muted"></i>' +
+    '<span class="text-truncate" style="max-width:45%" title="' + esc(f.name) + '">' + esc(f.name) + '</span>' +
+    '<span class="text-muted">' + fmtSize(f.size) + '</span>' +
+    '<div class="progress flex-grow-1" style="height:6px"><div class="progress-bar" style="width:0%"></div></div>' +
+    '<span class="q-status text-muted text-nowrap" style="min-width:110px">в очереди</span>';
+  document.getElementById('queueList').appendChild(li);
+  document.getElementById('queueSection').classList.remove('d-none');
+  queue.push({ file: f, li });
+  updateQueueSummary();
+  pump();
+}
+
+function updateQueueSummary() {
+  const total = document.querySelectorAll('#queueList li').length;
+  const done = document.querySelectorAll('#queueList li.q-done').length;
+  document.getElementById('queueSummary').textContent = done + ' из ' + total;
+}
+
+function pump() {
+  while (activeUploads < MAX_PARALLEL && queue.length) {
+    const job = queue.shift();
+    activeUploads++;
+    stageFile(job).finally(() => { activeUploads--; updateQueueSummary(); pump(); updateCommitBar(); });
+  }
+}
+
+function stageFile(job) {
+  return new Promise(resolve => {
+    const bar = job.li.querySelector('.progress-bar');
+    const st = job.li.querySelector('.q-status');
+    const fd = new FormData();
+    fd.append('file', job.file);
+    fd.append('translate', optTranslate.checked ? '1' : '0');
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/books/stage');
+    xhr.upload.onprogress = e => {
+      if (e.lengthComputable) {
+        const p = Math.round(e.loaded / e.total * 100);
+        bar.style.width = p + '%';
+        st.textContent = 'загрузка ' + p + '%';
+      }
+    };
+    xhr.upload.onload = () => {
+      bar.style.width = '100%';
+      bar.classList.add('progress-bar-striped', 'progress-bar-animated');
+      st.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>разбор…';
+    };
+    xhr.onload = () => {
+      bar.classList.remove('progress-bar-striped', 'progress-bar-animated');
+      job.li.classList.add('q-done');
+      let data = null;
+      try { data = JSON.parse(xhr.responseText); } catch (e) {}
+      if (xhr.status !== 200 || !data) {
+        bar.classList.add('bg-danger');
+        st.innerHTML = '<span class="text-danger">ошибка ' + xhr.status + '</span>';
+        return resolve();
+      }
+      (data.items || []).forEach(addCard);
+      const n = (data.items || []).length;
+      bar.classList.add(n ? 'bg-success' : 'bg-danger');
+      st.innerHTML = n ? '<span class="text-success"><i class="bi bi-check2"></i> ' + n + ' ' + plural(n, 'книга', 'книги', 'книг') + '</span>'
+                       : '<span class="text-danger">нет книг</span>';
+      if ((data.errors || []).length) {
+        const ul = document.createElement('div');
+        ul.className = 'w-100 text-danger small mt-1';
+        ul.innerHTML = data.errors.map(e => '<div><i class="bi bi-exclamation-triangle me-1"></i>' + esc(e) + '</div>').join('');
+        job.li.classList.add('flex-wrap');
+        job.li.appendChild(ul);
+      }
+      resolve();
+    };
+    xhr.onerror = () => {
+      job.li.classList.add('q-done');
+      bar.classList.add('bg-danger');
+      st.innerHTML = '<span class="text-danger">сеть недоступна</span>';
+      resolve();
+    };
+    xhr.send(fd);
   });
-  renderBooks();
-  renderAudio();
-  document.getElementById('emptyHint').classList.toggle('d-none', !!(bookFiles.length || audioFiles.length));
+}
+
+function plural(n, one, few, many) {
+  const m10 = n % 10, m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return one;
+  if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return few;
+  return many;
+}
+
+// ── карточки книг ──
+const HOW = { translate: 'переведено', translit: 'из транслита' };
+
+function origHint(c, field) {
+  const o = (c.original || {})[field];
+  if (!o) return '';
+  return '<div class="up-orig" data-field="' + field + '" data-orig="' + esc(o) + '">' +
+    '<i class="bi bi-translate me-1"></i>' + HOW[(c.how || {})[field]] + ' из «' + esc(o) + '» · ' +
+    '<a href="#" class="up-revert">вернуть</a></div>';
+}
+
+function addCard(c) {
+  const el = document.createElement('div');
+  el.className = 'card up-card' + (c.duplicate_of ? ' is-dup' : '');
+  el.dataset.token = c.token;
+  const cover = c.has_cover
+    ? '<img src="/books/stage/' + c.token + '/cover" alt="" class="up-cover">'
+    : '<div class="up-cover cover-placeholder"><i class="bi bi-book"></i></div>';
+  el.innerHTML =
+    '<div class="card-body p-2 p-md-3">' +
+    '<div class="d-flex gap-3">' +
+      '<div class="d-flex flex-column align-items-center gap-2">' +
+        '<input class="form-check-input up-check m-0" type="checkbox" ' + (c.duplicate_of ? '' : 'checked') + ' title="Загружать">' +
+        cover +
+        '<span class="badge text-bg-secondary text-uppercase">' + esc(c.format) + '</span>' +
+      '</div>' +
+      '<div class="flex-grow-1 min-w-0">' +
+        '<div class="d-flex justify-content-between gap-2 mb-1">' +
+          '<span class="small text-muted text-truncate" title="' + esc(c.filename) + '"><i class="bi bi-paperclip"></i> ' + esc(c.filename) + ' · ' + fmtSize(c.size) + '</span>' +
+          '<button type="button" class="btn btn-sm btn-link text-danger p-0 up-remove" title="Убрать"><i class="bi bi-x-lg"></i></button>' +
+        '</div>' +
+        (c.duplicate_of ? '<div class="alert alert-warning py-1 px-2 small mb-2"><i class="bi bi-files me-1"></i>Похоже, уже есть в библиотеке — <a href="/books/' + c.duplicate_of + '" target="_blank">открыть</a>. Не выбрана.</div>' : '') +
+        (!c.parsed ? '<div class="small text-warning mb-1"><i class="bi bi-exclamation-circle me-1"></i>Метаданные не прочитаны — название взято из имени файла.</div>' : '') +
+        '<div class="row g-2">' +
+          '<div class="col-md-7"><label class="up-lbl">Название *</label><input class="form-control form-control-sm f-title" value="' + esc(c.title) + '">' + origHint(c, 'title') + '</div>' +
+          '<div class="col-md-5"><label class="up-lbl">Автор</label><input class="form-control form-control-sm f-author" list="authorsList" placeholder="Неизвестный автор" value="' + esc(c.author) + '">' + origHint(c, 'author') + '</div>' +
+          '<div class="col-7 col-md-5"><label class="up-lbl">Цикл</label><input class="form-control form-control-sm f-series" list="seriesList" placeholder="—" value="' + esc(c.series) + '">' + origHint(c, 'series') + '</div>' +
+          '<div class="col-2 col-md-1"><label class="up-lbl">№</label><input class="form-control form-control-sm f-order" type="number" step="0.1" min="0" value="' + esc(fmtOrder(c.series_order)) + '"></div>' +
+          '<div class="col-3 col-md-2"><label class="up-lbl">Год</label><input class="form-control form-control-sm f-year" type="number" min="0" max="2100" value="' + esc(c.year || '') + '"></div>' +
+          '<div class="col-md-4"><label class="up-lbl">Полка</label><input class="form-control form-control-sm f-shelf" list="shelvesList" placeholder="Без полки"></div>' +
+          '<div class="col-12"><label class="up-lbl">Жанры и теги</label><input class="form-control form-control-sm f-tags" placeholder="через запятую" value="' + esc((c.tags || []).join(', ')) + '"></div>' +
+          '<div class="col-12">' +
+            '<details class="up-desc"' + (c.description ? '' : '') + '><summary class="small text-muted">Аннотация' + (c.description ? ' · ' + c.description.length + ' зн.' : ' — нет') + '</summary>' +
+            '<textarea class="form-control form-control-sm f-desc mt-1" rows="4">' + esc(c.description) + '</textarea></details>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div></div>';
+  el.querySelector('.up-check').addEventListener('change', () => { el.classList.toggle('is-off', !el.querySelector('.up-check').checked); updateCommitBar(); });
+  if (c.duplicate_of) el.classList.add('is-off');
+  el.querySelector('.up-remove').addEventListener('click', () => removeCard(c.token));
+  el.querySelectorAll('.up-revert').forEach(a => a.addEventListener('click', e => {
+    e.preventDefault();
+    const box = a.closest('.up-orig');
+    el.querySelector('.f-' + box.dataset.field).value = box.dataset.orig;
+    box.remove();
+  }));
+  // если пользователь сменил автора/название вручную — подсказку о переводе убираем
+  ['title', 'author', 'series'].forEach(f => {
+    const inp = el.querySelector('.f-' + f);
+    inp.addEventListener('input', () => { const h = el.querySelector('.up-orig[data-field="' + f + '"]'); if (h) h.remove(); });
+  });
+  document.getElementById('bookCards').appendChild(el);
+  cards.set(c.token, { card: c, el });
+  document.getElementById('bookSection').classList.remove('d-none');
+  updateCommitBar();
+}
+
+function removeCard(token) {
+  const it = cards.get(token);
+  if (!it) return;
+  it.el.remove();
+  cards.delete(token);
+  fetch('/books/stage/discard', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tokens: [token] }) });
+  updateCommitBar();
+}
+
+function selectedCards() {
+  return Array.from(cards.values()).filter(it => it.el.querySelector('.up-check').checked);
+}
+
+function updateCommitBar() {
+  const total = cards.size, sel = selectedCards().length;
+  document.getElementById('bookCount').textContent = total;
+  document.getElementById('bookSection').classList.toggle('d-none', !total);
+  const bar = document.getElementById('commitBar');
+  bar.classList.toggle('d-none', !total);
+  const pending = queue.length + activeUploads;
+  document.getElementById('commitInfo').innerHTML =
+    'Выбрано <b>' + sel + '</b> из ' + total + (pending ? ' · <span class="text-muted">ещё разбирается: ' + pending + '</span>' : '');
+  const btn = document.getElementById('commitBtn');
+  btn.disabled = !sel || committing;
+  btn.innerHTML = '<i class="bi bi-check2-circle me-1"></i>Сохранить ' + sel + ' ' + plural(sel, 'книгу', 'книги', 'книг');
+}
+
+document.getElementById('shelfAllBtn').addEventListener('click', () => {
+  const v = document.getElementById('shelfAll').value;
+  cards.forEach(it => { it.el.querySelector('.f-shelf').value = v; });
 });
+document.getElementById('checkAll').addEventListener('click', () => { cards.forEach(it => { it.el.querySelector('.up-check').checked = true; it.el.classList.remove('is-off'); }); updateCommitBar(); });
+document.getElementById('checkNone').addEventListener('click', () => { cards.forEach(it => { it.el.querySelector('.up-check').checked = false; it.el.classList.add('is-off'); }); updateCommitBar(); });
 
-function renderBooks() {
-  const sec = document.getElementById('bookSection');
-  const tbody = document.getElementById('bookRows');
-  tbody.innerHTML = '';
-  if (!bookFiles.length) { sec.classList.add('d-none'); return; }
-  sec.classList.remove('d-none');
-  document.getElementById('bookCount').textContent = bookFiles.length;
-  bookFiles.forEach((f, i) => {
-    const tr = document.createElement('tr');
-    tr.innerHTML =
-      '<td class="small text-muted text-truncate" style="max-width:150px" title="' + esc(f.name) + '">' + esc(f.name) + '</td>' +
-      '<td><input class="form-control form-control-sm bk-title" value="' + esc(stripExt(f.name)) + '" required></td>' +
-      '<td><input class="form-control form-control-sm bk-author" list="authorsList" placeholder="Неизвестный автор"></td>' +
-      '<td><input class="form-control form-control-sm bk-series" list="seriesList" placeholder="—"></td>' +
-      '<td><input class="form-control form-control-sm bk-order" type="number" step="0.1" min="0"></td>' +
-      '<td><input class="form-control form-control-sm bk-shelf" list="shelvesList" placeholder="Без полки"></td>';
-    tbody.appendChild(tr);
-  });
-  bookFiles.forEach((f, i) => prefillTitle(f, i));
-}
-
-async function prefillTitle(f, i) {
+async function commitBooks() {
+  const sel = selectedCards();
+  if (!sel.length || committing) return;
+  const bad = sel.find(it => !it.el.querySelector('.f-title').value.trim());
+  if (bad) { bad.el.scrollIntoView({ behavior: 'smooth', block: 'center' }); bad.el.querySelector('.f-title').focus(); return; }
+  committing = true;
+  updateCommitBar();
+  document.getElementById('commitProgress').classList.remove('d-none');
+  document.getElementById('commitErr').textContent = '';
+  const items = sel.map(({ card, el }) => ({
+    token: card.token,
+    title: el.querySelector('.f-title').value,
+    author: el.querySelector('.f-author').value,
+    series: el.querySelector('.f-series').value,
+    series_order: el.querySelector('.f-order').value,
+    year: el.querySelector('.f-year').value,
+    shelf: el.querySelector('.f-shelf').value,
+    tags: el.querySelector('.f-tags').value,
+    description: el.querySelector('.f-desc').value,
+  }));
   try {
-    const fd = new FormData(); fd.append('file', f);
-    const r = await fetch('/books/parse-meta', { method: 'POST', body: fd });
-    if (!r.ok) return;
-    const m = await r.json();
-    const inp = document.querySelectorAll('.bk-title')[i];
-    if (m.title && inp && inp.value === stripExt(f.name)) inp.value = m.title;
-  } catch (e) {}
+    const r = await fetch('/books/stage/commit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items }) });
+    const data = await r.json();
+    if (data.ok) {
+      if ((data.errors || []).length) alert('Сохранено: ' + data.created + '\nНе удалось:\n' + data.errors.join('\n'));
+      window.location = data.redirect || '/books';
+      return;
+    }
+    document.getElementById('commitErr').textContent = data.error + ((data.errors || []).length ? ': ' + data.errors.join('; ') : '');
+  } catch (e) {
+    document.getElementById('commitErr').textContent = 'Ошибка сети. Попробуйте ещё раз.';
+  }
+  committing = false;
+  document.getElementById('commitProgress').classList.add('d-none');
+  updateCommitBar();
 }
+document.getElementById('commitBtn').addEventListener('click', commitBooks);
+
+window.addEventListener('beforeunload', e => {
+  if (cards.size && !committing) { e.preventDefault(); e.returnValue = ''; }
+});
 
 function renderAudio() {
   const sec = document.getElementById('audioSection');
@@ -264,25 +528,6 @@ async function postAndGo(url, fd) {
   }
 }
 
-function submitBooks() {
-  if (!bookFiles.length) return;
-  const fd = new FormData();
-  const titles = document.querySelectorAll('.bk-title');
-  const authors = document.querySelectorAll('.bk-author');
-  const series = document.querySelectorAll('.bk-series');
-  const orders = document.querySelectorAll('.bk-order');
-  const shelves = document.querySelectorAll('.bk-shelf');
-  bookFiles.forEach((f, i) => {
-    fd.append('files', f);
-    fd.append('titles', titles[i].value);
-    fd.append('author_names', authors[i].value);
-    fd.append('series_names', series[i].value);
-    fd.append('series_orders', orders[i].value);
-    fd.append('shelf_names', shelves[i].value);
-  });
-  postAndGo('/books/bulk-upload', fd);
-}
-
 function submitAudio() {
   if (!audioFiles.length) return;
   const fd = new FormData();
@@ -295,7 +540,6 @@ function submitAudio() {
   postAndGo('/audiobooks/upload', fd);
 }
 
-document.querySelectorAll('.book-submit').forEach(b => b.addEventListener('click', submitBooks));
 document.getElementById('audioSubmit').addEventListener('click', submitAudio);
 </script>
 {% endblock %}

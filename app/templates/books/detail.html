@@ -1,285 +1,455 @@
 {% extends "base.html" %}
 {% block title %}{{ book.title }} — WeBook{% endblock %}
+
+{% block head %}
+<style>
+  /* Страница книги в стиле «карточка произведения»: панели, левая колонка с
+     обложкой и действиями, справа — автор / цикл / похожие. */
+  .bp-panel { background: #fff; border: 1px solid var(--bs-border-color-translucent); border-radius: var(--radius-sm); }
+  [data-bs-theme="dark"] .bp-panel { background: var(--bs-tertiary-bg); border-color: rgba(255,255,255,.06); }
+  .bp-pad { padding: 1.1rem 1.25rem; }
+  .bp-left { width: 196px; flex: none; }
+  .bp-left .btn { white-space: nowrap; font-size: .9rem; }
+  .bp-left .btn-outline-secondary, .bp-left [data-col-add] > .btn { color: var(--bs-body-color); border-color: var(--bs-border-color); }
+  .bp-left .btn-outline-secondary:hover, .bp-left [data-col-add] > .btn:hover { background: var(--bs-secondary-bg); color: var(--bs-body-color); }
+  [data-bs-theme="dark"] .bp-left .btn-outline-secondary, [data-bs-theme="dark"] .bp-left [data-col-add] > .btn { border-color: rgba(255,255,255,.35); }
+  .bp-left .bp-cover { width: 100%; aspect-ratio: 2/3; object-fit: cover; border-radius: 4px; box-shadow: var(--shadow-md); display: block; }
+  .bp-left .cover-placeholder { width: 100%; aspect-ratio: 2/3; border-radius: 4px; font-size: 3rem; }
+  .bp-left .btn { width: 100%; }
+  .bp-left .bp-row { display: flex; gap: .5rem; }
+  .bp-left .bp-row > .btn, .bp-left .bp-row > form { flex: 1; }
+  .bp-left .bp-row > .bp-sq { flex: 0 0 42px; }
+  .bp-left .bp-row form .btn { width: 100%; }
+  .bp-left [data-col-add], .bp-left [data-col-add] > .btn { width: 100%; display: block; }
+  .bp-icons { display: flex; justify-content: center; gap: .6rem; }
+  .bp-icons .btn { width: 42px; height: 38px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+  .bp-title { font-size: 1.35rem; font-weight: 700; line-height: 1.25; margin: 0 0 .25rem; }
+  .bp-author { font-size: 1rem; }
+  .bp-genres { font-size: .86rem; }
+  .bp-meta { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem .9rem; font-size: .84rem; color: var(--bs-secondary-color); }
+  .bp-meta > span + span { border-left: 1px solid var(--bs-border-color); padding-left: .9rem; }
+  .bp-status { font-size: .75rem; font-weight: 600; padding: .2rem .5rem; border-radius: 3px; color: #fff; }
+  .bp-stats { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem 1.4rem; font-size: .88rem; color: var(--bs-secondary-color); }
+  .bp-stats .btn-link { color: inherit; text-decoration: none; padding: 0; font-size: inherit; }
+  .bp-stats .is-on { color: var(--bs-danger); }
+  .bp-stars .btn { color: #f5b301; font-size: 1rem; line-height: 1; padding: 0 .05rem; border: 0; }
+  .bp-chip { border: 1px solid var(--bs-danger); color: var(--bs-danger); border-radius: 3px; padding: 0 .4rem; font-size: .75rem; font-weight: 600; }
+  .bp-tags { font-size: .86rem; line-height: 1.6; }
+  .bp-tabs { border-bottom: 0; gap: .15rem; }
+  .bp-tabs .nav-link { border-radius: 3px 3px 0 0; font-size: .86rem; color: var(--bs-body-color); background: var(--bs-secondary-bg); border: 0; padding: .55rem .9rem; }
+  .bp-tabs .nav-link.active { background: var(--bp-box); color: var(--bs-body-color); font-weight: 600; }
+  :root { --bp-box: #f6f7f9; }
+  [data-bs-theme="dark"] { --bp-box: #0d0e10; }
+  .bp-box { background: var(--bp-box); border-radius: 0 3px 3px 3px; padding: 1rem 1.1rem; min-height: 130px; font-size: .93rem; }
+  .bp-box .bp-desc { white-space: pre-line; }
+  .bp-toc a { text-decoration: none; display: block; padding: .18rem 0; color: var(--bs-body-color); }
+  .bp-toc a:hover { color: var(--accent); }
+  .bp-ul-tabs { border-bottom: 1px solid var(--bs-border-color); gap: 1.2rem; }
+  .bp-ul-tabs .nav-link { border: 0; padding: .65rem .1rem; color: var(--bs-body-color); font-size: .92rem; border-bottom: 3px solid transparent; border-radius: 0; background: none; }
+  .bp-ul-tabs .nav-link.active { border-bottom-color: var(--accent); font-weight: 600; }
+  .bp-ul-tabs .cnt { color: var(--bs-secondary-color); font-weight: 400; }
+  .bp-quote { border-left: 3px solid var(--bs-warning); padding: .35rem .8rem; margin-bottom: .9rem; }
+  .bp-side-h { font-size: 1rem; font-weight: 500; padding: .8rem 1rem; border-bottom: 1px solid var(--bs-border-color-translucent); margin: 0; }
+  .bp-author-card { position: relative; overflow: hidden; border-radius: var(--radius-sm) var(--radius-sm) 0 0; min-height: 96px; display: flex; align-items: center; gap: .8rem; padding: 1rem; color: #fff; text-decoration: none; }
+  .bp-author-card .bg { position: absolute; inset: 0; background-size: cover; background-position: center; filter: blur(6px) brightness(.55); transform: scale(1.15); }
+  .bp-author-card .bg.plain { filter: none; background: linear-gradient(135deg, var(--accent-grad-from), var(--accent-grad-to)); }
+  .bp-author-card > *:not(.bg) { position: relative; }
+  .bp-avatar { width: 60px; height: 60px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255,255,255,.85); background: rgba(255,255,255,.15); display: inline-flex; align-items: center; justify-content: center; font-size: 1.6rem; flex: none; }
+  .bp-author-card .name { font-size: 1.05rem; font-weight: 600; text-shadow: 0 1px 3px rgba(0,0,0,.5); }
+  .bp-author-stats { display: flex; justify-content: center; gap: 0; font-size: .85rem; color: var(--bs-secondary-color); padding: .55rem; }
+  .bp-author-stats span { padding: 0 .8rem; }
+  .bp-author-stats span + span { border-left: 1px solid var(--bs-border-color); }
+  .bp-mini { display: flex; gap: .7rem; padding: .7rem 1rem; text-decoration: none; color: inherit; }
+  .bp-mini + .bp-mini { border-top: 1px solid var(--bs-border-color-translucent); }
+  .bp-mini:hover .t { color: var(--accent); }
+  .bp-mini img, .bp-mini .cover-placeholder { width: 56px; height: 80px; object-fit: cover; border-radius: 3px; flex: none; font-size: 1.2rem; }
+  .bp-mini .g { font-size: .76rem; color: var(--bs-secondary-color); }
+  .bp-mini .t { font-weight: 600; font-size: .9rem; line-height: 1.25; }
+  .bp-mini .a { font-size: .8rem; color: var(--bs-secondary-color); }
+  .bp-mini .r { font-size: .76rem; color: var(--bs-success); }
+  .bp-vol { display: flex; gap: .55rem; align-items: baseline; padding: .4rem 1rem; text-decoration: none; color: inherit; font-size: .9rem; }
+  .bp-vol:hover { background: var(--bs-secondary-bg); }
+  .bp-vol.cur { background: rgba(var(--accent-rgb), .1); font-weight: 600; }
+  .bp-vol .n { color: var(--bs-secondary-color); min-width: 1.6rem; text-align: right; font-variant-numeric: tabular-nums; }
+  @media (max-width: 575.98px) {
+    .bp-hero { flex-direction: column; }
+    .bp-left { width: 100%; max-width: 240px; margin: 0 auto; }
+  }
+</style>
+{% endblock %}
+
 {% block content %}
-{% if is_owner %}
-<nav aria-label="breadcrumb" class="mb-3">
-  <ol class="breadcrumb">
-    <li class="breadcrumb-item"><a href="/shelves/{{ book.shelf_id }}">{{ book.shelf.name }}</a></li>
-    <li class="breadcrumb-item"><a href="/authors/{{ book.author_id }}">{{ book.author.name }}</a></li>
-    {% if book.series %}
-    <li class="breadcrumb-item"><a href="/series/{{ book.series_id }}">{{ book.series.name }}</a></li>
-    {% endif %}
-    <li class="breadcrumb-item active">{{ book.title }}</li>
-  </ol>
-</nav>
-{% else %}
-<nav aria-label="breadcrumb" class="mb-3">
-  <ol class="breadcrumb">
+{% set pct = ((read_progress.percentage or 0) * 100) | round | int if read_progress and read_progress.percentage is not none else 0 %}
+{% set fmt_order = (book.series_order | int) if book.series_order is not none and (book.series_order | int) == book.series_order else book.series_order %}
+
+<nav aria-label="breadcrumb" class="mb-2 small">
+  <ol class="breadcrumb mb-0">
+    {% if is_owner %}
+    <li class="breadcrumb-item"><a href="/books">Книги</a></li>
+    <li class="breadcrumb-item"><a href="/books?shelf_id={{ book.shelf_id }}">{{ book.shelf.name }}</a></li>
+    {% else %}
     <li class="breadcrumb-item"><a href="/shared">Поделились со мной</a></li>
-    <li class="breadcrumb-item active">{{ book.title }}</li>
+    {% endif %}
+    <li class="breadcrumb-item active text-truncate" style="max-width:40ch">{{ book.title }}</li>
   </ol>
 </nav>
-{% endif %}
 {% if request.query_params.get('convert_error') %}
 <div class="alert alert-warning"><i class="bi bi-exclamation-triangle me-1"></i>Не удалось сконвертировать книгу.</div>
 {% endif %}
 
-<div class="row g-4">
-  <!-- Обложка -->
-  <div class="col-sm-4 col-md-3 col-lg-2">
-    {% if book.cover_path %}
-    <img src="/books/{{ book.id }}/cover" class="book-cover w-100" alt="{{ book.title }}">
-    {% else %}
-    <div class="cover-placeholder w-100"><i class="bi bi-book"></i></div>
-    {% endif %}
-  </div>
-
-  <!-- Инфо -->
-  <div class="col-sm-8 col-md-9 col-lg-10">
-    <h2 class="mb-1">{{ book.title }}</h2>
-    <p class="text-muted mb-2">
-      {% if is_owner %}
-      <a href="/authors/{{ book.author_id }}" class="text-decoration-none">{{ book.author.name }}</a>
-      {% if book.series %}
-      · <a href="/series/{{ book.series_id }}" class="text-decoration-none text-muted">{{ book.series.name }}</a>
-        {% if book.series_order %} #{{ book.series_order | int }}{% endif %}
-      {% endif %}
-      {% else %}
-      {{ book.author.name }}
-      {% if book.series %} · {{ book.series.name }}{% if book.series_order %} #{{ book.series_order | int }}{% endif %}{% endif %}
-      {% endif %}
-    </p>
-
-    <div class="d-flex flex-wrap gap-2 mb-3">
-      {% if book.file_format %}<span class="badge bg-primary text-uppercase">{{ book.file_format }}</span>
-      {% else %}<span class="badge bg-warning text-dark"><i class="bi bi-bookmark-star me-1"></i>Хочу прочитать</span>{% endif %}
-      {% if book.language %}<span class="badge bg-secondary">{{ book.language }}</span>{% endif %}
-      {% if book.published_year %}<span class="badge bg-light text-dark border">{{ book.published_year }}</span>{% endif %}
-      {% if book.file_size %}
-      <span class="badge bg-light text-dark border">{{ (book.file_size / 1024 / 1024) | round(1) }} МБ</span>
-      {% endif %}
-    </div>
-
-    {% if read_progress and read_progress.percentage is not none %}
-    <div class="mb-3" style="max-width: 300px;">
-      <div class="d-flex justify-content-between align-items-center mb-1">
-        <span class="small text-muted"><i class="bi bi-book-half me-1"></i>Прогресс чтения</span>
-        <span class="small text-muted">{{ (read_progress.percentage * 100) | round | int }}%</span>
-      </div>
-      <div class="progress" style="height: 5px;">
-        <div class="progress-bar" role="progressbar"
-             style="width: {{ (read_progress.percentage * 100) | round | int }}%"></div>
-      </div>
-    </div>
-    {% endif %}
-
-    {% if book.tags %}
-    <div class="d-flex flex-wrap gap-2 mb-3">
-      {% for t in book.tags %}
-      {% if is_owner %}
-      <a href="/books?tag={{ t.name | urlencode }}" class="badge bg-light text-secondary border text-decoration-none">
-        <i class="bi bi-tag me-1"></i>{{ t.name }}
-      </a>
-      {% else %}
-      <span class="badge bg-light text-secondary border"><i class="bi bi-tag me-1"></i>{{ t.name }}</span>
-      {% endif %}
-      {% endfor %}
-    </div>
-    {% endif %}
-
-    <!-- Оценка -->
-    {% if is_owner %}
-    <div class="mb-3 d-flex align-items-center gap-2">
-      <span class="text-muted small">Оценка:</span>
-      <div class="d-flex align-items-center">
-        {% for n in range(1, 6) %}
-        <form method="post" action="/books/{{ book.id }}/rate" class="d-inline">
-          <input type="hidden" name="rating" value="{{ n }}">
-          <button type="submit" class="btn btn-link p-0 border-0 fs-5 text-warning lh-1" title="Оценка {{ n }}">
-            <i class="bi bi-star{% if book.rating and book.rating >= n %}-fill{% endif %}"></i>
-          </button>
-        </form>
-        {% endfor %}
-      </div>
-      {% if book.rating %}
-      <form method="post" action="/books/{{ book.id }}/rate" class="d-inline">
-        <input type="hidden" name="rating" value="0">
-        <button type="submit" class="btn btn-sm btn-link text-muted p-0 lh-1" title="Сбросить оценку">×</button>
-      </form>
-      {% endif %}
-    </div>
-    {% elif book.rating %}
-    <div class="mb-3 text-warning">
-      {% for n in range(1, 6) %}<i class="bi bi-star{% if book.rating >= n %}-fill{% endif %}"></i>{% endfor %}
-    </div>
-    {% endif %}
-
-    <div class="d-flex gap-2 mb-3 flex-wrap align-items-center">
-      {% if book.file_format in ("epub", "pdf", "fb2") %}
-      <a href="/books/{{ book.id }}/read" class="btn btn-primary">
-        <i class="bi bi-book-open me-1"></i>Читать
-      </a>
-      {% endif %}
-      {% if book.file_format in ("epub", "fb2") %}
-      <div class="dropdown d-inline">
-        <button class="btn btn-outline-primary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-          <i class="bi bi-people me-1"></i>Читать вместе
-        </button>
-        <ul class="dropdown-menu">
-          <li><a class="dropdown-item" href="#" onclick="return syncReadCreate({{ book.id }})">
-            <i class="bi bi-plus-circle me-2"></i>Создать комнату</a></li>
-          <li><a class="dropdown-item" href="/books/{{ book.id }}/sync">
-            <i class="bi bi-box-arrow-in-right me-2"></i>Присоединиться по коду</a></li>
-        </ul>
-      </div>
-      {% endif %}
-      {% if book.file_format %}
-      <a href="/books/{{ book.id }}/download" class="btn btn-success">
-        <i class="bi bi-download me-1"></i>Скачать {{ book.file_format | upper }}
-      </a>
-      {% endif %}
-      {% if is_owner %}
-      <form action="/books/{{ book.id }}/favorite" method="post" class="d-inline">
-        <button class="btn {% if book.is_favorite %}btn-danger{% else %}btn-outline-danger{% endif %}"
-                title="{% if book.is_favorite %}Убрать из избранного{% else %}В избранное{% endif %}">
-          <i class="bi bi-heart{% if book.is_favorite %}-fill{% endif %}"></i>
-        </button>
-      </form>
-      <form action="/books/{{ book.id }}/reading" method="post" class="d-inline">
-        <button class="btn {% if book.in_reading_list %}btn-warning{% else %}btn-outline-warning{% endif %}"
-                title="{% if book.in_reading_list %}Убрать из списка «Хочу прочитать»{% else %}В список «Хочу прочитать»{% endif %}">
-          <i class="bi bi-bookmark{% if book.in_reading_list %}-check-fill{% endif %}"></i>
-        </button>
-      </form>
-      <form action="/books/{{ book.id }}/toggle-read" method="post" class="d-inline">
-        <button class="btn {% if book.is_read %}btn-secondary{% else %}btn-outline-secondary{% endif %}"
-                title="{% if book.is_read %}Отметить непрочитанным{% else %}Отметить прочитанным{% endif %}">
-          <i class="bi {% if book.is_read %}bi-check2-circle{% else %}bi-book{% endif %} me-1"></i>{% if book.is_read %}Прочитано{% else %}Не прочитано{% endif %}
-        </button>
-      </form>
-
-      {% set add_rtype = 'book' %}{% set add_rid = book.id %}
-      {% include "collections/_add.html" %}
-
-      <!-- Поделиться (публичная ссылка + с пользователем) -->
-      <div class="dropdown d-inline">
-        <button class="btn btn-outline-primary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-          <i class="bi bi-share me-1"></i>Поделиться
-        </button>
-        <ul class="dropdown-menu">
-          {% if share %}
-          <li>
-            <form action="/books/{{ book.id }}/unshare" method="post"
-                  onsubmit="return confirm('Удалить публичную ссылку?')">
-              <button type="submit" class="dropdown-item text-danger"><i class="bi bi-x-circle me-2"></i>Отозвать публичную ссылку</button>
-            </form>
-          </li>
-          {% else %}
-          <li>
-            <form action="/books/{{ book.id }}/share" method="post">
-              <button type="submit" class="dropdown-item"><i class="bi bi-link-45deg me-2"></i>Создать публичную ссылку</button>
-            </form>
-          </li>
-          {% endif %}
-          <li><hr class="dropdown-divider"></li>
-          <li><a class="dropdown-item" href="/books/{{ book.id }}/share-user">
-            <i class="bi bi-person-plus me-2"></i>Поделиться с пользователем</a></li>
-        </ul>
-      </div>
-
-      <!-- Ещё -->
-      <div class="dropdown d-inline">
-        <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-          <i class="bi bi-three-dots"></i>
-        </button>
-        <ul class="dropdown-menu">
-          <li><a class="dropdown-item" href="/books/{{ book.id }}/edit">
-            <i class="bi bi-pencil me-2"></i>Изменить</a></li>
-          {% if book.file_format in ('fb2', 'epub') %}
-          <li><hr class="dropdown-divider"></li>
-          <li><h6 class="dropdown-header">Конвертировать в</h6></li>
-          {% for fmt in ('epub', 'fb2', 'pdf') %}
-          {% if fmt != book.file_format %}
-          <li>
-            <form action="/books/{{ book.id }}/convert" method="post">
-              <input type="hidden" name="target_format" value="{{ fmt }}">
-              <button type="submit" class="dropdown-item"><i class="bi bi-arrow-repeat me-2"></i>{{ fmt | upper }}</button>
-            </form>
-          </li>
-          {% endif %}
-          {% endfor %}
-          {% endif %}
-          <li><hr class="dropdown-divider"></li>
-          <li>
-            <form action="/books/{{ book.id }}/delete" method="post"
-                  onsubmit="return confirm('Удалить книгу «{{ book.title }}»?')">
-              <button type="submit" class="dropdown-item text-danger"><i class="bi bi-trash me-2"></i>Удалить</button>
-            </form>
-          </li>
-        </ul>
-      </div>
-      {% endif %}
-    </div>
-
-    {% if share %}
-    <div class="alert alert-success py-2 mb-3 d-flex align-items-center gap-2">
-      <i class="bi bi-share-fill"></i>
-      <span class="small">Публичная ссылка активна:</span>
-      <input type="text" class="form-control form-control-sm font-monospace" id="share-url"
-             value="{{ request.base_url }}share/{{ share.token }}" readonly style="max-width:350px">
-      <button class="btn btn-sm btn-outline-success" onclick="copyShare()">
-        <i class="bi bi-clipboard" id="share-icon"></i>
-      </button>
-    </div>
-    {% endif %}
-
-    {% if book.description %}
-    <div class="card bg-body-tertiary border-0">
-      <div class="card-body">
-        <h6 class="text-muted text-uppercase fw-semibold mb-2">Описание</h6>
-        <p class="mb-0" style="white-space: pre-line">{{ book.description }}</p>
-      </div>
-    </div>
-    {% endif %}
-
-    <div class="mt-3 small text-muted">
-      Добавлена: {{ book.added_at.strftime('%d.%m.%Y') if book.added_at else '—' }}
-      {% if is_owner %}
-      · Полка: <a href="/shelves/{{ book.shelf_id }}" class="text-muted">{{ book.shelf.name }}</a>
-      {% endif %}
-    </div>
-  </div>
-</div>
-
-{% if is_owner and book.series and book.series.books | length > 1 %}
-<hr class="my-5">
-<h5 class="mb-3">Другие книги цикла «{{ book.series.name }}»</h5>
 <div class="row g-3">
-  {% for b in book.series.books %}
-  {% if b.id != book.id %}
-  <div class="col-6 col-sm-4 col-md-3 col-lg-2">
-    <a href="/books/{{ b.id }}" class="text-decoration-none">
-      <div class="card h-100 {% if b.id == book.id %}border-primary{% endif %}">
-        {% if b.cover_path %}
-        <img src="/books/{{ b.id }}/cover" class="book-cover" alt="{{ b.title }}">
-        {% else %}
-        <div class="cover-placeholder"><i class="bi bi-book"></i></div>
-        {% endif %}
-        <div class="card-body p-2">
-          {% if b.series_order %}<p class="card-text small text-muted mb-0">№{{ b.series_order | int }}</p>{% endif %}
-          <p class="card-text small fw-semibold text-body">{{ b.title }}</p>
+  <!-- ═════════════ основная колонка ═════════════ -->
+  <div class="{% if is_owner %}col-xl-9{% else %}col-12{% endif %}">
+    <section class="bp-panel bp-pad">
+      <div class="d-flex gap-4 bp-hero">
+
+        <!-- обложка + действия -->
+        <aside class="bp-left vstack gap-2">
+          {% if book.cover_path %}
+          <img src="/books/{{ book.id }}/cover" class="bp-cover mb-1" alt="{{ book.title }}">
+          {% else %}
+          <div class="cover-placeholder mb-1"><i class="bi bi-book"></i></div>
+          {% endif %}
+
+          {% if book.file_format in ("epub", "pdf", "fb2") %}
+          <a href="/books/{{ book.id }}/read" class="btn btn-success">
+            <i class="bi bi-book me-1"></i>{% if pct > 0 and pct < 100 %}Читать · {{ pct }}%{% else %}Читать книгу{% endif %}
+          </a>
+          {% endif %}
+
+          {% if is_owner %}
+          <div class="bp-row">
+            <form action="/books/{{ book.id }}/reading" method="post">
+              <button class="btn {% if book.in_reading_list %}btn-secondary{% else %}btn-outline-secondary{% endif %}"
+                      title="{% if book.in_reading_list %}Убрать из «Хочу прочитать»{% else %}Добавить в «Хочу прочитать»{% endif %}">
+                {% if book.in_reading_list %}<i class="bi bi-bookmark-check-fill me-1"></i>В планах{% else %}<i class="bi bi-plus-lg me-1"></i>В планы{% endif %}
+              </button>
+            </form>
+            <form action="/books/{{ book.id }}/toggle-read" method="post" class="bp-sq">
+              <button class="btn {% if book.is_read %}btn-success{% else %}btn-outline-secondary{% endif %} px-0"
+                      title="{% if book.is_read %}Прочитано — снять отметку{% else %}Отметить прочитанной{% endif %}">
+                <i class="bi bi-eye{% if book.is_read %}-fill{% endif %}"></i>
+              </button>
+            </form>
+          </div>
+          {% endif %}
+
+          {% if book.file_format in ("epub", "fb2") %}
+          <div class="dropdown">
+            <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+              <i class="bi bi-people me-1"></i>Читать вместе
+            </button>
+            <ul class="dropdown-menu">
+              <li><a class="dropdown-item" href="#" onclick="return syncReadCreate({{ book.id }})"><i class="bi bi-plus-circle me-2"></i>Создать комнату</a></li>
+              <li><a class="dropdown-item" href="/books/{{ book.id }}/sync"><i class="bi bi-box-arrow-in-right me-2"></i>Присоединиться по коду</a></li>
+            </ul>
+          </div>
+          {% endif %}
+
+          {% if book.file_format %}
+          <a href="/books/{{ book.id }}/download" class="btn btn-outline-secondary">
+            <i class="bi bi-download me-1"></i>Скачать {{ book.file_format | upper }}
+          </a>
+          {% endif %}
+
+          {% if is_owner %}
+          {% set add_rtype = 'book' %}{% set add_rid = book.id %}
+          {% include "collections/_add.html" %}
+
+          <div class="bp-icons mt-1">
+            <div class="dropdown">
+              <button class="btn btn-outline-secondary" type="button" data-bs-toggle="dropdown" title="Поделиться"><i class="bi bi-share"></i></button>
+              <ul class="dropdown-menu">
+                {% if share %}
+                <li><form action="/books/{{ book.id }}/unshare" method="post" onsubmit="return confirm('Удалить публичную ссылку?')">
+                  <button type="submit" class="dropdown-item text-danger"><i class="bi bi-x-circle me-2"></i>Отозвать публичную ссылку</button></form></li>
+                {% else %}
+                <li><form action="/books/{{ book.id }}/share" method="post">
+                  <button type="submit" class="dropdown-item"><i class="bi bi-link-45deg me-2"></i>Создать публичную ссылку</button></form></li>
+                {% endif %}
+                <li><hr class="dropdown-divider"></li>
+                <li><a class="dropdown-item" href="/books/{{ book.id }}/share-user"><i class="bi bi-person-plus me-2"></i>Поделиться с пользователем</a></li>
+              </ul>
+            </div>
+            <div class="dropdown">
+              <button class="btn btn-outline-secondary" type="button" data-bs-toggle="dropdown" title="Ещё"><i class="bi bi-three-dots"></i></button>
+              <ul class="dropdown-menu">
+                <li><a class="dropdown-item" href="/books/{{ book.id }}/edit"><i class="bi bi-pencil me-2"></i>Изменить</a></li>
+                {% if book.file_format in ('fb2', 'epub') %}
+                <li><hr class="dropdown-divider"></li>
+                <li><h6 class="dropdown-header">Конвертировать в</h6></li>
+                {% for fmt in ('epub', 'fb2', 'pdf') %}{% if fmt != book.file_format %}
+                <li><form action="/books/{{ book.id }}/convert" method="post">
+                  <input type="hidden" name="target_format" value="{{ fmt }}">
+                  <button type="submit" class="dropdown-item"><i class="bi bi-arrow-repeat me-2"></i>{{ fmt | upper }}</button></form></li>
+                {% endif %}{% endfor %}
+                {% endif %}
+                <li><hr class="dropdown-divider"></li>
+                <li><form action="/books/{{ book.id }}/delete" method="post" onsubmit="return confirm('Удалить книгу «{{ book.title }}»?')">
+                  <button type="submit" class="dropdown-item text-danger"><i class="bi bi-trash me-2"></i>Удалить</button></form></li>
+              </ul>
+            </div>
+          </div>
+          {% endif %}
+        </aside>
+
+        <!-- информация -->
+        <div class="flex-grow-1" style="min-width:0">
+          <h1 class="bp-title">{{ book.title }}</h1>
+          <div class="bp-author mb-1">
+            {% if is_owner %}<a href="/authors/{{ book.author_id }}" class="text-decoration-none">{{ book.author.name }}</a>
+            {% else %}{{ book.author.name }}{% endif %}
+          </div>
+          {% if book.tags or is_owner %}
+          <div class="bp-genres mb-2">
+            {% if is_owner %}<a href="/books?shelf_id={{ book.shelf_id }}" class="text-decoration-none">{{ book.shelf.name }}</a>{% endif %}
+            {% set genre_tags = book.tags | rejectattr('name', 'equalto', book.shelf.name) | list if is_owner else book.tags %}
+            {% if genre_tags %}{% if is_owner %} / {% endif %}{% for t in genre_tags[:4] %}{% if is_owner %}<a href="/books?tag={{ t.name | urlencode }}" class="text-decoration-none">{{ t.name }}</a>{% else %}{{ t.name }}{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}
+          </div>
+          {% endif %}
+
+          <div class="bp-meta mb-2">
+            <span class="border-0 ps-0">
+              {% if not book.file_format %}<span class="bp-status bg-warning text-dark">хочу прочитать · без файла</span>
+              {% elif book.is_read %}<span class="bp-status bg-success"><i class="bi bi-check2 me-1"></i>прочитано</span>
+              {% elif pct > 0 %}<span class="bp-status" style="background:var(--accent)">читаю · {{ pct }}%</span>
+              {% elif book.in_reading_list %}<span class="bp-status bg-secondary">в планах</span>
+              {% else %}<span class="bp-status bg-secondary">не начата</span>{% endif %}
+            </span>
+            {% if book.added_at %}<span title="Добавлена в библиотеку">{{ book.added_at.strftime('%d.%m.%Y') }}</span>{% endif %}
+            {% if book.file_format %}<span>{{ book.file_format | upper }}{% if book.file_size %}, {{ book.file_size | humanbytes }}{% endif %}</span>{% endif %}
+            {% if book.file_format %}<span id="bpVolume" class="d-none"></span>{% endif %}
+          </div>
+
+          {% if book.series %}
+          <div class="small mb-3">
+            <span class="text-muted">Цикл:</span>
+            {% if is_owner %}<a href="/series/{{ book.series_id }}" class="text-decoration-none">{{ book.series.name }}</a>{% else %}{{ book.series.name }}{% endif %}
+            {% if book.series_order is not none %}<span class="text-muted">#{{ fmt_order }}</span>{% endif %}
+          </div>
+          {% endif %}
+
+          <div class="bp-stats mb-3">
+            {% if is_owner %}
+            <span class="bp-stars d-inline-flex align-items-center" title="Ваша оценка">
+              {% for n in range(1, 6) %}
+              <form method="post" action="/books/{{ book.id }}/rate" class="d-inline">
+                <input type="hidden" name="rating" value="{{ n }}">
+                <button type="submit" class="btn" title="Оценка {{ n }}"><i class="bi bi-star{% if book.rating and book.rating >= n %}-fill{% endif %}"></i></button>
+              </form>
+              {% endfor %}
+              {% if book.rating %}
+              <form method="post" action="/books/{{ book.id }}/rate" class="d-inline ms-1">
+                <input type="hidden" name="rating" value="0">
+                <button type="submit" class="btn text-muted" title="Сбросить оценку">×</button>
+              </form>
+              {% endif %}
+            </span>
+            <form action="/books/{{ book.id }}/favorite" method="post" class="d-inline">
+              <button class="btn btn-link {% if book.is_favorite %}is-on{% endif %}">
+                <i class="bi bi-heart{% if book.is_favorite %}-fill{% endif %} me-1"></i>{% if book.is_favorite %}В избранном{% else %}В избранное{% endif %}
+              </button>
+            </form>
+            <a href="#bpLower" class="btn btn-link" onclick="bpShow('quotes')" title="Цитаты"><i class="bi bi-chat-quote me-1"></i>{{ highlights | length }}</a>
+            <a href="#bpLower" class="btn btn-link" onclick="bpShow('marks')" title="Закладки"><i class="bi bi-bookmark me-1"></i>{{ bookmarks | length }}</a>
+            {% elif book.rating %}
+            <span class="text-warning">{% for n in range(1, 6) %}<i class="bi bi-star{% if book.rating >= n %}-fill{% endif %}"></i>{% endfor %}</span>
+            {% endif %}
+            {% if book.published_year %}<span title="Год издания"><i class="bi bi-calendar3 me-1"></i>{{ book.published_year }}</span>{% endif %}
+            {% if book.language %}<span class="bp-chip text-uppercase" title="Язык">{{ book.language }}</span>{% endif %}
+          </div>
+
+          {% if book.tags %}
+          <div class="bp-tags mb-3">
+            <i class="bi bi-tags-fill text-muted me-1"></i>
+            {% for t in book.tags %}{% if is_owner %}<a href="/books?tag={{ t.name | urlencode }}" class="text-decoration-none">{{ t.name | lower }}</a>{% else %}{{ t.name | lower }}{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}
+          </div>
+          {% endif %}
+
+          {% if share %}
+          <div class="alert alert-success py-2 mb-3 d-flex align-items-center gap-2 flex-wrap">
+            <i class="bi bi-share-fill"></i><span class="small">Публичная ссылка:</span>
+            <input type="text" class="form-control form-control-sm font-monospace flex-grow-1" id="share-url"
+                   value="{{ request.base_url }}share/{{ share.token }}" readonly style="max-width:360px">
+            <button class="btn btn-sm btn-outline-success" onclick="copyShare()"><i class="bi bi-clipboard" id="share-icon"></i></button>
+          </div>
+          {% endif %}
+
+          <!-- вкладки: аннотация / оглавление / статистика / файл -->
+          <ul class="nav bp-tabs" role="tablist">
+            <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#bpAnn" type="button">Аннотация</button></li>
+            {% if book.file_format %}
+            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#bpToc" type="button" data-insights>Оглавление</button></li>
+            {% endif %}
+            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#bpStat" type="button" data-insights>Статистика</button></li>
+            {% if book.file_format %}
+            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#bpFile" type="button">Файл</button></li>
+            {% endif %}
+          </ul>
+          <div class="tab-content bp-box">
+            <div class="tab-pane fade show active" id="bpAnn">
+              {% if book.description %}
+              <div class="bp-desc">{{ book.description }}</div>
+              {% else %}
+              <div class="text-muted">Аннотации нет.{% if is_owner %} <a href="/books/{{ book.id }}/edit">Добавить</a>{% endif %}</div>
+              {% endif %}
+            </div>
+            {% if book.file_format %}
+            <div class="tab-pane fade" id="bpToc">
+              <div class="bp-toc" id="bpTocList"><span class="text-muted small"><span class="spinner-border spinner-border-sm me-1"></span>Читаем оглавление…</span></div>
+            </div>
+            {% endif %}
+            <div class="tab-pane fade" id="bpStat">
+              <div class="row g-3 small">
+                <div class="col-sm-6">
+                  <div class="text-muted text-uppercase fw-semibold mb-1" style="font-size:.72rem">Чтение</div>
+                  <div class="mb-1">Прогресс: <b>{{ pct }}%</b></div>
+                  <div class="progress mb-2" style="height:5px;max-width:260px"><div class="progress-bar" style="width:{{ pct }}%"></div></div>
+                  <div>Добавлена: {{ book.added_at.strftime('%d.%m.%Y') if book.added_at else '—' }}</div>
+                  {% if book.read_at %}<div>Прочитана: {{ book.read_at.strftime('%d.%m.%Y') }}</div>{% endif %}
+                  {% if read_progress and read_progress.updated_at is defined and read_progress.updated_at %}<div>Последнее чтение: {{ read_progress.updated_at.strftime('%d.%m.%Y %H:%M') }}</div>{% endif %}
+                  {% if is_owner %}<div>Цитат: {{ highlights | length }} · закладок: {{ bookmarks | length }}</div>{% endif %}
+                </div>
+                <div class="col-sm-6" id="bpVolStats">
+                  <div class="text-muted text-uppercase fw-semibold mb-1" style="font-size:.72rem">Объём</div>
+                  {% if book.file_format %}<span class="text-muted"><span class="spinner-border spinner-border-sm me-1"></span>Считаем…</span>
+                  {% else %}<span class="text-muted">Файла нет — объём неизвестен.</span>{% endif %}
+                </div>
+              </div>
+            </div>
+            {% if book.file_format %}
+            <div class="tab-pane fade small" id="bpFile">
+              <div>Формат: <b>{{ book.file_format | upper }}</b>{% if book.file_size %} · {{ book.file_size | humanbytes }}{% endif %}</div>
+              {% if book.language %}<div>Язык: {{ book.language }}</div>{% endif %}
+              {% if is_owner %}<div>Полка: <a href="/books?shelf_id={{ book.shelf_id }}">{{ book.shelf.name }}</a></div>{% endif %}
+              <div class="mt-2 d-flex gap-2 flex-wrap">
+                <a href="/books/{{ book.id }}/download" class="btn btn-sm btn-outline-secondary"><i class="bi bi-download me-1"></i>Скачать</a>
+                {% if is_owner %}<a href="/books/{{ book.id }}/edit" class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil me-1"></i>Изменить данные</a>{% endif %}
+              </div>
+            </div>
+            {% endif %}
+          </div>
         </div>
       </div>
-    </a>
+    </section>
+
+    {% if is_owner %}
+    <!-- ═════════════ нижняя панель: цитаты / закладки / подборки ═════════════ -->
+    <section class="bp-panel bp-pad mt-3" id="bpLower">
+      <ul class="nav bp-ul-tabs mb-3" role="tablist">
+        <li class="nav-item"><button class="nav-link active" id="bpTabQuotes" data-bs-toggle="tab" data-bs-target="#bpQuotes" type="button"><i class="bi bi-chat-quote me-1"></i>Цитаты <span class="cnt">· {{ highlights | length }}</span></button></li>
+        <li class="nav-item"><button class="nav-link" id="bpTabMarks" data-bs-toggle="tab" data-bs-target="#bpMarks" type="button"><i class="bi bi-bookmark me-1"></i>Закладки <span class="cnt">· {{ bookmarks | length }}</span></button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#bpCols" type="button"><i class="bi bi-collection me-1"></i>Подборки <span class="cnt">· {{ collections | length }}</span></button></li>
+      </ul>
+      <div class="tab-content">
+        <div class="tab-pane fade show active" id="bpQuotes">
+          {% for h in highlights[:30] %}
+          <div class="bp-quote">
+            <div class="fst-italic">«{{ h.quote }}»</div>
+            {% if h.note %}<div class="small mt-1"><i class="bi bi-pencil-square me-1 text-muted"></i>{{ h.note }}</div>{% endif %}
+            <div class="small text-muted mt-1">{{ h.created_at.strftime('%d.%m.%Y') if h.created_at }}</div>
+          </div>
+          {% else %}
+          <div class="text-muted small">Цитат пока нет — выделите текст в читалке, чтобы сохранить.</div>
+          {% endfor %}
+          {% if highlights | length > 30 %}<a href="/highlights" class="small">Все цитаты →</a>{% endif %}
+        </div>
+        <div class="tab-pane fade" id="bpMarks">
+          {% for m in bookmarks %}
+          <div class="d-flex justify-content-between align-items-center py-1 border-bottom small">
+            <span><i class="bi bi-bookmark-fill text-primary me-2"></i>{{ m.label or 'Без названия' }}</span>
+            <span class="text-muted">{{ m.created_at.strftime('%d.%m.%Y') if m.created_at }}</span>
+          </div>
+          {% else %}
+          <div class="text-muted small">Закладок нет — их можно поставить в читалке.</div>
+          {% endfor %}
+        </div>
+        <div class="tab-pane fade" id="bpCols">
+          {% for c in collections %}
+          <a href="/collections/{{ c.id }}" class="d-inline-block me-2 mb-2 badge text-bg-light border text-decoration-none"><i class="bi bi-collection me-1"></i>{{ c.name }}</a>
+          {% else %}
+          <div class="text-muted small">Книга не входит ни в одну подборку.</div>
+          {% endfor %}
+        </div>
+      </div>
+    </section>
+    {% endif %}
+  </div>
+
+  {% if is_owner %}
+  <!-- ═════════════ правая колонка ═════════════ -->
+  <div class="col-xl-3">
+    <div class="vstack gap-3">
+      <section class="bp-panel">
+        <a href="/authors/{{ book.author_id }}" class="bp-author-card">
+          {% if book.cover_path %}<div class="bg" style="background-image:url('/books/{{ book.id }}/cover')"></div>{% else %}<div class="bg plain"></div>{% endif %}
+          {% if book.author.photo_path %}<img src="/storage/covers/{{ book.author.photo_path }}" class="bp-avatar" alt="">
+          {% else %}<span class="bp-avatar"><i class="bi bi-person"></i></span>{% endif %}
+          <span class="name">{{ book.author.name }}</span>
+        </a>
+        {% if author_stats %}
+        <div class="bp-author-stats">
+          <span title="Книг автора в библиотеке"><i class="bi bi-book me-1"></i>{{ author_stats.books }}</span>
+          <span title="Прочитано"><i class="bi bi-check2-circle me-1"></i>{{ author_stats.read }}</span>
+          <span title="Циклов"><i class="bi bi-collection me-1"></i>{{ author_stats.series }}</span>
+        </div>
+        {% endif %}
+      </section>
+
+      {% if series_books | length > 1 %}
+      <section class="bp-panel">
+        <h3 class="bp-side-h"><i class="bi bi-list-ol me-1"></i>Цикл «{{ book.series.name }}»</h3>
+        <div class="py-1">
+          {% for b in series_books %}
+          <a href="/books/{{ b.id }}" class="bp-vol {% if b.id == book.id %}cur{% endif %}">
+            <span class="n">{% if b.series_order is not none %}{{ (b.series_order | int) if (b.series_order | int) == b.series_order else b.series_order }}{% else %}–{% endif %}</span>
+            <span class="flex-grow-1 text-truncate">{{ b.title }}</span>
+            {% if b.is_read %}<i class="bi bi-check2 text-success"></i>{% endif %}
+          </a>
+          {% endfor %}
+        </div>
+      </section>
+      {% endif %}
+
+      {% if author_books %}
+      <section class="bp-panel">
+        <h3 class="bp-side-h">Ещё у автора</h3>
+        {% for b in author_books %}
+        <a href="/books/{{ b.id }}" class="bp-mini">
+          {% if b.cover_path %}<img src="/books/{{ b.id }}/cover" alt="" loading="lazy">{% else %}<div class="cover-placeholder"><i class="bi bi-book"></i></div>{% endif %}
+          <div style="min-width:0">
+            {% if b.series %}<div class="g">{{ b.series.name }}{% if b.series_order is not none %} #{{ b.series_order | int }}{% endif %}</div>{% endif %}
+            <div class="t">{{ b.title }}</div>
+            {% if b.is_read %}<div class="r"><i class="bi bi-check2"></i> прочитано</div>{% endif %}
+          </div>
+        </a>
+        {% endfor %}
+      </section>
+      {% endif %}
+
+      {% if similar %}
+      <section class="bp-panel">
+        <h3 class="bp-side-h">С этой книгой читают</h3>
+        {% for s in similar %}
+        <a href="/books/{{ s.book.id }}" class="bp-mini">
+          {% if s.book.cover_path %}<img src="/books/{{ s.book.id }}/cover" alt="" loading="lazy">{% else %}<div class="cover-placeholder"><i class="bi bi-book"></i></div>{% endif %}
+          <div style="min-width:0">
+            {% if s.genre %}<div class="g">{{ s.genre }}</div>{% endif %}
+            <div class="t">{{ s.book.title }}</div>
+            <div class="a">{{ s.book.author.name if s.book.author }}</div>
+            {% if s.reason %}<div class="r">{{ s.reason }}</div>{% endif %}
+          </div>
+        </a>
+        {% endfor %}
+      </section>
+      {% endif %}
+    </div>
   </div>
   {% endif %}
-  {% endfor %}
 </div>
-{% endif %}
 {% endblock %}
 
 {% block scripts %}
-{% if share %}
 <script>
 function copyShare() {
   const val = document.getElementById('share-url').value;
@@ -289,9 +459,6 @@ function copyShare() {
     setTimeout(() => icon.className = 'bi bi-clipboard', 2000);
   });
 }
-</script>
-{% endif %}
-<script>
 function syncReadCreate(bookId) {
   fetch('/books/' + bookId + '/sync/create', {method: 'POST'})
     .then(function (r) { return r.json(); })
@@ -302,5 +469,51 @@ function syncReadCreate(bookId) {
     .catch(function () { alert('Ошибка запроса'); });
   return false;
 }
+function bpShow(which) {
+  var btn = document.getElementById(which === 'marks' ? 'bpTabMarks' : 'bpTabQuotes');
+  if (btn) bootstrap.Tab.getOrCreateInstance(btn).show();
+}
+
+// ── Оглавление и объём: грузим лениво (разбор файла на сервере) ──
+(function () {
+  {% if book.file_format %}
+  var BOOK_ID = {{ book.id }};
+  var loaded = false;
+  function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  function nf(n) { return Number(n).toLocaleString('ru-RU'); }
+  function load() {
+    if (loaded) return; loaded = true;
+    fetch('/books/' + BOOK_ID + '/insights').then(function (r) { return r.json(); }).then(function (d) {
+      var toc = document.getElementById('bpTocList');
+      if (toc) {
+        if (!d.toc || !d.toc.length) toc.innerHTML = '<span class="text-muted small">Оглавление в файле не найдено.</span>';
+        else toc.innerHTML = d.toc.map(function (it) {
+          var href = '/books/' + BOOK_ID + '/read' + (it.goto ? '?goto=' + encodeURIComponent(it.goto) : '');
+          return '<a href="' + href + '" style="padding-left:' + (it.level * 1.1) + 'rem">' + esc(it.title) + '</a>';
+        }).join('');
+      }
+      var vs = document.getElementById('bpVolStats');
+      var head = '<div class="text-muted text-uppercase fw-semibold mb-1" style="font-size:.72rem">Объём</div>';
+      if (d.chars) {
+        var h = Math.floor(d.minutes / 60), m = d.minutes % 60;
+        vs.innerHTML = head +
+          '<div>' + nf(d.chars) + ' зн. · ' + String(d.author_sheets).replace('.', ',') + ' а.л.</div>' +
+          '<div>' + nf(d.words) + ' слов · ≈' + nf(d.pages) + ' стр.</div>' +
+          '<div>Время чтения: ≈' + (h ? h + ' ч ' : '') + m + ' мин</div>';
+        var meta = document.getElementById('bpVolume');
+        if (meta) { meta.textContent = nf(d.chars) + ' зн., ' + String(d.author_sheets).replace('.', ',') + ' а.л.'; meta.classList.remove('d-none'); }
+      } else {
+        vs.innerHTML = head + '<span class="text-muted">' + (d.error || 'Не удалось посчитать (скан PDF без текста?)') + '</span>';
+      }
+    }).catch(function () {
+      var toc = document.getElementById('bpTocList');
+      if (toc) toc.innerHTML = '<span class="text-danger small">Не удалось загрузить</span>';
+    });
+  }
+  document.querySelectorAll('[data-insights]').forEach(function (b) { b.addEventListener('show.bs.tab', load); });
+  // объём в строке метаданных — подгружаем фоном, когда страница уже отрисована
+  (window.requestIdleCallback || function (f) { setTimeout(f, 600); })(load);
+  {% endif %}
+})();
 </script>
 {% endblock %}

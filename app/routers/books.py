@@ -209,6 +209,8 @@ def books_list(
             query = query.filter(Book.in_reading_list == True)
         if sort == "rating":
             query = query.order_by(Book.rating.is_(None), Book.rating.desc(), Book.title)
+        elif sort == "added":
+            query = query.order_by(Book.added_at.desc(), Book.id.desc())
         else:
             query = query.order_by(Book.title)
         for b in query.all():
@@ -237,8 +239,8 @@ def books_list(
                 "is_finished": ab.is_finished, "sort_key": (ab.title or "").lower(),
             })
 
-    if sort == "rating":
-        items = book_items  # уже отсортированы по оценке, аудио исключены
+    if sort in ("rating", "added"):
+        items = book_items  # уже отсортированы запросом, аудио исключены
     else:
         items = book_items + audio_items
         items.sort(key=lambda x: x["sort_key"])
@@ -352,6 +354,7 @@ async def bulk_upload(
             series_id=series.id if series else None, series_order=order,
             cover_path=cover_path, file_path=file_name, file_format=suffix.lstrip("."),
             file_size=len(data), language=(meta.get("language") or ""),
+            description=(meta.get("description") or ""), published_year=meta.get("year"),
         )
         db.add(book)
         db.flush()
@@ -433,6 +436,122 @@ async def parse_meta(
     result = parse_book_file(data, suffix)
     result.pop("cover_data", None)
     return result
+
+
+# ─────────────── загрузка в два шага: разобрать → сохранить ───────────────
+# (объявлено до /{book_id}). См. app/services/upload_staging_service.py
+
+def _find_duplicate(db: Session, user: User, title: str, author: str) -> Optional[int]:
+    if not title:
+        return None
+    q = _user_books(db, user).filter(Book.title.ilike(title.strip()))
+    if author:
+        q = q.join(Author, Book.author_id == Author.id).filter(Author.name.ilike(author.strip()))
+    b = q.first()
+    return b.id if b else None
+
+
+@router.post("/stage")
+def stage_book(
+    file: UploadFile = File(...),
+    translate: str = Form("1"),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Шаг 1: принять книгу или ZIP с книгами, разобрать метаданные (+перевод/
+    транслит, номер тома) и вернуть карточки для проверки. Ничего не создаёт в БД."""
+    from app.config import MAX_BOOK_ARCHIVE_SIZE
+    from app.services import upload_staging_service as staging
+    size = file.size or 0
+    cards, errors = staging.stage_upload(
+        user.id, file.filename or "", file.file, size,
+        translate=translate not in ("0", "false", ""), max_archive_size=MAX_BOOK_ARCHIVE_SIZE,
+    )
+    for c in cards:
+        c["duplicate_of"] = _find_duplicate(db, user, c.get("title", ""), c.get("author", ""))
+        if not c["duplicate_of"] and c.get("original", {}).get("title"):
+            c["duplicate_of"] = _find_duplicate(db, user, c["original"]["title"], "")
+    return JSONResponse({"ok": bool(cards), "items": cards, "errors": errors})
+
+
+@router.get("/stage/{token}/cover")
+def stage_cover(token: str, user: User = Depends(get_current_user)):
+    from app.services import upload_staging_service as staging
+    p = staging.cover_path(token, user.id)
+    if not p:
+        raise HTTPException(status_code=404)
+    return FileResponse(p, media_type="image/jpeg")
+
+
+@router.post("/stage/discard")
+async def stage_discard(request: Request, user: User = Depends(get_current_user)):
+    from app.services import upload_staging_service as staging
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+    for t in (payload.get("tokens") or [])[:5000]:
+        staging.discard(str(t), user.id)
+    return JSONResponse({"ok": True})
+
+
+@router.post("/stage/commit")
+async def stage_commit(request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Шаг 2: создать книги из разобранных карточек (с правками пользователя)."""
+    from app.services import upload_staging_service as staging
+    try:
+        payload = await request.json()
+    except Exception:
+        return JSONResponse({"ok": False, "error": "Некорректный запрос"}, status_code=400)
+
+    created_ids, errors = [], []
+    for it in (payload.get("items") or [])[:5000]:
+        token = str(it.get("token") or "")
+        rec = staging.load(token, user.id)
+        if not rec:
+            errors.append(f"{it.get('title') or token}: файл не найден (истёк срок или уже загружен)")
+            continue
+        card = rec.get("card") or {}
+        title = (str(it.get("title") or "").strip() or card.get("title") or
+                 Path(card.get("filename") or "book").stem)[:500]
+        author = _get_or_create_author(str(it.get("author") or ""), db)
+        shelf = _get_or_create_shelf(str(it.get("shelf") or ""), user, db)
+        series = _get_or_create_series(str(it.get("series") or ""), author.id, db)
+        try:
+            order = float(str(it.get("series_order")).replace(",", ".")) if str(it.get("series_order") or "").strip() else None
+        except ValueError:
+            order = None
+        try:
+            year = int(str(it.get("year") or "").strip()) if str(it.get("year") or "").strip() else None
+        except ValueError:
+            year = None
+
+        file_name, cover_name, size = staging.take_files(token, rec)
+        if not file_name:
+            errors.append(f"{title}: файл не найден")
+            continue
+        book = Book(
+            user_id=user.id, title=title, author_id=author.id, shelf_id=shelf.id,
+            series_id=series.id if series else None, series_order=order if series else None,
+            description=str(it.get("description") if it.get("description") is not None
+                            else card.get("description") or "").strip(),
+            cover_path=cover_name, file_path=file_name, file_format=rec["suffix"].lstrip("."),
+            file_size=size, language=str(card.get("language") or "")[:20], published_year=year,
+        )
+        db.add(book)
+        db.flush()
+        tags = str(it.get("tags") or "").strip()
+        if tags:
+            set_tags_from_string(book, tags, user.id, db)
+        created_ids.append(book.id)
+    db.commit()
+
+    if not created_ids:
+        return JSONResponse({"ok": False, "error": "Не удалось сохранить ни одной книги", "errors": errors},
+                            status_code=400)
+    redirect = f"/books/{created_ids[0]}" if len(created_ids) == 1 else "/books?sort=added"
+    return JSONResponse({"ok": True, "created": len(created_ids), "ids": created_ids,
+                         "errors": errors, "redirect": redirect})
 
 
 # ─────────────────────────── импорт по ISBN ───────────────────────────
@@ -560,10 +679,87 @@ def book_detail(book_id: int, request: Request, user: User = Depends(get_current
     is_owner = book.user_id == user.id
     share = _get_share(book_id, "book", db) if is_owner else None
     read_progress = db.query(ReadProgress).filter_by(user_id=user.id, book_id=book_id).first()
-    return templates.TemplateResponse("books/detail.html", {
+    ctx = {
         "request": request, "user": user, "book": book, "share": share,
         "is_owner": is_owner, "read_progress": read_progress,
-    })
+        "series_books": [], "author_books": [], "similar": [], "author_stats": None,
+        "highlights": [], "bookmarks": [], "collections": [],
+    }
+    if is_owner:
+        ctx.update(_detail_sidebar(book, user, db))
+    return templates.TemplateResponse("books/detail.html", ctx)
+
+
+def _detail_sidebar(book: Book, user: User, db: Session) -> dict:
+    """Боковые блоки и нижние вкладки страницы книги (только для владельца)."""
+    from app.models.highlight import Highlight
+    from app.models.bookmark import Bookmark
+    from app.models.collection import Collection, CollectionItem
+    from app.models.tag import Tag, book_tags
+
+    mine = _user_books(db, user).options(joinedload(Book.author))
+    series_books = []
+    if book.series_id:
+        series_books = mine.filter(Book.series_id == book.series_id).order_by(
+            Book.series_order.is_(None), Book.series_order, Book.title).all()
+
+    author_q = mine.filter(Book.author_id == book.author_id)
+    others_q = author_q.filter(Book.id != book.id)
+    if book.series_id:   # тома этого же цикла показываем отдельным блоком
+        others_q = others_q.filter(or_(Book.series_id.is_(None), Book.series_id != book.series_id))
+    author_books = others_q.order_by(Book.added_at.desc()).limit(6).all()
+    author_all = author_q.all()
+    author_stats = {
+        "books": len(author_all),
+        "read": sum(1 for b in author_all if b.is_read),
+        "series": len({b.series_id for b in author_all if b.series_id}),
+    }
+
+    # «С этой книгой читают» → похожие из своей библиотеки: общие теги, затем тот же цикл/автор исключаем
+    similar = []
+    tag_ids = [t.id for t in book.tags]
+    exclude = {book.id} | {b.id for b in series_books} | {b.id for b in author_books}
+    if tag_ids:
+        from sqlalchemy import func
+        rows = (
+            db.query(Book, func.count(book_tags.c.tag_id).label("common"))
+            .join(book_tags, book_tags.c.book_id == Book.id)
+            .filter(book_tags.c.tag_id.in_(tag_ids), Book.user_id == user.id,
+                    Book.deleted_at.is_(None), Book.id.notin_(exclude))
+            .group_by(Book.id).order_by(func.count(book_tags.c.tag_id).desc(), Book.added_at.desc())
+            .limit(6).all()
+        )
+        tag_names = {t.id: t.name for t in book.tags}
+        for b, common in rows:
+            shared = [t.name for t in b.tags if t.id in tag_names][:2]
+            similar.append({"book": b, "reason": ", ".join(shared), "genre": shared[0] if shared else ""})
+    if len(similar) < 6:
+        from app.services.reco_service import recommend
+        have = exclude | {x["book"].id for x in similar}
+        for r in recommend(db, user.id, limit=12):
+            if r["book"].id not in have and len(similar) < 6:
+                similar.append({"book": r["book"], "reason": r["reason"],
+                                "genre": r["book"].tags[0].name if r["book"].tags else ""})
+                have.add(r["book"].id)
+
+    highlights = db.query(Highlight).filter_by(user_id=user.id, resource_type="book", resource_id=book.id)         .order_by(Highlight.created_at.desc()).all()
+    bookmarks = db.query(Bookmark).filter_by(user_id=user.id, resource_type="book", resource_id=book.id)         .order_by(Bookmark.created_at.desc()).all()
+    collections = (
+        db.query(Collection).join(CollectionItem, CollectionItem.collection_id == Collection.id)
+        .filter(Collection.user_id == user.id, CollectionItem.resource_type == "book",
+                CollectionItem.resource_id == book.id).order_by(Collection.name).all()
+    )
+    return {"series_books": series_books, "author_books": author_books, "similar": similar,
+            "author_stats": author_stats, "highlights": highlights, "bookmarks": bookmarks,
+            "collections": collections}
+
+
+@router.get("/{book_id}/insights")
+def book_insights(book_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Оглавление + объём текста (знаки, а.л., время чтения) — для вкладок страницы книги."""
+    from app.services.book_insights_service import insights
+    book = _accessible_book(book_id, user, db)
+    return JSONResponse(insights(book))
 
 
 @router.get("/{book_id}/edit", response_class=HTMLResponse)

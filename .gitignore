@@ -9,6 +9,7 @@ webook.db
 /db/
 /storage/
 /backups/
+/staging/
 __pycache__/
 *.pyc
 *.pyo

@@ -1,7 +1,7 @@
 """Создание и привязка тегов к книгам и статьям."""
 from typing import List
 
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.models.tag import Tag, book_tags, link_tags
@@ -24,7 +24,9 @@ def get_or_create_tags(names: List[str], user_id: int, db: Session) -> List[Tag]
     for name in names:
         tag = (
             db.query(Tag)
-            .filter(Tag.user_id == user_id, func.lower(Tag.name) == name.lower())
+            # точное совпадение — отдельно: lower() в SQLite не знает кириллицу
+            .filter(Tag.user_id == user_id,
+                    or_(Tag.name == name, func.lower(Tag.name) == name.lower()))
             .first()
         )
         if not tag:

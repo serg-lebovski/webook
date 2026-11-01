@@ -220,7 +220,8 @@
   </div>
 
 {% elif book.file_format == "pdf" %}
-  <iframe id="pdf-frame" src="/books/{{ book.id }}/serve"></iframe>
+  {% set goto = request.query_params.get('goto', '') if request else '' %}
+  <iframe id="pdf-frame" src="/books/{{ book.id }}/serve{% if goto[:1] == 'p' and goto[1:].isdigit() %}#page={{ goto[1:] }}{% endif %}"></iframe>
 
 {% elif book.file_format == "fb2" %}
   <div id="fb2-scroll">
@@ -314,6 +315,9 @@ window.RS = (function () {
   };
 
   var saved = serverProgress || localStorage.getItem(KEY);
+  // ?goto=<href> — переход из оглавления на странице книги
+  var GOTO = new URLSearchParams(location.search).get("goto");
+  if (GOTO && !/^[tp]\d+$/.test(GOTO)) saved = GOTO;
   rendition.display(saved || undefined).then(function () {
     if (window.RS) window.RS.apply();
   });
@@ -409,6 +413,13 @@ window.RS = (function () {
 
   var saved = serverProgress || localStorage.getItem(KEY);
   if (saved) el.scrollTop = parseInt(saved, 10);
+  // ?goto=tN — N-й заголовок (пункт оглавления со страницы книги)
+  var GOTO = /^t(\d+)$/.exec(new URLSearchParams(location.search).get("goto") || "");
+  if (GOTO) {
+    var heads = document.querySelectorAll("#fb2-content .fb2-title");
+    var h = heads[parseInt(GOTO[1], 10)];
+    if (h) el.scrollTop = Math.max(0, h.offsetTop - el.offsetTop - 12);
+  }
 
   window.__bmGetLocation = function () { return String(el.scrollTop); };
   window.__bmGoTo = function (loc) { el.scrollTop = parseInt(loc, 10) || 0; };

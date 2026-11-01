@@ -271,9 +271,15 @@ async def api_upload_book(
         raise HTTPException(status_code=400, detail="Файл слишком большой")
 
     meta = book_service.parse_book_file(data, ext)
-    title = (meta.get("title") or os.path.splitext(name)[0] or "Без названия").strip()[:500]
-    author = _get_or_create_author(meta.get("author") or "", db)
+    # цикл/№ тома (из метаданных, названия или имени файла), год, жанры; без перевода —
+    # в приложении нет экрана проверки, где можно вернуть оригинал
+    from app.services.book_meta_service import normalize
+    card = normalize({k: v for k, v in meta.items() if k != "cover_data"}, name, translate=False)
+    title = (card.get("title") or os.path.splitext(name)[0] or "Без названия").strip()[:500]
+    author = _get_or_create_author(card.get("author") or "", db)
     shelf = _get_or_create_shelf("", user, db)
+    from app.routers.books import _get_or_create_series
+    series = _get_or_create_series(card.get("series") or "", author.id, db)
     file_path = book_service.save_book_file(data, ext)
     cover_path = (
         book_service.save_cover_file(meta.get("cover_data"), ".jpg")
@@ -287,11 +293,18 @@ async def api_upload_book(
         file_path=file_path,
         file_format=ext.lstrip("."),
         file_size=len(data),
-        description=meta.get("description") or "",
-        language=meta.get("language") or "",
+        description=card.get("description") or "",
+        language=card.get("language") or "",
         cover_path=cover_path,
+        series_id=series.id if series else None,
+        series_order=card.get("series_order") if series else None,
+        published_year=card.get("year"),
     )
     db.add(book)
+    db.flush()
+    if card.get("tags"):
+        from app.services.tag_service import set_tags_from_string
+        set_tags_from_string(book, ", ".join(card["tags"]), user.id, db)
     db.commit()
     db.refresh(book)
     return {"id": book.id, "title": book.title, "format": book.file_format}

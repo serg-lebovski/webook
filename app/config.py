@@ -21,12 +21,16 @@ MANGA_DIR = Path(os.getenv("MANGA_DIR", str(BASE_DIR / "manga")))
 LOGS_DIR = Path(os.getenv("LOGS_DIR", str(BASE_DIR / "logs")))
 BACKUPS_DIR = Path(os.getenv("BACKUPS_DIR", str(BASE_DIR / "backups")))
 UPDATE_DIR = Path(os.getenv("UPDATE_DIR", str(BASE_DIR / "update")))
+# Временная область загрузки: книги лежат тут между «разобрать» и «сохранить»
+# (не volume — переживать рестарт не обязаны; чистится по TTL).
+STAGING_DIR = Path(os.getenv("STAGING_DIR", str(BASE_DIR / "staging")))
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
 ALLOWED_BOOK_FORMATS = {".epub", ".fb2", ".pdf"}
 ALLOWED_IMAGE_FORMATS = {".jpg", ".jpeg", ".png", ".webp"}
 ALLOWED_AUDIO_FORMATS = {".mp3", ".m4a", ".m4b", ".ogg", ".oga", ".opus", ".aac", ".flac", ".wav", ".webm"}
 MAX_BOOK_SIZE = 100 * 1024 * 1024            # 100 MB
+MAX_BOOK_ARCHIVE_SIZE = 1024 * 1024 * 1024    # 1 GB — ZIP с книгами
 MAX_COVER_SIZE = 5 * 1024 * 1024             # 5 MB
 MAX_AUDIO_SIZE = 1024 * 1024 * 1024          # 1 GB на файл
 ALLOWED_MANGA_PAGE_FORMATS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"}
