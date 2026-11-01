@@ -68,11 +68,11 @@
       <i class="bi bi-cloud-arrow-up fs-1 d-block mb-1"></i>
       <span class="fw-semibold">Перетащите файлы сюда или нажмите, чтобы выбрать</span>
       <span class="d-block small text-muted mt-1">
-        Книги: <b>epub, fb2, pdf</b> и <b>zip-архивы</b> с ними (в т.ч. <code>*.fb2.zip</code> и архив из нескольких книг) ·
+        Книги: <b>epub, fb2, pdf</b> и архивы <b>zip, 7z, rar</b> с ними (в т.ч. <code>*.fb2.zip</code> и архив из нескольких книг) ·
         аудио: mp3, m4a, m4b, ogg, flac… — одной аудиокнигой
       </span>
       <input type="file" id="fileInput" class="d-none" multiple
-             accept=".epub,.fb2,.pdf,.zip,.mp3,.m4a,.m4b,.ogg,.oga,.opus,.aac,.flac,.wav,.webm">
+             accept=".epub,.fb2,.pdf,.zip,.7z,.rar,.mp3,.m4a,.m4b,.ogg,.oga,.opus,.aac,.flac,.wav,.webm">
     </label>
     <div class="d-flex flex-wrap gap-3 align-items-center mt-3 small">
       <div class="form-check form-switch m-0">
@@ -104,11 +104,6 @@
   <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
     <h5 class="m-0"><i class="bi bi-journals me-1"></i>Книги к загрузке <span class="badge text-bg-secondary" id="bookCount">0</span></h5>
     <div class="d-flex flex-wrap gap-2 align-items-center">
-      <div class="input-group input-group-sm" style="width:auto">
-        <span class="input-group-text"><i class="bi bi-bookshelf"></i></span>
-        <input id="shelfAll" class="form-control" list="shelvesList" placeholder="Полка для всех" style="max-width:180px">
-        <button class="btn btn-outline-secondary" type="button" id="shelfAllBtn">Применить</button>
-      </div>
       <div class="btn-group btn-group-sm">
         <button class="btn btn-outline-secondary" type="button" id="checkAll">Выбрать все</button>
         <button class="btn btn-outline-secondary" type="button" id="checkNone">Снять</button>
@@ -232,7 +227,7 @@
 })();
 
 let committing = false;
-const BOOK_EXT = ['epub', 'fb2', 'pdf', 'zip'];
+const BOOK_EXT = ['epub', 'fb2', 'pdf', 'zip', '7z', 'rar'];
 const fileInput = document.getElementById('fileInput');
 let audioFiles = [];
 const cards = new Map();          // token -> {card, el}
@@ -271,7 +266,7 @@ function enqueue(f) {
   const li = document.createElement('li');
   li.className = 'list-group-item d-flex align-items-center gap-2';
   li.innerHTML =
-    '<i class="bi ' + (ext(f.name) === 'zip' ? 'bi-file-zip' : 'bi-file-earmark-text') + ' text-muted"></i>' +
+    '<i class="bi ' + (['zip', '7z', 'rar'].includes(ext(f.name)) ? 'bi-file-zip' : 'bi-file-earmark-text') + ' text-muted"></i>' +
     '<span class="text-truncate" style="max-width:45%" title="' + esc(f.name) + '">' + esc(f.name) + '</span>' +
     '<span class="text-muted">' + fmtSize(f.size) + '</span>' +
     '<div class="progress flex-grow-1" style="height:6px"><div class="progress-bar" style="width:0%"></div></div>' +
@@ -395,10 +390,9 @@ function addCard(c) {
         '<div class="row g-2">' +
           '<div class="col-md-7"><label class="up-lbl">Название *</label><input class="form-control form-control-sm f-title" value="' + esc(c.title) + '">' + origHint(c, 'title') + '</div>' +
           '<div class="col-md-5"><label class="up-lbl">Автор</label><input class="form-control form-control-sm f-author" list="authorsList" placeholder="Неизвестный автор" value="' + esc(c.author) + '">' + origHint(c, 'author') + '</div>' +
-          '<div class="col-7 col-md-5"><label class="up-lbl">Цикл</label><input class="form-control form-control-sm f-series" list="seriesList" placeholder="—" value="' + esc(c.series) + '">' + origHint(c, 'series') + '</div>' +
+          '<div class="col-7 col-md-7"><label class="up-lbl">Цикл</label><input class="form-control form-control-sm f-series" list="seriesList" placeholder="—" value="' + esc(c.series) + '">' + origHint(c, 'series') + '</div>' +
           '<div class="col-2 col-md-1"><label class="up-lbl">№</label><input class="form-control form-control-sm f-order" type="number" step="0.1" min="0" value="' + esc(fmtOrder(c.series_order)) + '"></div>' +
           '<div class="col-3 col-md-2"><label class="up-lbl">Год</label><input class="form-control form-control-sm f-year" type="number" min="0" max="2100" value="' + esc(c.year || '') + '"></div>' +
-          '<div class="col-md-4"><label class="up-lbl">Полка</label><input class="form-control form-control-sm f-shelf" list="shelvesList" placeholder="Без полки"></div>' +
           '<div class="col-12"><label class="up-lbl">Жанры и теги</label><input class="form-control form-control-sm f-tags" placeholder="через запятую" value="' + esc((c.tags || []).join(', ')) + '"></div>' +
           '<div class="col-12">' +
             '<details class="up-desc"' + (c.description ? '' : '') + '><summary class="small text-muted">Аннотация' + (c.description ? ' · ' + c.description.length + ' зн.' : ' — нет') + '</summary>' +
@@ -454,10 +448,6 @@ function updateCommitBar() {
   btn.innerHTML = '<i class="bi bi-check2-circle me-1"></i>Сохранить ' + sel + ' ' + plural(sel, 'книгу', 'книги', 'книг');
 }
 
-document.getElementById('shelfAllBtn').addEventListener('click', () => {
-  const v = document.getElementById('shelfAll').value;
-  cards.forEach(it => { it.el.querySelector('.f-shelf').value = v; });
-});
 document.getElementById('checkAll').addEventListener('click', () => { cards.forEach(it => { it.el.querySelector('.up-check').checked = true; it.el.classList.remove('is-off'); }); updateCommitBar(); });
 document.getElementById('checkNone').addEventListener('click', () => { cards.forEach(it => { it.el.querySelector('.up-check').checked = false; it.el.classList.add('is-off'); }); updateCommitBar(); });
 
@@ -477,7 +467,6 @@ async function commitBooks() {
     series: el.querySelector('.f-series').value,
     series_order: el.querySelector('.f-order').value,
     year: el.querySelector('.f-year').value,
-    shelf: el.querySelector('.f-shelf').value,
     tags: el.querySelector('.f-tags').value,
     description: el.querySelector('.f-desc').value,
   }));

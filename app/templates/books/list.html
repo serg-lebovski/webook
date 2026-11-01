@@ -8,7 +8,7 @@
   .lib-grid .bulk-check { position:absolute; top:8px; left:8px; z-index:2; width:1.1rem; height:1.1rem; }
   .lib-grid .lib-link { display:block; text-decoration:none; }
   .lib-grid .lib-cover {
-    width:100%; aspect-ratio:2/3; border-radius:var(--radius); object-fit:cover; box-shadow:var(--shadow-sm);
+    width:100%; aspect-ratio:2/3; border-radius:var(--radius-sm); object-fit:cover; box-shadow:var(--shadow-sm);
     transition:transform .18s ease, box-shadow .18s ease;
   }
   .lib-grid .lib-cell:hover .lib-cover { transform:translateY(-4px) scale(1.015); box-shadow:var(--shadow-lift); }
@@ -16,8 +16,9 @@
   .lib-grid .lib-author { font-size:.78rem; color:var(--bs-secondary-color); }
   .lib-grid .lib-badges { margin-top:.3rem; display:flex; gap:.25rem; flex-wrap:wrap; }
 
-  .lib-list { display:flex; flex-direction:column; gap:.4rem; }
-  .lib-list .lib-cell { display:flex; align-items:center; gap:.6rem; border:1px solid var(--bs-border-color); border-radius:.4rem; padding:.35rem .6rem; }
+  .lib-list { display:flex; flex-direction:column; gap:0; }
+  .lib-list .lib-cell { display:flex; align-items:center; gap:.6rem; border-bottom:1px solid var(--wb-border); padding:.45rem .3rem; }
+  .lib-list .lib-cell:last-child { border-bottom:0; }
   .lib-list .bulk-check { flex:none; width:1.1rem; height:1.1rem; }
   .lib-list .lib-link { display:flex; align-items:center; gap:.6rem; flex:1 1 auto; min-width:0; text-decoration:none; }
   .lib-list .lib-cover { width:32px; min-width:32px; aspect-ratio:2/3; border-radius:3px; object-fit:cover; }
@@ -27,6 +28,20 @@
   .lib-list .lib-badges { margin-left:auto; display:flex; gap:.3rem; flex-wrap:wrap; flex:none; padding-left:.5rem; }
 
   .lib-title, .lib-author { overflow:hidden; text-overflow:ellipsis; }
+  /* обёртка обложки + плитка цикла (стопка томов) */
+  .lib-cover-wrap { position:relative; }
+  .lib-grid .lib-series .lib-cover {
+    box-shadow: 5px -5px 0 -1px var(--wb-panel), 5px -5px 0 0 var(--wb-border),
+                10px -10px 0 -2px var(--wb-panel), 10px -10px 0 -1px var(--wb-border), var(--shadow-sm);
+  }
+  .lib-vols { position:absolute; left:6px; bottom:6px; background:rgba(0,0,0,.72); color:#fff;
+              font-size:.72rem; font-weight:600; padding:.15rem .45rem; border-radius:3px; }
+  .lib-list .lib-vols { display:none; }
+  .lib-kicker { font-size:.7rem; text-transform:uppercase; letter-spacing:.04em; color:var(--accent); font-weight:600; margin-top:.45rem; }
+  .lib-list .lib-kicker { margin-top:0; }
+  .lib-grid .lib-series .lib-title { margin-top:.1rem; }
+  .lib-series-prog { display:inline-block; width:60px; height:5px; border-radius:3px; background:var(--bs-secondary-bg); overflow:hidden; vertical-align:middle; }
+  .lib-series-prog > span { display:block; height:100%; background:var(--wb-cta); }
   .lib-cover-ph { display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg,var(--accent-grad-from),var(--accent-grad-to)); color:#fff; }
   .lib-grid .lib-cover-ph { font-size:2rem; }
 
@@ -41,230 +56,232 @@
 {% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-  <h2 class="mb-0"><i class="bi bi-collection me-2"></i>{% if type == 'audio' %}Аудиокниги{% elif favorite %}Избранное{% elif reading %}Хочу прочитать{% else %}Книги{% endif %}</h2>
+{% set cur_shelf = (shelf_chips | selectattr('id', 'equalto', shelf_id) | first) if shelf_id else none %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb mb-2">
+    <li class="breadcrumb-item"><a href="/books">Книги</a></li>
+    {% if cur_shelf %}<li class="breadcrumb-item active">{{ cur_shelf.name }}</li>
+    {% elif type == 'audio' %}<li class="breadcrumb-item active">Аудиокниги</li>
+    {% elif favorite %}<li class="breadcrumb-item active">Избранное</li>
+    {% elif reading %}<li class="breadcrumb-item active">Хочу прочитать</li>
+    {% elif no_series %}<li class="breadcrumb-item active">Вне циклов</li>
+    {% else %}<li class="breadcrumb-item active">Все книги</li>{% endif %}
+  </ol>
+</nav>
+
+<div class="wb-page-h">
+  <h1>{% if cur_shelf %}{{ cur_shelf.name }}{% elif type == 'audio' %}Аудиокниги{% elif favorite %}Избранное{% elif reading %}Хочу прочитать{% elif no_series %}Книги вне циклов{% else %}Все книги{% endif %}</h1>
+  <span class="wb-sub">{{ total }} {% if group_series and series_count %}позиций · циклов: {{ series_count }}{% else %}шт.{% endif %}</span>
+  <div class="ms-auto d-flex gap-2">
+    <a href="/books/upload" class="btn btn-success btn-sm"><i class="bi bi-cloud-upload me-1"></i>Загрузить</a>
+  </div>
 </div>
 
-{% if type != 'audio' %}
-<div class="pill-row mb-4">
-  <a href="/books?{{ all_shelf_qs }}" class="pill {% if not shelf_id %}active{% endif %}"><i class="bi bi-collection me-1"></i>Все полки</a>
-  {% for sc in shelf_chips %}
-  <a href="/books?{{ sc.qs }}" class="pill {% if shelf_id == sc.id %}active{% endif %}"><i class="bi bi-bookshelf me-1"></i>{{ sc.name }}</a>
-  {% endfor %}
-  <a href="/shelves" class="pill" title="Управление полками"><i class="bi bi-gear"></i></a>
-</div>
-{% endif %}
-
-<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-  <div class="d-flex flex-wrap gap-2">
-    <div class="btn-group btn-group-sm" role="group">
-      <a href="/books{% if q %}?q={{ q|urlencode }}{% endif %}" class="btn btn-outline-secondary {% if type == 'all' %}active{% endif %}">Все</a>
-      <a href="/books?type=book{% if q %}&q={{ q|urlencode }}{% endif %}" class="btn btn-outline-secondary {% if type == 'book' %}active{% endif %}"><i class="bi bi-book me-1"></i>Книги</a>
-      <a href="/books?type=audio{% if q %}&q={{ q|urlencode }}{% endif %}" class="btn btn-outline-secondary {% if type == 'audio' %}active{% endif %}"><i class="bi bi-headphones me-1"></i>Аудио</a>
+<section class="wb-panel mb-3">
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 px-3 py-2">
+    <div class="d-flex flex-wrap gap-2">
+      <div class="btn-group btn-group-sm" role="group">
+        <a href="/books?type=all{% if q %}&q={{ q|urlencode }}{% endif %}" class="btn btn-outline-secondary {% if type == 'all' %}active{% endif %}">Все</a>
+        <a href="/books?type=book{% if q %}&q={{ q|urlencode }}{% endif %}" class="btn btn-outline-secondary {% if type == 'book' %}active{% endif %}"><i class="bi bi-book me-1"></i>Книги</a>
+        <a href="/books?type=audio{% if q %}&q={{ q|urlencode }}{% endif %}" class="btn btn-outline-secondary {% if type == 'audio' %}active{% endif %}"><i class="bi bi-headphones me-1"></i>Аудио</a>
+      </div>
+      {% if type != 'audio' %}
+      <div class="btn-group btn-group-sm" role="group">
+        <a href="/books?{{ fav_qs }}" class="btn btn-outline-secondary {% if favorite %}active{% endif %}" title="Избранное"><i class="bi bi-heart-fill text-danger"></i> Избранное</a>
+        <a href="/books?{{ reading_qs }}" class="btn btn-outline-secondary {% if reading %}active{% endif %}" title="Хочу прочитать"><i class="bi bi-bookmark-check"></i> Хочу прочитать</a>
+      </div>
+      {% endif %}
+      {% if not q and not no_series and type != 'audio' %}
+      <div class="btn-group btn-group-sm" role="group" title="Как показывать тома циклов">
+        <a href="/books?{{ grouped_qs }}" class="btn btn-outline-secondary {% if not flat %}active{% endif %}"><i class="bi bi-stack me-1"></i>Циклами</a>
+        <a href="/books?{{ flat_qs }}" class="btn btn-outline-secondary {% if flat %}active{% endif %}"><i class="bi bi-grid me-1"></i>Все тома</a>
+      </div>
+      {% endif %}
     </div>
-    {% if type != 'audio' %}
-    <div class="btn-group btn-group-sm" role="group">
-      <a href="/books?{{ fav_qs }}" class="btn btn-outline-secondary {% if favorite %}active{% endif %}" title="Избранное"><i class="bi bi-heart-fill text-danger"></i> Избранное</a>
-      <a href="/books?{{ reading_qs }}" class="btn btn-outline-secondary {% if reading %}active{% endif %}" title="Хочу прочитать"><i class="bi bi-bookmark-check"></i> Хочу прочитать</a>
+    <div class="btn-group btn-group-sm" role="group" aria-label="Вид">
+      <button type="button" class="btn btn-outline-secondary" id="viewGrid" title="Сетка"><i class="bi bi-grid-3x3-gap"></i></button>
+      <button type="button" class="btn btn-outline-secondary" id="viewList" title="Список"><i class="bi bi-list-ul"></i></button>
     </div>
-    {% endif %}
   </div>
-  <div class="btn-group btn-group-sm" role="group" aria-label="Вид">
-    <button type="button" class="btn btn-outline-secondary" id="viewGrid" title="Сетка"><i class="bi bi-grid-3x3-gap"></i></button>
-    <button type="button" class="btn btn-outline-secondary" id="viewList" title="Список"><i class="bi bi-list-ul"></i></button>
-  </div>
-</div>
 
-{% if type != 'audio' %}
-<form method="get" class="row g-2 mb-3">
-  <input type="hidden" name="type" value="{{ type }}">
-  {% if favorite %}<input type="hidden" name="favorite" value="1">{% endif %}
-  {% if reading %}<input type="hidden" name="reading" value="1">{% endif %}
-  {% if shelf_id %}<input type="hidden" name="shelf_id" value="{{ shelf_id }}">{% endif %}
-  {% if tag %}<input type="hidden" name="tag" value="{{ tag }}">{% endif %}
-  <div class="col-sm-6 col-md-4">
-    <input type="text" name="q" class="form-control form-control-sm" placeholder="Поиск по названию…" value="{{ q }}">
-  </div>
-  <div class="col-auto">
-    <select name="sort" class="form-select form-select-sm">
-      <option value="">По названию</option>
-      <option value="rating" {% if sort == 'rating' %}selected{% endif %}>По оценке</option>
-      <option value="added" {% if sort == 'added' %}selected{% endif %}>Сначала новые</option>
-    </select>
-  </div>
-  <div class="col-auto">
-    <button type="submit" class="btn btn-sm btn-outline-secondary">Найти</button>
-    {% if q or shelf_id or tag or favorite or reading or sort %}<a href="/books" class="btn btn-sm btn-outline-danger ms-1">✕</a>{% endif %}
-  </div>
-</form>
-{% endif %}
+  {% if type != 'audio' %}
+  <form method="get" class="row g-2 px-3 pb-3 m-0">
+    <input type="hidden" name="type" value="{{ type }}">
+    {% if favorite %}<input type="hidden" name="favorite" value="1">{% endif %}
+    {% if reading %}<input type="hidden" name="reading" value="1">{% endif %}
+    {% if shelf_id %}<input type="hidden" name="shelf_id" value="{{ shelf_id }}">{% endif %}
+    {% if tag %}<input type="hidden" name="tag" value="{{ tag }}">{% endif %}
+    {% if flat %}<input type="hidden" name="flat" value="1">{% endif %}
+    {% if no_series %}<input type="hidden" name="no_series" value="1">{% endif %}
+    <div class="col-sm-6 col-md-4 ps-0">
+      <input type="text" name="q" class="form-control form-control-sm" placeholder="Поиск по названию…" value="{{ q }}">
+    </div>
+    <div class="col-auto">
+      <select name="sort" class="form-select form-select-sm">
+        <option value="">По названию</option>
+        <option value="rating" {% if sort == 'rating' %}selected{% endif %}>По оценке</option>
+        <option value="added" {% if sort == 'added' %}selected{% endif %}>Сначала новые</option>
+      </select>
+    </div>
+    <div class="col-auto">
+      <button type="submit" class="btn btn-sm btn-outline-secondary">Найти</button>
+      {% if q or shelf_id or tag or favorite or reading or sort %}<a href="/books?type=all" class="btn btn-sm btn-outline-danger ms-1" title="Сбросить фильтры">✕</a>{% endif %}
+    </div>
+  </form>
+  {% endif %}
+</section>
 
 {% if tag %}
 <div class="mb-3">
   <span class="badge bg-primary fs-6"><i class="bi bi-tag me-1"></i>{{ tag }}</span>
-  <a href="/books" class="text-decoration-none small ms-1">сбросить фильтр</a>
+  <a href="/books?type=all" class="text-decoration-none small ms-1">сбросить фильтр</a>
 </div>
 {% endif %}
 
 {% if items %}
-<div class="d-flex align-items-center gap-2 mb-2">
-  <div class="form-check mb-0">
-    <input class="form-check-input" type="checkbox" id="bulkSelectAll">
-    <label class="form-check-label small text-muted" for="bulkSelectAll">Выбрать</label>
+<section class="wb-panel wb-pad">
+  <div class="d-flex align-items-center gap-2 mb-3">
+    <div class="form-check mb-0">
+      <input class="form-check-input" type="checkbox" id="bulkSelectAll">
+      <label class="form-check-label small text-muted" for="bulkSelectAll">Выбрать</label>
+    </div>
+    <p class="text-muted small mb-0">Всего: {{ total }}{% if total_pages > 1 %} · стр. {{ page }} из {{ total_pages }}{% endif %}</p>
   </div>
-  <p class="text-muted small mb-0">Всего: {{ total }}{% if total_pages > 1 %} · стр. {{ page }} из {{ total_pages }}{% endif %}</p>
-</div>
 
-<div id="libContainer" class="lib-grid">
-  {% for it in items %}
-  <div class="lib-cell" data-kind="{{ it.kind }}">
-    {% if it.kind == 'book' %}
-    <input type="checkbox" class="form-check-input bulk-check" value="{{ it.id }}" onclick="event.stopPropagation()">
-    {% endif %}
-    <a href="{{ it.url }}" class="lib-link">
-      {% if it.cover %}
-      <img src="{{ it.cover }}" class="lib-cover" alt="{{ it.title }}">
-      {% else %}
-      <div class="lib-cover lib-cover-ph"><i class="bi bi-{{ 'headphones' if it.kind == 'audio' else 'book' }}"></i></div>
+  <div id="libContainer" class="lib-grid">
+    {% for it in items %}
+    <div class="lib-cell{% if it.kind == 'series' %} lib-series{% endif %}" data-kind="{{ it.kind }}">
+      {% if it.kind == 'book' %}
+      <input type="checkbox" class="form-check-input bulk-check" value="{{ it.id }}" onclick="event.stopPropagation()">
       {% endif %}
-      <div class="lib-body">
-        <div class="lib-title text-body">{{ it.title }}</div>
-        {% if it.author %}<div class="lib-author">{{ it.author }}</div>{% endif %}
-        <div class="lib-badges">
-          {% if it.kind == 'book' %}
-          {% if it.fmt %}<span class="badge bg-secondary text-2xs">{{ it.fmt }}</span>{% endif %}
-          {% if it.is_favorite %}<span class="badge bg-danger text-2xs"><i class="bi bi-heart-fill"></i></span>{% endif %}
-          {% if it.is_read %}<span class="badge bg-success text-2xs"><i class="bi bi-check2"></i></span>{% endif %}
-          {% if it.in_reading_list %}<span class="badge bg-warning text-dark text-2xs" title="Хочу прочитать"><i class="bi bi-bookmark-check-fill"></i></span>{% endif %}
-          {% if it.rating %}<span class="badge bg-warning text-dark text-2xs"><i class="bi bi-star-fill"></i> {{ it.rating }}</span>{% endif %}
+      <a href="{{ it.url }}" class="lib-link">
+        <div class="lib-cover-wrap">
+          {% if it.cover %}
+          <img src="{{ it.cover }}" class="lib-cover" alt="{{ it.title }}" loading="lazy">
           {% else %}
-          <span class="badge bg-dark text-2xs"><i class="bi bi-headphones me-1"></i>аудио</span>
-          <span class="badge bg-secondary text-2xs">{{ it.chapters }} гл.</span>
-          {% if it.is_finished %}<span class="badge bg-success text-2xs"><i class="bi bi-check2"></i></span>{% endif %}
+          <div class="lib-cover lib-cover-ph"><i class="bi bi-{{ 'headphones' if it.kind == 'audio' else ('collection' if it.kind == 'series' else 'book') }}"></i></div>
           {% endif %}
+          {% if it.kind == 'series' %}<span class="lib-vols"><i class="bi bi-stack me-1"></i>{{ it.count }} {{ 'том' if it.count % 10 == 1 and it.count % 100 != 11 else ('тома' if it.count % 10 in (2, 3, 4) and it.count % 100 not in (12, 13, 14) else 'томов') }}</span>{% endif %}
+        </div>
+        <div class="lib-body">
+          {% if it.kind == 'series' %}<div class="lib-kicker">Цикл</div>{% endif %}
+          <div class="lib-title text-body">{{ it.title }}</div>
+          {% if it.author %}<div class="lib-author">{{ it.author }}</div>{% endif %}
+          <div class="lib-badges">
+            {% if it.kind == 'book' %}
+            {% if it.fmt %}<span class="badge bg-secondary text-2xs">{{ it.fmt }}</span>{% endif %}
+            {% if it.is_favorite %}<span class="badge bg-danger text-2xs"><i class="bi bi-heart-fill"></i></span>{% endif %}
+            {% if it.is_read %}<span class="badge bg-success text-2xs"><i class="bi bi-check2"></i></span>{% endif %}
+            {% if it.in_reading_list %}<span class="badge bg-warning text-dark text-2xs" title="Хочу прочитать"><i class="bi bi-bookmark-check-fill"></i></span>{% endif %}
+            {% if it.rating %}<span class="badge bg-warning text-dark text-2xs"><i class="bi bi-star-fill"></i> {{ it.rating }}</span>{% endif %}
+            {% elif it.kind == 'series' %}
+            <span class="lib-series-prog" title="Прочитано {{ it.read }} из {{ it.count }}"><span style="width:{{ (it.read / it.count * 100) | round | int }}%"></span></span>
+            <span class="text-2xs text-muted">{{ it.read }}/{{ it.count }}</span>
+            {% else %}
+            <span class="badge bg-dark text-2xs"><i class="bi bi-headphones me-1"></i>аудио</span>
+            <span class="badge bg-secondary text-2xs">{{ it.chapters }} гл.</span>
+            {% if it.is_finished %}<span class="badge bg-success text-2xs"><i class="bi bi-check2"></i></span>{% endif %}
+            {% endif %}
+          </div>
+        </div>
+      </a>
+      {% if it.kind == 'book' %}
+      <div class="lib-actions">
+        <div class="lib-stars d-flex align-items-center">
+          {% for n in range(1, 6) %}
+          <form method="post" action="/books/{{ it.id }}/rate" class="d-inline">
+            <input type="hidden" name="rating" value="{{ n }}">
+            <input type="hidden" name="next" value="{{ current_url }}">
+            <button type="submit" class="btn btn-link p-0 border-0 text-warning lh-1" title="Оценка {{ n }}">
+              <i class="bi bi-star{% if it.rating and it.rating >= n %}-fill{% endif %}"></i>
+            </button>
+          </form>
+          {% endfor %}
+        </div>
+        {% if it.fmt %}
+        <a href="/books/{{ it.id }}/download" class="btn btn-sm btn-outline-secondary py-0 px-1" title="Скачать"><i class="bi bi-download"></i></a>
+        {% endif %}
+        <div class="dropdown">
+          <button class="btn btn-sm btn-outline-secondary py-0 px-1 dropdown-toggle" type="button" data-bs-toggle="dropdown" title="Статус"><i class="bi bi-flag"></i></button>
+          <ul class="dropdown-menu dropdown-menu-end">
+            <li>
+              <form method="post" action="/books/{{ it.id }}/toggle-read">
+                <input type="hidden" name="next" value="{{ current_url }}">
+                <button type="submit" class="dropdown-item"><i class="bi bi-check2-circle me-2"></i>{% if it.is_read %}Убрать «прочитано»{% else %}Отметить прочитанной{% endif %}</button>
+              </form>
+            </li>
+            <li>
+              <form method="post" action="/books/{{ it.id }}/reading">
+                <input type="hidden" name="next" value="{{ current_url }}">
+                <button type="submit" class="dropdown-item"><i class="bi bi-bookmark-check me-2"></i>{% if it.in_reading_list %}Убрать из «хочу прочитать»{% else %}В «хочу прочитать»{% endif %}</button>
+              </form>
+            </li>
+          </ul>
         </div>
       </div>
-    </a>
-    {% if it.kind == 'book' %}
-    <div class="lib-actions">
-      <div class="lib-stars d-flex align-items-center">
-        {% for n in range(1, 6) %}
-        <form method="post" action="/books/{{ it.id }}/rate" class="d-inline">
-          <input type="hidden" name="rating" value="{{ n }}">
-          <input type="hidden" name="next" value="{{ current_url }}">
-          <button type="submit" class="btn btn-link p-0 border-0 text-warning lh-1" title="Оценка {{ n }}">
-            <i class="bi bi-star{% if it.rating and it.rating >= n %}-fill{% endif %}"></i>
-          </button>
-        </form>
-        {% endfor %}
-      </div>
-      {% if it.fmt %}
-      <a href="/books/{{ it.id }}/download" class="btn btn-sm btn-outline-secondary py-0 px-1" title="Скачать">
-        <i class="bi bi-download"></i>
-      </a>
       {% endif %}
-      <div class="dropdown">
-        <button class="btn btn-sm btn-outline-secondary py-0 px-1 dropdown-toggle" type="button" data-bs-toggle="dropdown" title="Статус">
-          <i class="bi bi-flag"></i>
-        </button>
-        <ul class="dropdown-menu dropdown-menu-end">
-          <li>
-            <form method="post" action="/books/{{ it.id }}/toggle-read">
-              <input type="hidden" name="next" value="{{ current_url }}">
-              <button type="submit" class="dropdown-item"><i class="bi bi-check2-circle me-2"></i>{% if it.is_read %}Убрать «прочитано»{% else %}Отметить прочитанной{% endif %}</button>
-            </form>
-          </li>
-          <li>
-            <form method="post" action="/books/{{ it.id }}/reading">
-              <input type="hidden" name="next" value="{{ current_url }}">
-              <button type="submit" class="dropdown-item"><i class="bi bi-bookmark-check me-2"></i>{% if it.in_reading_list %}Убрать из «хочу прочитать»{% else %}В «хочу прочитать»{% endif %}</button>
-            </form>
-          </li>
-        </ul>
+    </div>
+    {% endfor %}
+  </div>
+
+  {% set bulk_kind = 'books' %}
+  {% include "_bulk_bar.html" %}
+  {% include "_pagination.html" %}
+</section>
+{% else %}
+<section class="wb-panel wb-pad">
+{% if q %}
+  <div class="text-center py-5">
+    <i class="bi bi-search display-4 text-muted"></i>
+    <h5 class="mt-3 text-muted">По запросу «{{ q }}» ничего не найдено</h5>
+  </div>
+{% else %}
+  <div class="text-center py-4">
+    <i class="bi bi-collection display-4 text-muted"></i>
+    <h4 class="mt-3">Здесь пока пусто</h4>
+    <p class="text-muted mb-4">Несколько способов наполнить библиотеку:</p>
+    <div class="row g-3 justify-content-center" style="max-width:760px;margin:0 auto;">
+      <div class="col-sm-6 col-lg-3">
+        <a href="/books/upload" class="card h-100 text-decoration-none text-body"><div class="card-body text-center">
+          <i class="bi bi-cloud-upload fs-2 text-primary"></i><p class="fw-semibold mt-2 mb-1">Загрузить файлы</p><p class="small text-muted mb-0">EPUB, FB2, PDF, ZIP или аудио</p></div></a>
+      </div>
+      <div class="col-sm-6 col-lg-3">
+        <a href="/books/upload#isbn" class="card h-100 text-decoration-none text-body"><div class="card-body text-center">
+          <i class="bi bi-upc-scan fs-2 text-primary"></i><p class="fw-semibold mt-2 mb-1">Добавить по ISBN</p><p class="small text-muted mb-0">В список «Хочу прочитать»</p></div></a>
+      </div>
+      <div class="col-sm-6 col-lg-3">
+        <a href="/links" class="card h-100 text-decoration-none text-body"><div class="card-body text-center">
+          <i class="bi bi-journal-text fs-2 text-primary"></i><p class="fw-semibold mt-2 mb-1">Сохранить статью</p><p class="small text-muted mb-0">Ссылка на чтение позже</p></div></a>
+      </div>
+      <div class="col-sm-6 col-lg-3">
+        <a href="/settings" class="card h-100 text-decoration-none text-body"><div class="card-body text-center">
+          <i class="bi bi-phone fs-2 text-primary"></i><p class="fw-semibold mt-2 mb-1">Приложение и плагин</p><p class="small text-muted mb-0">Android и браузер</p></div></a>
       </div>
     </div>
-    {% endif %}
   </div>
-  {% endfor %}
-</div>
-
-{% set bulk_kind = 'books' %}
-{% include "_bulk_bar.html" %}
-{% include "_pagination.html" %}
-{% else %}
-{% if q %}
-<div class="text-center py-5">
-  <i class="bi bi-search display-1 text-muted"></i>
-  <h5 class="mt-3 text-muted">По запросу «{{ q }}» ничего не найдено</h5>
-</div>
-{% else %}
-<div class="text-center py-5">
-  <i class="bi bi-collection display-1 text-muted"></i>
-  <h4 class="mt-3">Добро пожаловать в вашу библиотеку</h4>
-  <p class="text-muted mb-4">Здесь пока пусто. Вот несколько способов наполнить её:</p>
-  <div class="row g-3 justify-content-center" style="max-width:760px;margin:0 auto;">
-    <div class="col-sm-6 col-lg-3">
-      <a href="/books/upload" class="card h-100 text-decoration-none text-body">
-        <div class="card-body text-center">
-          <i class="bi bi-cloud-upload fs-2 text-primary"></i>
-          <p class="fw-semibold mt-2 mb-1">Загрузить файлы</p>
-          <p class="small text-muted mb-0">EPUB, FB2, PDF или аудио</p>
-        </div>
-      </a>
-    </div>
-    <div class="col-sm-6 col-lg-3">
-      <a href="/books/upload#isbn" class="card h-100 text-decoration-none text-body">
-        <div class="card-body text-center">
-          <i class="bi bi-upc-scan fs-2 text-primary"></i>
-          <p class="fw-semibold mt-2 mb-1">Добавить по ISBN</p>
-          <p class="small text-muted mb-0">В список «Хочу прочитать»</p>
-        </div>
-      </a>
-    </div>
-    <div class="col-sm-6 col-lg-3">
-      <a href="/links" class="card h-100 text-decoration-none text-body">
-        <div class="card-body text-center">
-          <i class="bi bi-journal-text fs-2 text-primary"></i>
-          <p class="fw-semibold mt-2 mb-1">Сохранить статью</p>
-          <p class="small text-muted mb-0">Ссылка на чтение позже</p>
-        </div>
-      </a>
-    </div>
-    <div class="col-sm-6 col-lg-3">
-      <a href="/settings" class="card h-100 text-decoration-none text-body">
-        <div class="card-body text-center">
-          <i class="bi bi-phone fs-2 text-primary"></i>
-          <p class="fw-semibold mt-2 mb-1">Приложение и плагин</p>
-          <p class="small text-muted mb-0">Android и браузер</p>
-        </div>
-      </a>
-    </div>
-  </div>
-</div>
 {% endif %}
+</section>
 {% endif %}
 
 {% if shared_books %}
-<hr class="my-4">
-<h6 class="text-muted mb-3"><i class="bi bi-people me-1"></i>Поделились со мной</h6>
-<div class="lib-grid">
-  {% for book in shared_books %}
-  <div class="lib-cell" data-kind="book">
-    <a href="/books/{{ book.id }}" class="lib-link">
-      {% if book.cover_path %}
-      <img src="/books/{{ book.id }}/cover" class="lib-cover" alt="{{ book.title }}">
-      {% else %}
-      <div class="lib-cover lib-cover-ph"><i class="bi bi-book"></i></div>
-      {% endif %}
-      <div class="lib-body">
-        <div class="lib-title text-body">{{ book.title }}</div>
-        <div class="lib-author">{{ book.author.name }}</div>
-        <div class="lib-badges"><span class="badge bg-info text-dark text-2xs"><i class="bi bi-share me-1"></i>чужая</span></div>
-      </div>
-    </a>
+<section class="wb-panel mt-3">
+  <h3 class="wb-panel-h"><i class="bi bi-people"></i>Поделились со мной</h3>
+  <div class="lib-grid p-3">
+    {% for book in shared_books %}
+    <div class="lib-cell" data-kind="book">
+      <a href="/books/{{ book.id }}" class="lib-link">
+        {% if book.cover_path %}<img src="/books/{{ book.id }}/cover" class="lib-cover" alt="{{ book.title }}" loading="lazy">
+        {% else %}<div class="lib-cover lib-cover-ph"><i class="bi bi-book"></i></div>{% endif %}
+        <div class="lib-body">
+          <div class="lib-title text-body">{{ book.title }}</div>
+          <div class="lib-author">{{ book.author.name }}</div>
+          <div class="lib-badges"><span class="badge bg-info text-dark text-2xs"><i class="bi bi-share me-1"></i>чужая</span></div>
+        </div>
+      </a>
+    </div>
+    {% endfor %}
   </div>
-  {% endfor %}
-</div>
+</section>
 {% endif %}
 {% endblock %}
 

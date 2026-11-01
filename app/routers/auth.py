@@ -9,6 +9,7 @@ from app.services.settings_service import is_registration_allowed
 from app.services.security_service import client_ip, banned_until, record_failure, record_success
 from app.logging_config import auth_log
 
+from app.config import COOKIE_SECURE
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
 
@@ -55,14 +56,14 @@ def login(
     auth_log.info("login OK ip=%s username=%s", ip, user.username)
     token = create_access_token(user.username)
     response = RedirectResponse("/", status_code=302)
-    response.set_cookie("access_token", token, httponly=True, max_age=60 * 60 * 24 * 7, samesite="lax")
+    response.set_cookie("access_token", token, httponly=True, max_age=60 * 60 * 24 * 7, samesite="lax", secure=COOKIE_SECURE)
     return response
 
 
 @router.post("/logout")
 def logout():
     response = RedirectResponse("/login", status_code=302)
-    response.delete_cookie("access_token")
+    response.delete_cookie("access_token", samesite="lax", secure=COOKIE_SECURE)
     return response
 
 
@@ -94,5 +95,5 @@ def register(
     auth_log.info("register user=%s admin=%s ip=%s", user.username, first_user, client_ip(request))
     token = create_access_token(user.username)
     response = RedirectResponse("/", status_code=302)
-    response.set_cookie("access_token", token, httponly=True, max_age=60 * 60 * 24 * 7, samesite="lax")
+    response.set_cookie("access_token", token, httponly=True, max_age=60 * 60 * 24 * 7, samesite="lax", secure=COOKIE_SECURE)
     return response

@@ -26,7 +26,7 @@
             <label class="form-label fw-semibold">Фото автора</label>
             {% if author and author.photo_path %}
             <div class="mb-2">
-              <img src="/storage/covers/{{ author.photo_path }}" class="rounded" width="80" height="80" style="object-fit:cover">
+              <img src="/authors/{{ author.id }}/photo" class="rounded" width="80" height="80" style="object-fit:cover">
               <small class="text-muted ms-2">Загрузите новое, чтобы заменить</small>
             </div>
             {% endif %}

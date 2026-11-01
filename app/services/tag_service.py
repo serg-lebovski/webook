@@ -1,7 +1,7 @@
 """Создание и привязка тегов к книгам и статьям."""
 from typing import List
 
-from sqlalchemy import func, or_
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.tag import Tag, book_tags, link_tags
@@ -20,20 +20,20 @@ def parse_tag_names(raw: str) -> List[str]:
 
 
 def get_or_create_tags(names: List[str], user_id: int, db: Session) -> List[Tag]:
+    """Теги пользователя по именам без учёта регистра. Сравнение — в Python
+    (casefold), потому что lower()/ilike в SQLite не знают кириллицу и создавали
+    дубли «Фэнтези»/«фэнтези»; на PostgreSQL результат тот же."""
+    existing = {t.name.casefold(): t for t in db.query(Tag).filter(Tag.user_id == user_id).all()}
     result: List[Tag] = []
     for name in names:
-        tag = (
-            db.query(Tag)
-            # точное совпадение — отдельно: lower() в SQLite не знает кириллицу
-            .filter(Tag.user_id == user_id,
-                    or_(Tag.name == name, func.lower(Tag.name) == name.lower()))
-            .first()
-        )
+        tag = existing.get(name.casefold())
         if not tag:
             tag = Tag(name=name, user_id=user_id)
             db.add(tag)
             db.flush()
-        result.append(tag)
+            existing[name.casefold()] = tag
+        if tag not in result:
+            result.append(tag)
     return result
 
 

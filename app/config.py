@@ -7,6 +7,9 @@ load_dotenv()
 SECRET_KEY = os.getenv("SECRET_KEY", "change-me-in-production-please")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
+# Флаг Secure у cookie: включать, когда сайт открыт по HTTPS (за reverse-proxy).
+# По умолчанию выключен — локальная разработка идёт по http://, где Secure-cookie не сохранится.
+COOKIE_SECURE = os.getenv("COOKIE_SECURE", "false").strip().lower() in ("1", "true", "yes", "on")
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./webook.db")
 

@@ -5,4 +5,24 @@ __pycache__/
 *.pyo
 # Android-проект собирается отдельно; в образ нужен только static/webook.apk
 android/
+# Данные — это смонтированные volume'ы, в образ их копировать нельзя:
+# иначе каждая сборка на сервере тащит всю библиотеку (медленно, раздутый образ).
+books/
+files/
+links/
+audiobooks/
+manga/
+logs/
+db/
+backups/
+update/
+storage/
 staging/
+webook.db
+# Секреты передаются через env_file в docker-compose, в образе им не место
+.env
+# Локальные инструменты/заметки
+claude.exe
+tests/
+CLAUDE.md
+DEV_NOTES.md

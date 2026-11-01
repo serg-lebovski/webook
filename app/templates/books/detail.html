@@ -1,82 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{{ book.title }} — WeBook{% endblock %}
 
-{% block head %}
-<style>
-  /* Страница книги в стиле «карточка произведения»: панели, левая колонка с
-     обложкой и действиями, справа — автор / цикл / похожие. */
-  .bp-panel { background: #fff; border: 1px solid var(--bs-border-color-translucent); border-radius: var(--radius-sm); }
-  [data-bs-theme="dark"] .bp-panel { background: var(--bs-tertiary-bg); border-color: rgba(255,255,255,.06); }
-  .bp-pad { padding: 1.1rem 1.25rem; }
-  .bp-left { width: 196px; flex: none; }
-  .bp-left .btn { white-space: nowrap; font-size: .9rem; }
-  .bp-left .btn-outline-secondary, .bp-left [data-col-add] > .btn { color: var(--bs-body-color); border-color: var(--bs-border-color); }
-  .bp-left .btn-outline-secondary:hover, .bp-left [data-col-add] > .btn:hover { background: var(--bs-secondary-bg); color: var(--bs-body-color); }
-  [data-bs-theme="dark"] .bp-left .btn-outline-secondary, [data-bs-theme="dark"] .bp-left [data-col-add] > .btn { border-color: rgba(255,255,255,.35); }
-  .bp-left .bp-cover { width: 100%; aspect-ratio: 2/3; object-fit: cover; border-radius: 4px; box-shadow: var(--shadow-md); display: block; }
-  .bp-left .cover-placeholder { width: 100%; aspect-ratio: 2/3; border-radius: 4px; font-size: 3rem; }
-  .bp-left .btn { width: 100%; }
-  .bp-left .bp-row { display: flex; gap: .5rem; }
-  .bp-left .bp-row > .btn, .bp-left .bp-row > form { flex: 1; }
-  .bp-left .bp-row > .bp-sq { flex: 0 0 42px; }
-  .bp-left .bp-row form .btn { width: 100%; }
-  .bp-left [data-col-add], .bp-left [data-col-add] > .btn { width: 100%; display: block; }
-  .bp-icons { display: flex; justify-content: center; gap: .6rem; }
-  .bp-icons .btn { width: 42px; height: 38px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
-  .bp-title { font-size: 1.35rem; font-weight: 700; line-height: 1.25; margin: 0 0 .25rem; }
-  .bp-author { font-size: 1rem; }
-  .bp-genres { font-size: .86rem; }
-  .bp-meta { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem .9rem; font-size: .84rem; color: var(--bs-secondary-color); }
-  .bp-meta > span + span { border-left: 1px solid var(--bs-border-color); padding-left: .9rem; }
-  .bp-status { font-size: .75rem; font-weight: 600; padding: .2rem .5rem; border-radius: 3px; color: #fff; }
-  .bp-stats { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem 1.4rem; font-size: .88rem; color: var(--bs-secondary-color); }
-  .bp-stats .btn-link { color: inherit; text-decoration: none; padding: 0; font-size: inherit; }
-  .bp-stats .is-on { color: var(--bs-danger); }
-  .bp-stars .btn { color: #f5b301; font-size: 1rem; line-height: 1; padding: 0 .05rem; border: 0; }
-  .bp-chip { border: 1px solid var(--bs-danger); color: var(--bs-danger); border-radius: 3px; padding: 0 .4rem; font-size: .75rem; font-weight: 600; }
-  .bp-tags { font-size: .86rem; line-height: 1.6; }
-  .bp-tabs { border-bottom: 0; gap: .15rem; }
-  .bp-tabs .nav-link { border-radius: 3px 3px 0 0; font-size: .86rem; color: var(--bs-body-color); background: var(--bs-secondary-bg); border: 0; padding: .55rem .9rem; }
-  .bp-tabs .nav-link.active { background: var(--bp-box); color: var(--bs-body-color); font-weight: 600; }
-  :root { --bp-box: #f6f7f9; }
-  [data-bs-theme="dark"] { --bp-box: #0d0e10; }
-  .bp-box { background: var(--bp-box); border-radius: 0 3px 3px 3px; padding: 1rem 1.1rem; min-height: 130px; font-size: .93rem; }
-  .bp-box .bp-desc { white-space: pre-line; }
-  .bp-toc a { text-decoration: none; display: block; padding: .18rem 0; color: var(--bs-body-color); }
-  .bp-toc a:hover { color: var(--accent); }
-  .bp-ul-tabs { border-bottom: 1px solid var(--bs-border-color); gap: 1.2rem; }
-  .bp-ul-tabs .nav-link { border: 0; padding: .65rem .1rem; color: var(--bs-body-color); font-size: .92rem; border-bottom: 3px solid transparent; border-radius: 0; background: none; }
-  .bp-ul-tabs .nav-link.active { border-bottom-color: var(--accent); font-weight: 600; }
-  .bp-ul-tabs .cnt { color: var(--bs-secondary-color); font-weight: 400; }
-  .bp-quote { border-left: 3px solid var(--bs-warning); padding: .35rem .8rem; margin-bottom: .9rem; }
-  .bp-side-h { font-size: 1rem; font-weight: 500; padding: .8rem 1rem; border-bottom: 1px solid var(--bs-border-color-translucent); margin: 0; }
-  .bp-author-card { position: relative; overflow: hidden; border-radius: var(--radius-sm) var(--radius-sm) 0 0; min-height: 96px; display: flex; align-items: center; gap: .8rem; padding: 1rem; color: #fff; text-decoration: none; }
-  .bp-author-card .bg { position: absolute; inset: 0; background-size: cover; background-position: center; filter: blur(6px) brightness(.55); transform: scale(1.15); }
-  .bp-author-card .bg.plain { filter: none; background: linear-gradient(135deg, var(--accent-grad-from), var(--accent-grad-to)); }
-  .bp-author-card > *:not(.bg) { position: relative; }
-  .bp-avatar { width: 60px; height: 60px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255,255,255,.85); background: rgba(255,255,255,.15); display: inline-flex; align-items: center; justify-content: center; font-size: 1.6rem; flex: none; }
-  .bp-author-card .name { font-size: 1.05rem; font-weight: 600; text-shadow: 0 1px 3px rgba(0,0,0,.5); }
-  .bp-author-stats { display: flex; justify-content: center; gap: 0; font-size: .85rem; color: var(--bs-secondary-color); padding: .55rem; }
-  .bp-author-stats span { padding: 0 .8rem; }
-  .bp-author-stats span + span { border-left: 1px solid var(--bs-border-color); }
-  .bp-mini { display: flex; gap: .7rem; padding: .7rem 1rem; text-decoration: none; color: inherit; }
-  .bp-mini + .bp-mini { border-top: 1px solid var(--bs-border-color-translucent); }
-  .bp-mini:hover .t { color: var(--accent); }
-  .bp-mini img, .bp-mini .cover-placeholder { width: 56px; height: 80px; object-fit: cover; border-radius: 3px; flex: none; font-size: 1.2rem; }
-  .bp-mini .g { font-size: .76rem; color: var(--bs-secondary-color); }
-  .bp-mini .t { font-weight: 600; font-size: .9rem; line-height: 1.25; }
-  .bp-mini .a { font-size: .8rem; color: var(--bs-secondary-color); }
-  .bp-mini .r { font-size: .76rem; color: var(--bs-success); }
-  .bp-vol { display: flex; gap: .55rem; align-items: baseline; padding: .4rem 1rem; text-decoration: none; color: inherit; font-size: .9rem; }
-  .bp-vol:hover { background: var(--bs-secondary-bg); }
-  .bp-vol.cur { background: rgba(var(--accent-rgb), .1); font-weight: 600; }
-  .bp-vol .n { color: var(--bs-secondary-color); min-width: 1.6rem; text-align: right; font-variant-numeric: tabular-nums; }
-  @media (max-width: 575.98px) {
-    .bp-hero { flex-direction: column; }
-    .bp-left { width: 100%; max-width: 240px; margin: 0 auto; }
-  }
-</style>
-{% endblock %}
 
 {% block content %}
 {% set pct = ((read_progress.percentage or 0) * 100) | round | int if read_progress and read_progress.percentage is not none else 0 %}
@@ -86,7 +10,7 @@
   <ol class="breadcrumb mb-0">
     {% if is_owner %}
     <li class="breadcrumb-item"><a href="/books">Книги</a></li>
-    <li class="breadcrumb-item"><a href="/books?shelf_id={{ book.shelf_id }}">{{ book.shelf.name }}</a></li>
+    {% if book.series %}<li class="breadcrumb-item"><a href="/series/{{ book.series_id }}">{{ book.series.name }}</a></li>{% endif %}
     {% else %}
     <li class="breadcrumb-item"><a href="/shared">Поделились со мной</a></li>
     {% endif %}
@@ -200,11 +124,10 @@
             {% if is_owner %}<a href="/authors/{{ book.author_id }}" class="text-decoration-none">{{ book.author.name }}</a>
             {% else %}{{ book.author.name }}{% endif %}
           </div>
-          {% if book.tags or is_owner %}
+          {% if book.tags %}
           <div class="bp-genres mb-2">
-            {% if is_owner %}<a href="/books?shelf_id={{ book.shelf_id }}" class="text-decoration-none">{{ book.shelf.name }}</a>{% endif %}
-            {% set genre_tags = book.tags | rejectattr('name', 'equalto', book.shelf.name) | list if is_owner else book.tags %}
-            {% if genre_tags %}{% if is_owner %} / {% endif %}{% for t in genre_tags[:4] %}{% if is_owner %}<a href="/books?tag={{ t.name | urlencode }}" class="text-decoration-none">{{ t.name }}</a>{% else %}{{ t.name }}{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}
+            {% set genre_tags = book.tags %}
+            {% if genre_tags %}{% for t in genre_tags[:4] %}{% if is_owner %}<a href="/books?tag={{ t.name | urlencode }}" class="text-decoration-none">{{ t.name }}</a>{% else %}{{ t.name }}{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}
           </div>
           {% endif %}
 
@@ -321,7 +244,6 @@
             <div class="tab-pane fade small" id="bpFile">
               <div>Формат: <b>{{ book.file_format | upper }}</b>{% if book.file_size %} · {{ book.file_size | humanbytes }}{% endif %}</div>
               {% if book.language %}<div>Язык: {{ book.language }}</div>{% endif %}
-              {% if is_owner %}<div>Полка: <a href="/books?shelf_id={{ book.shelf_id }}">{{ book.shelf.name }}</a></div>{% endif %}
               <div class="mt-2 d-flex gap-2 flex-wrap">
                 <a href="/books/{{ book.id }}/download" class="btn btn-sm btn-outline-secondary"><i class="bi bi-download me-1"></i>Скачать</a>
                 {% if is_owner %}<a href="/books/{{ book.id }}/edit" class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil me-1"></i>Изменить данные</a>{% endif %}
@@ -383,7 +305,7 @@
       <section class="bp-panel">
         <a href="/authors/{{ book.author_id }}" class="bp-author-card">
           {% if book.cover_path %}<div class="bg" style="background-image:url('/books/{{ book.id }}/cover')"></div>{% else %}<div class="bg plain"></div>{% endif %}
-          {% if book.author.photo_path %}<img src="/storage/covers/{{ book.author.photo_path }}" class="bp-avatar" alt="">
+          {% if book.author.photo_path %}<img src="/authors/{{ book.author_id }}/photo" class="bp-avatar" alt="">
           {% else %}<span class="bp-avatar"><i class="bi bi-person"></i></span>{% endif %}
           <span class="name">{{ book.author.name }}</span>
         </a>

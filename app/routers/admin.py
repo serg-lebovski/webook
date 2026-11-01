@@ -15,7 +15,7 @@ from app.services.auth_service import hash_password
 from app.services.settings_service import get_setting, set_setting
 from app.services import update_service
 from app.logging_config import auth_log
-from app.config import LOGS_DIR
+from app.config import LOGS_DIR, COOKIE_SECURE
 
 router = APIRouter(prefix="/admin")
 templates = Jinja2Templates(directory="app/templates")
@@ -192,7 +192,7 @@ def backup_db(token: str = "", user: User = Depends(get_current_user), db: Sessi
                         filename=f"webook_db_{date_str}.{ext}",
                         background=BackgroundTask(lambda: _cleanup(tmp)))
     if token:
-        resp.set_cookie("backup_ready", token, max_age=300, path="/admin", samesite="lax")
+        resp.set_cookie("backup_ready", token, max_age=300, path="/admin", samesite="lax", secure=COOKIE_SECURE)
     return resp
 
 
@@ -214,7 +214,7 @@ def backup_full(token: str = "", user: User = Depends(get_current_user), db: Ses
                         filename=f"webook_full_backup_{date_str}.zip",
                         background=BackgroundTask(lambda: _cleanup(tmp)))
     if token:
-        resp.set_cookie("backup_ready", token, max_age=300, path="/admin", samesite="lax")
+        resp.set_cookie("backup_ready", token, max_age=300, path="/admin", samesite="lax", secure=COOKIE_SECURE)
     return resp
 
 
@@ -516,6 +516,14 @@ def _purge_user_data(uid: int, db: Session):
     # 9. series tiers (личный тир-лист)
     from app.models.series_tier import SeriesTier
     db.query(SeriesTier).filter_by(user_id=uid).delete(synchronize_session=False)
+
+    # 10. именованные закладки (FK users.id без ondelete — без этого PostgreSQL не даст удалить пользователя)
+    from app.models.bookmark import Bookmark
+    db.query(Bookmark).filter_by(user_id=uid).delete(synchronize_session=False)
+
+    # 11. подписки Web Push (тот же FK)
+    from app.models.push_subscription import PushSubscription
+    db.query(PushSubscription).filter_by(user_id=uid).delete(synchronize_session=False)
 
     # 12. манга: каталоги на диске + строки (главы каскадом)
     from app.models.manga import Manga

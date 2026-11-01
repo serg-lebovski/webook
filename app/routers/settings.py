@@ -21,6 +21,7 @@ from app.services.auth_service import hash_password, verify_password, create_acc
 from app.services import update_service
 from app.logging_config import auth_log
 
+from app.config import COOKIE_SECURE
 router = APIRouter(prefix="/settings")
 templates = Jinja2Templates(directory="app/templates")
 templates.env.globals["UPDATE_IN_PROGRESS_STATES"] = update_service.IN_PROGRESS_STATES
@@ -185,7 +186,7 @@ def update_profile(
     # Перевыпускаем токен (username мог измениться)
     token = create_access_token(user.username)
     response = RedirectResponse("/settings?success=profile", status_code=302)
-    response.set_cookie("access_token", token, httponly=True, max_age=60 * 60 * 24 * 7, samesite="lax")
+    response.set_cookie("access_token", token, httponly=True, max_age=60 * 60 * 24 * 7, samesite="lax", secure=COOKIE_SECURE)
     return response
 
 
@@ -264,7 +265,7 @@ def backup(
         background=BackgroundTask(lambda: os.path.exists(tmp_path) and os.unlink(tmp_path)),
     )
     if token:
-        resp.set_cookie("backup_ready", token, max_age=120, path="/settings", samesite="lax")
+        resp.set_cookie("backup_ready", token, max_age=120, path="/settings", samesite="lax", secure=COOKIE_SECURE)
     return resp
 
 

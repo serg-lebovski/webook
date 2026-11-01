@@ -1,59 +1,150 @@
 {% extends "base.html" %}
 {% block title %}{{ series.name }} — WeBook{% endblock %}
 {% block content %}
-<nav aria-label="breadcrumb" class="mb-3">
+{% set total = user_books | length %}
+{% set pct = ((read_count / total * 100) | round | int) if total else 0 %}
+{% set first_cover = (user_books | selectattr('cover_path') | first) %}
+
+<nav aria-label="breadcrumb">
   <ol class="breadcrumb">
-    <li class="breadcrumb-item"><a href="/authors">Авторы</a></li>
-    <li class="breadcrumb-item"><a href="/authors/{{ series.author.id }}">{{ series.author.name }}</a></li>
+    <li class="breadcrumb-item"><a href="/books">Книги</a></li>
+    {% if shelf %}<li class="breadcrumb-item"><a href="/books?shelf_id={{ shelf.id }}">{{ shelf.name }}</a></li>
+    {% else %}<li class="breadcrumb-item"><a href="/authors/{{ series.author.id }}">{{ series.author.name }}</a></li>{% endif %}
     <li class="breadcrumb-item active">{{ series.name }}</li>
   </ol>
 </nav>
 
-<div class="d-flex justify-content-between align-items-start mb-4">
-  <div>
-    <h2><i class="bi bi-collection text-primary me-2"></i>{{ series.name }}</h2>
-    <p class="text-muted mb-1">Цикл автора <a href="/authors/{{ series.author.id }}">{{ series.author.name }}</a></p>
-    {% if series.description %}<p class="text-muted">{{ series.description }}</p>{% endif %}
-  </div>
-  <div class="d-flex gap-2">
-    <a href="/books/upload?series_id={{ series.id }}&author_id={{ series.author_id }}" class="btn btn-primary btn-sm">
-      <i class="bi bi-plus-lg me-1"></i>Добавить книгу
-    </a>
-    <a href="/series/{{ series.id }}/edit" class="btn btn-outline-secondary btn-sm"><i class="bi bi-pencil me-1"></i>Изменить</a>
-    <form action="/series/{{ series.id }}/delete" method="post"
-          onsubmit="return confirm('Удалить цикл «{{ series.name }}»? Книги останутся как отдельные.')">
-      <button class="btn btn-outline-danger btn-sm"><i class="bi bi-trash"></i></button>
-    </form>
-  </div>
-</div>
-
-{% if series.books %}
 <div class="row g-3">
-  {% for book in series.books %}
-  <div class="col-6 col-sm-4 col-md-3 col-lg-2">
-    <a href="/books/{{ book.id }}" class="text-decoration-none">
-      <div class="card h-100">
-        {% if book.cover_path %}
-        <img src="/books/{{ book.id }}/cover" class="book-cover" alt="{{ book.title }}">
-        {% else %}
-        <div class="cover-placeholder"><i class="bi bi-book"></i></div>
-        {% endif %}
-        <div class="card-body p-2">
-          {% if book.series_order %}
-          <p class="card-text small text-muted mb-0">Том {{ book.series_order | int }}</p>
+  <div class="col-xl-9 vstack gap-3">
+    <section class="bp-panel bp-pad">
+      <div class="d-flex gap-4 bp-hero">
+        <aside class="bp-left vstack gap-2">
+          {% if first_cover %}
+          <img src="/books/{{ first_cover.id }}/cover" class="bp-cover mb-1 wb-stack" alt="{{ series.name }}">
+          {% else %}
+          <div class="cover-placeholder mb-1 wb-stack"><i class="bi bi-collection"></i></div>
           {% endif %}
-          <p class="card-text small fw-semibold text-dark">{{ book.title }}</p>
+          {% if next_book %}
+          <a href="/books/{{ next_book.id }}/read" class="btn btn-success">
+            <i class="bi bi-book me-1"></i>Читать{% if next_book.series_order is not none %} том {{ (next_book.series_order | int) if (next_book.series_order | int) == next_book.series_order else next_book.series_order }}{% endif %}
+          </a>
+          {% endif %}
+          {% if has_files %}
+          <a href="/series/{{ series.id }}/download" class="btn btn-outline-secondary"><i class="bi bi-file-zip me-1"></i>Скачать цикл</a>
+          {% endif %}
+          <a href="/books/upload" class="btn btn-outline-secondary"><i class="bi bi-plus-lg me-1"></i>Добавить том</a>
+          <div class="bp-icons mt-1">
+            <div class="dropdown">
+              <button class="btn btn-outline-secondary" type="button" data-bs-toggle="dropdown" title="Ещё"><i class="bi bi-three-dots"></i></button>
+              <ul class="dropdown-menu">
+                <li><a class="dropdown-item" href="/series/{{ series.id }}/edit"><i class="bi bi-pencil me-2"></i>Изменить цикл</a></li>
+                <li><a class="dropdown-item" href="/tier-list"><i class="bi bi-bar-chart-steps me-2"></i>Тир-лист циклов</a></li>
+                <li><hr class="dropdown-divider"></li>
+                <li><form action="/series/{{ series.id }}/delete" method="post" onsubmit="return confirm('Удалить цикл «{{ series.name }}»? Книги останутся как отдельные.')">
+                  <button class="dropdown-item text-danger"><i class="bi bi-trash me-2"></i>Удалить цикл</button></form></li>
+              </ul>
+            </div>
+          </div>
+        </aside>
+
+        <div class="flex-grow-1" style="min-width:0">
+          <div class="text-uppercase small fw-semibold" style="color:var(--accent);letter-spacing:.04em">Цикл</div>
+          <h1 class="bp-title">{{ series.name }}</h1>
+          <div class="bp-author mb-1"><a href="/authors/{{ series.author.id }}" class="text-decoration-none">{{ series.author.name }}</a></div>
+          {% if tags %}<div class="bp-genres mb-2">{% for t in tags[:5] %}<a href="/books?tag={{ t | urlencode }}" class="text-decoration-none">{{ t }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</div>{% endif %}
+
+          <div class="bp-meta mb-3">
+            <span class="border-0 ps-0">
+              {% if total and read_count == total %}<span class="bp-status bg-success"><i class="bi bi-check2 me-1"></i>цикл прочитан</span>
+              {% elif read_count %}<span class="bp-status" style="background:var(--accent)">читаю · {{ read_count }}/{{ total }}</span>
+              {% else %}<span class="bp-status bg-secondary">не начат</span>{% endif %}
+            </span>
+            <span>{{ total }} {{ 'том' if total % 10 == 1 and total % 100 != 11 else ('тома' if total % 10 in (2, 3, 4) and total % 100 not in (12, 13, 14) else 'томов') }} в библиотеке</span>
+            {% if total_size %}<span>{{ total_size | humanbytes }}</span>{% endif %}
+          </div>
+
+          <div class="mb-3" style="max-width:420px">
+            <div class="d-flex justify-content-between small mb-1"><span>Прочитано томов</span><span class="text-muted">{{ read_count }} из {{ total }} · {{ pct }}%</span></div>
+            <div class="progress" style="height:6px"><div class="progress-bar bg-success" style="width:{{ pct }}%"></div></div>
+          </div>
+
+          <ul class="nav bp-tabs" role="tablist">
+            <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#sAbout" type="button">О цикле</button></li>
+            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#sVols" type="button">Тома · {{ total }}</button></li>
+          </ul>
+          <div class="tab-content bp-box">
+            <div class="tab-pane fade show active" id="sAbout">
+              {% if description %}<div class="bp-desc">{{ description }}</div>
+              {% else %}<div class="text-muted">Описания нет. <a href="/series/{{ series.id }}/edit">Добавить</a></div>{% endif %}
+            </div>
+            <div class="tab-pane fade" id="sVols">
+              {% for b in user_books %}
+              <div class="small py-1">{% if b.series_order is not none %}<span class="text-muted me-1">{{ (b.series_order | int) if (b.series_order | int) == b.series_order else b.series_order }}.</span>{% endif %}<a href="/books/{{ b.id }}">{{ b.title }}</a>{% if b.is_read %} <i class="bi bi-check2 text-success"></i>{% endif %}</div>
+              {% else %}<div class="text-muted">В цикле пока нет ваших книг.</div>{% endfor %}
+            </div>
+          </div>
         </div>
       </div>
-    </a>
+    </section>
+
+    <section class="wb-panel">
+      <h3 class="wb-panel-h"><i class="bi bi-list-ol"></i>Тома цикла</h3>
+      {% for b in user_books %}
+      {% set bp = (progress.get(b.id, 0) * 100) | round | int %}
+      <div class="wb-row">
+        <a href="/books/{{ b.id }}" class="wb-row-cover">
+          {% if b.cover_path %}<img src="/books/{{ b.id }}/cover" alt="" loading="lazy">{% else %}<div class="cover-placeholder"><i class="bi bi-book"></i></div>{% endif %}
+        </a>
+        <div class="flex-grow-1" style="min-width:0">
+          <div class="small text-muted">{% if b.series_order is not none %}Том {{ (b.series_order | int) if (b.series_order | int) == b.series_order else b.series_order }}{% else %}Без номера{% endif %}{% if b.published_year %} · {{ b.published_year }}{% endif %}</div>
+          <a href="/books/{{ b.id }}" class="fw-semibold text-body text-decoration-none d-block text-truncate">{{ b.title }}</a>
+          <div class="small d-flex flex-wrap gap-2 align-items-center mt-1">
+            {% if b.is_read %}<span class="bp-status bg-success"><i class="bi bi-check2"></i> прочитано</span>
+            {% elif bp > 0 %}<span class="bp-status" style="background:var(--accent)">{{ bp }}%</span>
+            {% elif not b.file_format %}<span class="bp-status bg-warning text-dark">без файла</span>{% endif %}
+            {% if b.rating %}<span class="text-warning">{% for n in range(b.rating) %}<i class="bi bi-star-fill"></i>{% endfor %}</span>{% endif %}
+            {% if b.file_format %}<span class="text-muted text-uppercase">{{ b.file_format }}{% if b.file_size %} · {{ b.file_size | humanbytes }}{% endif %}</span>{% endif %}
+          </div>
+        </div>
+        <div class="d-flex gap-2 flex-none">
+          {% if b.file_format in ('epub', 'fb2', 'pdf') %}<a href="/books/{{ b.id }}/read" class="btn btn-sm {% if next_book and next_book.id == b.id %}btn-success{% else %}btn-outline-secondary{% endif %}" title="Читать"><i class="bi bi-book"></i><span class="d-none d-md-inline ms-1">Читать</span></a>{% endif %}
+          {% if b.file_format %}<a href="/books/{{ b.id }}/download" class="btn btn-sm btn-outline-secondary" title="Скачать"><i class="bi bi-download"></i></a>{% endif %}
+        </div>
+      </div>
+      {% else %}
+      <div class="text-center py-5 text-muted">
+        <i class="bi bi-book display-5"></i>
+        <p class="mt-3">В цикле пока нет ваших книг.</p>
+        <a href="/books/upload" class="btn btn-success btn-sm">Загрузить</a>
+      </div>
+      {% endfor %}
+    </section>
   </div>
-  {% endfor %}
+
+  <aside class="col-xl-3 vstack gap-3">
+    <section class="bp-panel">
+      <a href="/authors/{{ series.author.id }}" class="bp-author-card">
+        {% if first_cover %}<div class="bg" style="background-image:url('/books/{{ first_cover.id }}/cover')"></div>{% else %}<div class="bg plain"></div>{% endif %}
+        {% if series.author.photo_path %}<img src="/authors/{{ series.author.id }}/photo" class="bp-avatar" alt="">
+        {% else %}<span class="bp-avatar"><i class="bi bi-person"></i></span>{% endif %}
+        <span class="name">{{ series.author.name }}</span>
+      </a>
+      <div class="bp-author-stats">
+        <span title="Томов в библиотеке"><i class="bi bi-book me-1"></i>{{ total }}</span>
+        <span title="Прочитано"><i class="bi bi-check2-circle me-1"></i>{{ read_count }}</span>
+        <span title="Других циклов автора"><i class="bi bi-collection me-1"></i>{{ other_series | length }}</span>
+      </div>
+    </section>
+    {% if other_series %}
+    <section class="bp-panel">
+      <h3 class="bp-side-h">Другие циклы автора</h3>
+      <div class="py-1">
+        {% for os in other_series %}
+        <a href="/series/{{ os.id }}" class="bp-vol"><i class="bi bi-collection text-muted"></i><span class="flex-grow-1 text-truncate">{{ os.name }}</span></a>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+  </aside>
 </div>
-{% else %}
-<div class="text-center py-5">
-  <i class="bi bi-book display-1 text-muted"></i>
-  <h5 class="mt-3 text-muted">В цикле пока нет книг</h5>
-  <a href="/books/upload?series_id={{ series.id }}&author_id={{ series.author_id }}" class="btn btn-primary mt-2">Добавить первую</a>
-</div>
-{% endif %}
 {% endblock %}

@@ -137,20 +137,40 @@ def _accessible_book(book_id: int, user: User, db: Session) -> Book:
 
 
 def _books_shelves_landing(request: Request, user: User, db: Session) -> HTMLResponse:
-    """Экран выбора полки — стартовый вид «Книг» (см. books_list): показывает
-    сначала полки + псевдо-полки (Избранное/Хочу прочитать/Аудио), а не сразу
-    все книги списком."""
-    shelves = db.query(Shelf).filter(Shelf.user_id == user.id).order_by(Shelf.sort_order, Shelf.name).all()
-    shelves_data = []
-    for s in shelves:
-        cover_books = (
-            db.query(Book).filter(Book.shelf_id == s.id, Book.user_id == user.id,
-                                   Book.deleted_at.is_(None), Book.cover_path.isnot(None))
-            .order_by(Book.added_at.desc()).limit(4).all()
-        )
-        covers = [f"/books/{b.id}/cover" for b in cover_books]
-        count = _user_books(db, user).filter(Book.shelf_id == s.id).count()
-        shelves_data.append({"id": s.id, "name": s.name, "covers": covers, "count": count})
+    """Стартовый экран «Книг»: полки — это циклы. Каждый цикл пользователя —
+    одна плитка (стопка обложек, автор, тома, прогресс), без ручных полок."""
+    books = (
+        _user_books(db, user).options(joinedload(Book.series), joinedload(Book.author))
+        .order_by(Book.series_order.is_(None), Book.series_order, Book.title).all()
+    )
+    groups: dict = {}
+    standalone = 0
+    for b in books:
+        if not b.series_id:
+            standalone += 1
+            continue
+        g = groups.get(b.series_id)
+        if not g:
+            g = groups[b.series_id] = {
+                "id": b.series_id, "name": b.series.name if b.series else "", "authors": set(),
+                "count": 0, "read": 0, "cover": None, "added": b.added_at, "has_progress": False,
+            }
+        g["count"] += 1
+        g["read"] += 1 if b.is_read else 0
+        if b.author:
+            g["authors"].add(b.author.name)
+        if not g["cover"] and b.cover_path:
+            g["cover"] = f"/books/{b.id}/cover"
+        if b.added_at and (not g["added"] or b.added_at > g["added"]):
+            g["added"] = b.added_at
+    series = []
+    for g in groups.values():
+        authors = sorted(g.pop("authors"))
+        g["author"] = ", ".join(authors) if len(authors) <= 2 else "разные авторы"
+        g["pct"] = round(g["read"] / g["count"] * 100) if g["count"] else 0
+        g["added_ts"] = g["added"].timestamp() if g["added"] else 0
+        series.append(g)
+    series.sort(key=lambda x: (x["name"] or "").lower())
 
     favorite_count = _user_books(db, user).filter(Book.is_favorite == True).count()
     reading_count = _user_books(db, user).filter(Book.in_reading_list == True).count()
@@ -158,7 +178,8 @@ def _books_shelves_landing(request: Request, user: User, db: Session) -> HTMLRes
         Audiobook.user_id == user.id, Audiobook.deleted_at.is_(None)).count()
 
     return templates.TemplateResponse("books/shelves_landing.html", {
-        "request": request, "user": user, "shelves": shelves_data,
+        "request": request, "user": user, "series": series, "standalone_count": standalone,
+        "total_books": len(books),
         "favorite_count": favorite_count, "reading_count": reading_count, "audio_count": audio_count,
     })
 
@@ -175,16 +196,19 @@ def books_list(
     sort: str = "",
     type: str = "all",
     page: int = 1,
+    flat: int = 0,
+    no_series: int = 0,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     from app.models.tag import Tag
 
     type_ = type if type in ("all", "book", "audio") else "all"
-    no_filters = not any((shelf_id, author_id, q, tag, favorite, reading, sort)) and type_ == "all"
-    if no_filters and page == 1:
+    # Голый /books — экран выбора полки; любой параметр (в т.ч. ?type=all) — список
+    no_filters = not request.query_params
+    if no_filters:
         return _books_shelves_landing(request, user, db)
-    book_only_filter = bool(shelf_id or author_id or tag or favorite or reading or sort)
+    book_only_filter = bool(shelf_id or author_id or tag or favorite or reading or sort or no_series)
     if type_ == "audio":
         include_books, include_audio = False, True
     elif type_ == "book":
@@ -194,11 +218,13 @@ def books_list(
 
     book_items = []
     if include_books:
-        query = _user_books(db, user).options(joinedload(Book.author))
+        query = _user_books(db, user).options(joinedload(Book.author), joinedload(Book.series))
         if shelf_id:
             query = query.filter(Book.shelf_id == shelf_id)
         if author_id:
             query = query.filter(Book.author_id == author_id)
+        if no_series:
+            query = query.filter(Book.series_id.is_(None))
         if q:
             query = query.filter(Book.title.ilike(f"%{q}%"))
         if tag:
@@ -221,6 +247,8 @@ def books_list(
                 "url": f"/books/{b.id}", "fmt": b.file_format,
                 "is_read": b.is_read, "is_favorite": b.is_favorite, "rating": b.rating,
                 "in_reading_list": b.in_reading_list, "sort_key": (b.title or "").lower(),
+                "series_id": b.series_id, "series_order": b.series_order,
+                "series_name": b.series.name if b.series else "",
             })
 
     audio_items = []
@@ -239,6 +267,11 @@ def books_list(
                 "is_finished": ab.is_finished, "sort_key": (ab.title or "").lower(),
             })
 
+    # Тома одного цикла сворачиваются в одну плитку «цикл» (flat=1 — показать все тома)
+    group_series = not q and not flat and not no_series and type_ != "audio"
+    if group_series:
+        book_items = _group_series(book_items, shelf_id)
+
     if sort in ("rating", "added"):
         items = book_items  # уже отсортированы запросом, аудио исключены
     else:
@@ -253,14 +286,14 @@ def books_list(
     def _filters_qs(**overrides):
         vals = {"shelf_id": shelf_id, "author_id": author_id, "q": q, "tag": tag,
                 "favorite": favorite, "reading": reading, "sort": sort,
-                "type": type_ if type_ != "all" else ""}
+                "type": type_ if type_ != "all" else "", "flat": flat, "no_series": no_series}
         vals.update(overrides)
         return urlencode({k: v for k, v in vals.items() if v})
 
     base_qs = _filters_qs()
     fav_qs = _filters_qs(favorite=0 if favorite else 1)
     reading_qs = _filters_qs(reading=0 if reading else 1)
-    all_shelf_qs = _filters_qs(shelf_id=0)
+    all_shelf_qs = _filters_qs(shelf_id=0) or "type=all"   # пустой qs открыл бы экран выбора полки
     shelves = db.query(Shelf).filter(Shelf.user_id == user.id).order_by(Shelf.sort_order, Shelf.name).all()
     shelf_chips = [{"id": s.id, "name": s.name, "qs": _filters_qs(shelf_id=s.id)} for s in shelves]
 
@@ -289,8 +322,41 @@ def books_list(
          "fav_qs": fav_qs, "reading_qs": reading_qs, "current_url": current_url,
          "q": q, "shelf_id": shelf_id, "tag": tag, "favorite": favorite, "reading": reading, "sort": sort,
          "type": type_, "shared_books": shared_books,
+         "group_series": group_series, "flat": flat, "no_series": no_series,
+         "flat_qs": _filters_qs(flat=1), "grouped_qs": _filters_qs(flat=0),
+         "series_count": sum(1 for it in items if it["kind"] == "series"),
          "page": page, "total_pages": total_pages, "total": total, "base_qs": base_qs},
     )
+
+
+def _group_series(book_items: list, shelf_id: int) -> list:
+    """Свернуть тома одного цикла (≥2 на полке) в одну плитку-цикл.
+    Порядок сохраняется: плитка встаёт на место первого тома цикла в исходном списке."""
+    by_series: dict = {}
+    for it in book_items:
+        if it.get("series_id"):
+            by_series.setdefault(it["series_id"], []).append(it)
+    out, emitted = [], set()
+    for it in book_items:
+        sid = it.get("series_id")
+        vols = by_series.get(sid) if sid else None
+        if not vols or len(vols) < 2:
+            out.append(it)
+            continue
+        if sid in emitted:
+            continue
+        emitted.add(sid)
+        vols_sorted = sorted(vols, key=lambda v: (v["series_order"] is None, v["series_order"] or 0, v["sort_key"]))
+        cover = next((v["cover"] for v in vols_sorted if v["cover"]), None)
+        authors = {v["author"] for v in vols_sorted if v["author"]}
+        out.append({
+            "kind": "series", "id": sid, "title": vols_sorted[0]["series_name"],
+            "author": ", ".join(sorted(authors)) if len(authors) <= 2 else "разные авторы",
+            "cover": cover, "url": f"/series/{sid}" + (f"?shelf_id={shelf_id}" if shelf_id else ""),
+            "count": len(vols), "read": sum(1 for v in vols if v["is_read"]),
+            "sort_key": (vols_sorted[0]["series_name"] or "").lower(),
+        })
+    return out
 
 
 @router.get("/upload", response_class=HTMLResponse)

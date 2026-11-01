@@ -1,67 +1,113 @@
 {% extends "base.html" %}
 {% block title %}Книги — WeBook{% endblock %}
 
-{% block head %}
-<style>
-  .picker-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(128px,1fr)); gap:1.1rem .9rem; }
-  .picker-grid .cover-placeholder { font-size:2rem; }
-  .picker-grid .tile-title { font-size:.85rem; }
-</style>
-{% endblock %}
-
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
-  <h2 class="mb-0"><i class="bi bi-collection me-2"></i>Книги</h2>
-  <div class="d-flex gap-2">
+<div class="wb-page-h">
+  <h1>Книги</h1>
+  <span class="wb-sub">{{ total_books }} книг · {{ series | length }} циклов</span>
+  <div class="ms-auto d-flex gap-2 flex-wrap">
+    <a href="/books?type=book" class="btn btn-outline-secondary btn-sm"><i class="bi bi-grid me-1"></i>Все книги</a>
     <button type="button" class="btn btn-outline-secondary btn-sm" onclick="bookRoulette()"><i class="bi bi-dice-5 me-1"></i>Рулетка</button>
-    <a href="/books/upload" class="btn btn-primary btn-sm"><i class="bi bi-cloud-upload me-1"></i>Загрузить</a>
-    <a href="/shelves" class="btn btn-outline-secondary btn-sm" title="Управление полками"><i class="bi bi-gear me-1"></i>Управление полками</a>
+    <a href="/books/upload" class="btn btn-success btn-sm"><i class="bi bi-cloud-upload me-1"></i>Загрузить</a>
   </div>
 </div>
 
-<div class="picker-grid mb-5">
-  <a href="/books?favorite=1" class="tile">
-    <div class="cover-placeholder" style="background:linear-gradient(135deg,#f43f5e,#ec4899)"><i class="bi bi-heart-fill"></i></div>
-    <div class="tile-title">Избранное</div>
-    <div class="tile-sub">{{ favorite_count }} книг</div>
-  </a>
-  <a href="/books?reading=1" class="tile">
-    <div class="cover-placeholder" style="background:linear-gradient(135deg,#f59e0b,#f97316)"><i class="bi bi-bookmark-check-fill"></i></div>
-    <div class="tile-title">Хочу прочитать</div>
-    <div class="tile-sub">{{ reading_count }} книг</div>
-  </a>
-  <a href="/books?type=audio" class="tile">
-    <div class="cover-placeholder" style="background:linear-gradient(135deg,#0ea5e9,#6366f1)"><i class="bi bi-headphones"></i></div>
-    <div class="tile-title">Аудиокниги</div>
-    <div class="tile-sub">{{ audio_count }} шт.</div>
-  </a>
-</div>
+<section class="wb-panel mb-3">
+  <div class="picker-grid p-3">
+    <a href="/books?favorite=1" class="tile">
+      <div class="cover-placeholder" style="background:linear-gradient(135deg,#d6455d,#b8336a)"><i class="bi bi-heart-fill"></i></div>
+      <div class="tile-title">Избранное</div>
+      <div class="tile-sub">{{ favorite_count }} книг</div>
+    </a>
+    <a href="/books?reading=1" class="tile">
+      <div class="cover-placeholder" style="background:linear-gradient(135deg,#d99a1e,#c96a1b)"><i class="bi bi-bookmark-check-fill"></i></div>
+      <div class="tile-title">Хочу прочитать</div>
+      <div class="tile-sub">{{ reading_count }} книг</div>
+    </a>
+    <a href="/books?no_series=1" class="tile">
+      <div class="cover-placeholder" style="background:linear-gradient(135deg,#5b6b7d,#3d4856)"><i class="bi bi-book"></i></div>
+      <div class="tile-title">Вне циклов</div>
+      <div class="tile-sub">{{ standalone_count }} книг</div>
+    </a>
+    <a href="/books?type=audio" class="tile">
+      <div class="cover-placeholder" style="background:linear-gradient(135deg,#2b88c8,#4a5fc4)"><i class="bi bi-headphones"></i></div>
+      <div class="tile-title">Аудиокниги</div>
+      <div class="tile-sub">{{ audio_count }} шт.</div>
+    </a>
+  </div>
+</section>
 
-{% if shelves %}
-<h6 class="text-uppercase text-muted fw-semibold small mb-3"><i class="bi bi-bookshelf me-1"></i>Полки</h6>
-<div class="picker-grid">
-  {% for s in shelves %}
-  <a href="/books?shelf_id={{ s.id }}" class="tile">
-    {% if s.covers %}
-    <div class="tile-mosaic">
-      {% for cov in s.covers %}
-      <img src="{{ cov }}" alt="">
-      {% endfor %}
-    </div>
-    {% else %}
-    <div class="cover-placeholder"><i class="bi bi-bookshelf"></i></div>
+<section class="wb-panel">
+  <h3 class="wb-panel-h flex-wrap"><i class="bi bi-collection"></i>Циклы <span class="text-muted fw-normal small">{{ series | length }}</span>
+    {% if series | length > 6 %}
+    <span class="ms-auto d-flex gap-2 align-items-center">
+      <input type="search" id="serFilter" class="form-control form-control-sm" placeholder="Найти цикл или автора" style="width:220px">
+      <select id="serSort" class="form-select form-select-sm" style="width:auto">
+        <option value="name">По названию</option>
+        <option value="added">Недавно пополненные</option>
+        <option value="progress">Начатые</option>
+        <option value="count">Больше томов</option>
+      </select>
+    </span>
     {% endif %}
-    <div class="tile-title">{{ s.name }}</div>
-    <div class="tile-sub">{{ s.count }} книг</div>
-  </a>
-  {% endfor %}
-</div>
-{% else %}
-<div class="text-center py-5">
-  <i class="bi bi-collection display-1 text-muted"></i>
-  <h4 class="mt-3">Добро пожаловать в вашу библиотеку</h4>
-  <p class="text-muted mb-4">Здесь пока пусто. Загрузите первую книгу, чтобы начать.</p>
-  <a href="/books/upload" class="btn btn-primary"><i class="bi bi-cloud-upload me-1"></i>Загрузить</a>
-</div>
-{% endif %}
+  </h3>
+  {% if series %}
+  <div class="wb-grid p-3" id="serGrid">
+    {% for g in series %}
+    <a href="/series/{{ g.id }}" class="tile ser-tile" data-name="{{ (g.name ~ ' ' ~ g.author) | lower }}"
+       data-added="{{ g.added_ts }}" data-count="{{ g.count }}" data-pct="{{ g.pct }}" data-sort="{{ g.name | lower }}">
+      <div class="tile-cover-wrap">
+        {% if g.cover %}<img src="{{ g.cover }}" class="tile-cover wb-stack" alt="" loading="lazy">
+        {% else %}<div class="cover-placeholder wb-stack"><i class="bi bi-collection"></i></div>{% endif %}
+        <span class="tile-badge"><i class="bi bi-stack me-1"></i>{{ g.count }}</span>
+      </div>
+      <div class="tile-title" title="{{ g.name }}">{{ g.name }}</div>
+      <div class="tile-sub">{{ g.author }}</div>
+      <div class="tile-prog" title="Прочитано {{ g.read }} из {{ g.count }}"><span style="width:{{ g.pct }}%"></span></div>
+    </a>
+    {% endfor %}
+  </div>
+  <div class="text-muted small px-3 pb-3 d-none" id="serEmpty">Ничего не найдено.</div>
+  {% else %}
+  <div class="text-center py-5">
+    <i class="bi bi-collection display-4 text-muted"></i>
+    <h4 class="mt-3">Циклов пока нет</h4>
+    <p class="text-muted mb-4">Загрузите книги — номер тома и цикл определятся сами, и здесь появятся плитки циклов.</p>
+    <a href="/books/upload" class="btn btn-success"><i class="bi bi-cloud-upload me-1"></i>Загрузить</a>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var grid = document.getElementById('serGrid'), f = document.getElementById('serFilter'), so = document.getElementById('serSort');
+  if (!grid || !f) return;
+  var tiles = Array.prototype.slice.call(grid.querySelectorAll('.ser-tile'));
+  try { var saved = localStorage.getItem('series_sort'); if (saved) so.value = saved; } catch (e) {}
+  function apply() {
+    var q = f.value.trim().toLowerCase(), key = so.value, shown = 0;
+    tiles.sort(function (a, b) {
+      if (key === 'added') return b.dataset.added - a.dataset.added;
+      if (key === 'count') return b.dataset.count - a.dataset.count;
+      if (key === 'progress') {
+        var pa = +a.dataset.pct, pb = +b.dataset.pct;
+        var sa = pa > 0 && pa < 100 ? 0 : 1, sb = pb > 0 && pb < 100 ? 0 : 1;
+        return sa - sb || pb - pa;
+      }
+      return a.dataset.sort.localeCompare(b.dataset.sort, 'ru');
+    });
+    tiles.forEach(function (t) {
+      var ok = !q || t.dataset.name.indexOf(q) !== -1;
+      t.classList.toggle('d-none', !ok); if (ok) shown++;
+      grid.appendChild(t);
+    });
+    document.getElementById('serEmpty').classList.toggle('d-none', shown > 0);
+  }
+  f.addEventListener('input', apply);
+  so.addEventListener('change', function () { try { localStorage.setItem('series_sort', so.value); } catch (e) {} apply(); });
+  apply();
+})();
+</script>
 {% endblock %}

@@ -56,8 +56,9 @@ app.add_middleware(
 )
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
-app.mount("/storage/books", StaticFiles(directory=str(BOOKS_DIR)), name="books_storage")
-app.mount("/storage/covers", StaticFiles(directory=str(COVERS_DIR)), name="covers_storage")
+# Файлы книг и обложек раздаются только через роуты с проверкой доступа
+# (/books/{id}/download|serve|cover, /authors/{id}/photo, OPDS, share-токены).
+# Открытые /storage/books и /storage/covers убраны: защищали их лишь uuid-имена.
 
 app.include_router(auth.router)
 app.include_router(shelves.router)

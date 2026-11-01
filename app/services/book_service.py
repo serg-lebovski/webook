@@ -257,14 +257,33 @@ def extract_pdf(data: bytes) -> dict:
 
 
 # ─────────────────────────── архивы ───────────────────────────
+# ZIP (в т.ч. «*.fb2.zip»), 7z (py7zr, чистый Python) и RAR (rarfile: несжатые
+# читает сам, сжатые — через внешнюю утилиту unar/unrar, в Docker-образе стоит unar).
+# Тип определяется по сигнатуре, а не по расширению.
 
-ARCHIVE_SUFFIXES = (".zip",)
+ARCHIVE_SUFFIXES = (".zip", ".7z", ".rar")
 _MAX_ARCHIVE_ENTRIES = 2000
-_MAX_ARCHIVE_TOTAL = 3 * 1024 * 1024 * 1024   # защита от zip-бомб: ≤3 ГБ распакованного
+_MAX_ARCHIVE_TOTAL = 3 * 1024 * 1024 * 1024   # защита от «бомб»: ≤3 ГБ распакованного
+
+_MAGIC = (
+    (b"PK\x03\x04", "zip"), (b"PK\x05\x06", "zip"),
+    (b"7z\xbc\xaf\x27\x1c", "7z"),
+    (b"Rar!\x1a\x07", "rar"),
+)
 
 
 def is_archive_name(name: str) -> bool:
     return (name or "").lower().endswith(ARCHIVE_SUFFIXES)
+
+
+def archive_kind(fileobj) -> Optional[str]:
+    pos = fileobj.tell()
+    head = fileobj.read(8)
+    fileobj.seek(pos)
+    for magic, kind in _MAGIC:
+        if head.startswith(magic):
+            return kind
+    return None
 
 
 def _zip_entry_name(info) -> str:
@@ -279,23 +298,61 @@ def _zip_entry_name(info) -> str:
     return name
 
 
+def _entries(fileobj, kind: str):
+    """→ (список (имя, размер, ключ), функция read(keys) -> {ключ: bytes}, close)."""
+    if kind == "zip":
+        import zipfile
+        zf = zipfile.ZipFile(fileobj)
+        infos = [i for i in zf.infolist() if not i.is_dir()]
+        return ([(_zip_entry_name(i), i.file_size, i) for i in infos],
+                lambda keys: {k: zf.read(k) for k in keys}, zf.close)
+    if kind == "7z":
+        import py7zr
+        z = py7zr.SevenZipFile(fileobj, mode="r")
+        infos = [i for i in z.list() if not i.is_directory]
+
+        def read7(keys):
+            names = [k for k in keys]
+            if not names:
+                return {}
+            z.reset()
+            got = z.read(targets=names) or {}
+            return {k: got[k].read() for k in names if k in got}
+        return ([(i.filename, i.uncompressed or 0, i.filename) for i in infos], read7, z.close)
+    if kind == "rar":
+        import rarfile
+        rf = rarfile.RarFile(fileobj)
+        infos = [i for i in rf.infolist() if not i.is_dir()]
+
+        def read_rar(keys):
+            out = {}
+            for k in keys:
+                out[k] = rf.read(k)
+            return out
+        return ([(i.filename, i.file_size, i) for i in infos], read_rar, rf.close)
+    raise ValueError(kind)
+
+
 def expand_archive(fileobj, allowed_suffixes, max_file_size: int, _depth: int = 0) -> tuple:
-    """Распаковать ZIP (в т.ч. «book.fb2.zip» и архив из таких архивов — 1 уровень
-    вложенности) в список (имя_файла, bytes) поддерживаемых книг.
-    Возвращает (items, errors). EPUB — тоже zip, но он сам книга: его не вызываем."""
-    import zipfile
+    """Распаковать архив (ZIP/7z/RAR, вложенные архивы — 1 уровень) в список
+    (имя_файла, bytes) поддерживаемых книг. Возвращает (items, errors).
+    EPUB — тоже zip, но он сам книга: вызывающий код его сюда не передаёт."""
+    kind = archive_kind(fileobj)
+    if not kind:
+        return [], ["файл повреждён или это не архив ZIP/7z/RAR"]
+    try:
+        entries, read, close = _entries(fileobj, kind)
+    except ImportError:
+        return [], [f"поддержка {kind.upper()} не установлена на сервере"]
+    except Exception as e:
+        return [], [f"не удалось открыть {kind.upper()}-архив ({e.__class__.__name__})"]
+
     items, errors = [], []
     try:
-        zf = zipfile.ZipFile(fileobj)
-    except zipfile.BadZipFile:
-        return [], ["файл повреждён или это не ZIP-архив"]
-    total = 0
-    with zf:
-        infos = [i for i in zf.infolist() if not i.is_dir()]
-        if len(infos) > _MAX_ARCHIVE_ENTRIES:
+        if len(entries) > _MAX_ARCHIVE_ENTRIES:
             return [], [f"в архиве слишком много файлов (>{_MAX_ARCHIVE_ENTRIES})"]
-        for info in infos:
-            name = _zip_entry_name(info)
+        wanted, total = [], 0
+        for name, size, key in entries:
             base = name.replace("\\", "/").rsplit("/", 1)[-1]
             if not base or base.startswith(".") or "__MACOSX" in name:
                 continue
@@ -303,28 +360,40 @@ def expand_archive(fileobj, allowed_suffixes, max_file_size: int, _depth: int = 
             nested = suffix in ARCHIVE_SUFFIXES
             if not nested and suffix not in allowed_suffixes:
                 continue
+            if nested and _depth >= 1:
+                continue
             limit = max_file_size * 5 if nested else max_file_size
-            if info.file_size > limit:
+            if size > limit:
                 errors.append(f"{base}: файл больше {limit // (1024 * 1024)} МБ")
                 continue
-            total += info.file_size
+            total += size
             if total > _MAX_ARCHIVE_TOTAL:
                 errors.append("архив слишком большой после распаковки")
                 break
-            try:
-                blob = zf.read(info)
-            except Exception as e:  # битый/зашифрованный элемент
-                errors.append(f"{base}: не удалось распаковать ({e.__class__.__name__})")
+            wanted.append((base, key, nested))
+        try:
+            blobs = read([k for _, k, _ in wanted])
+        except Exception as e:
+            msg = str(e) or e.__class__.__name__
+            if kind == "rar" and ("unrar" in msg.lower() or "tool" in msg.lower() or "RarCannotExec" in e.__class__.__name__):
+                return [], ["для сжатых RAR на сервере нужна утилита unar или unrar"]
+            return [], [f"не удалось распаковать ({e.__class__.__name__})"]
+        for base, key, nested in wanted:
+            blob = blobs.get(key)
+            if blob is None:
+                errors.append(f"{base}: не удалось распаковать")
                 continue
             if nested:
-                if _depth >= 1:
-                    continue
-                sub_items, sub_err = expand_archive(io.BytesIO(blob), allowed_suffixes,
-                                                    max_file_size, _depth + 1)
+                sub_items, sub_err = expand_archive(io.BytesIO(blob), allowed_suffixes, max_file_size, _depth + 1)
                 items.extend(sub_items)
                 errors.extend(f"{base}: {e}" for e in sub_err)
             else:
                 items.append((base, blob))
+    finally:
+        try:
+            close()
+        except Exception:
+            pass
     return items, errors
 
 

@@ -6,282 +6,168 @@
 {% endblock %}
 
 {% block content %}
-<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
-  <div>
-    <h2 class="mb-0">Добро пожаловать, {{ user.username }}</h2>
-    <p class="text-muted mb-0 small">Ваша библиотека</p>
+{% set books_pct = ((books_read / books_total * 100) | round(0) | int) if books_total else 0 %}
+{% set links_pct = ((links_read / links_total * 100) | round(0) | int) if links_total else 0 %}
+
+<div class="wb-page-h">
+  <h1>Моя библиотека</h1>
+  <span class="wb-sub">{{ books_total }} книг · {{ links_total }} статей</span>
+  <div class="ms-auto d-flex gap-2">
+    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="bookRoulette()"><i class="bi bi-dice-5 me-1"></i>Что почитать?</button>
+    <a href="/books/upload" class="btn btn-success btn-sm"><i class="bi bi-cloud-upload me-1"></i>Загрузить</a>
   </div>
-  <button type="button" class="btn btn-outline-secondary btn-sm" onclick="bookRoulette()"><i class="bi bi-dice-5 me-1"></i>Рулетка</button>
 </div>
 
-{% if expiring_shares %}
-<div class="card border-warning mb-4">
-  <div class="card-header bg-warning-subtle fw-semibold">
-    <i class="bi bi-clock-history me-1"></i>Скоро истекают шары
-    <span class="text-muted fw-normal small">(в ближайшие {{ expiring_days }} дн.)</span>
-  </div>
-  <div class="list-group list-group-flush">
-    {% for s in expiring_shares %}
-    <div class="list-group-item d-flex align-items-center gap-2 flex-wrap">
-      {% if s.outgoing %}
-      <span class="badge bg-secondary"><i class="bi bi-share me-1"></i>я поделился</span>
-      {% else %}
-      <span class="badge bg-info text-dark"><i class="bi bi-inbox me-1"></i>со мной</span>
-      {% endif %}
-      <span class="fw-semibold">{{ s.title }}</span>
-      <span class="text-muted small">
-        {% if s.outgoing %}для {{ s.counterpart }}{% else %}от {{ s.counterpart }}{% endif %}
-      </span>
-      <span class="ms-auto text-danger small">
-        <i class="bi bi-hourglass-split me-1"></i>до {{ s.expires_at.strftime('%d.%m.%Y %H:%M') }}
-      </span>
-    </div>
-    {% endfor %}
-  </div>
-  <div class="card-footer py-2">
-    <a href="/shared" class="small text-decoration-none">Открыть «Общий доступ» →</a>
-  </div>
-</div>
-{% endif %}
+<div class="row g-3">
+  <!-- ═════════ основная колонка ═════════ -->
+  <div class="col-lg-9 vstack gap-3">
 
-<!-- Счётчики -->
-<div class="row g-3 mb-4">
-
-  <!-- Книги -->
-  <div class="col-6 col-md-3">
-    <div class="card text-center h-100">
-      <div class="card-body py-4">
-        <div class="display-5 fw-bold text-primary">{{ books_total }}</div>
-        <div class="text-muted small mt-1">Книг всего</div>
-      </div>
-    </div>
-  </div>
-  <div class="col-6 col-md-3">
-    <div class="card text-center h-100">
-      <div class="card-body py-4">
-        <div class="display-5 fw-bold text-success">{{ books_read }}</div>
-        <div class="text-muted small mt-1">Книг прочитано</div>
-      </div>
-    </div>
-  </div>
-  <div class="col-6 col-md-3">
-    <div class="card text-center h-100">
-      <div class="card-body py-4">
-        <div class="display-5 fw-bold text-warning">{{ links_total }}</div>
-        <div class="text-muted small mt-1">Статей всего</div>
-      </div>
-    </div>
-  </div>
-  <div class="col-6 col-md-3">
-    <div class="card text-center h-100">
-      <div class="card-body py-4">
-        <div class="display-5 fw-bold text-info">{{ links_read }}</div>
-        <div class="text-muted small mt-1">Статей прочитано</div>
-      </div>
-    </div>
-  </div>
-
-</div>
-
-{% if continue_reading %}
-<!-- Продолжить чтение -->
-<div class="hrow-section"><h3><i class="bi bi-play-circle me-2"></i>Продолжить чтение</h3></div>
-<div class="hrow mb-5">
-  {% for it in continue_reading %}
-  <a href="{{ it.url }}" class="tile">
-    {% if it.cover_url %}
-    <img src="{{ it.cover_url }}" class="tile-cover" alt="{{ it.title }}">
-    {% else %}
-    <div class="cover-placeholder"><i class="bi {{ 'bi-journal-text' if it.kind == 'link' else 'bi-book' }}"></i></div>
-    {% endif %}
-    <div class="progress mt-2" style="height:4px">
-      <div class="progress-bar {{ 'bg-info' if it.kind == 'link' else 'bg-success' }}" style="width:{{ it.pct }}%"></div>
-    </div>
-    <div class="tile-title mt-1">{{ it.title }}</div>
-    <div class="tile-sub">{{ it.pct }}%</div>
-  </a>
-  {% endfor %}
-</div>
-{% endif %}
-
-{% if paused_reading %}
-<!-- Полка на паузе -->
-<div class="hrow-section"><h3><i class="bi bi-pause-circle me-2"></i>Полка на паузе</h3></div>
-<div class="hrow mb-5">
-  {% for it in paused_reading %}
-  <a href="{{ it.url }}" class="tile">
-    {% if it.cover_url %}
-    <img src="{{ it.cover_url }}" class="tile-cover" alt="{{ it.title }}">
-    {% else %}
-    <div class="cover-placeholder"><i class="bi {{ 'bi-journal-text' if it.kind == 'link' else 'bi-book' }}"></i></div>
-    {% endif %}
-    <div class="progress mt-2" style="height:4px">
-      <div class="progress-bar bg-warning" style="width:{{ it.pct }}%"></div>
-    </div>
-    <div class="tile-title mt-1">{{ it.title }}</div>
-    <div class="tile-sub">Брошено на {{ it.pct }}%</div>
-  </a>
-  {% endfor %}
-</div>
-{% endif %}
-
-<!-- Цель чтения и серия -->
-<div class="row g-3 mb-4">
-  <div class="col-md-7">
-    <div class="card h-100">
-      <div class="card-body">
-        <div class="d-flex align-items-center justify-content-between mb-2">
-          <h6 class="text-muted mb-0"><i class="bi bi-bullseye me-1"></i>Цель на {{ stats.year }} год</h6>
-          <button class="btn btn-sm btn-outline-secondary py-0 px-2" type="button"
-                  data-bs-toggle="collapse" data-bs-target="#goalForm" title="Изменить цель">
-            <i class="bi bi-pencil"></i>
-          </button>
-        </div>
-        {% if stats.goal %}
-        <div class="d-flex justify-content-between small mb-1">
-          <span>Прочитано <strong>{{ stats.books_year }}</strong> из <strong>{{ stats.goal }}</strong> книг</span>
-          <span class="text-muted">{{ stats.goal_pct }}%</span>
-        </div>
-        <div class="progress mb-2" style="height:14px">
-          <div class="progress-bar bg-primary" role="progressbar" style="width:{{ stats.goal_pct }}%">
-            {% if stats.goal_pct >= 15 %}{{ stats.goal_pct }}%{% endif %}
+    {% if continue_reading %}
+    <section class="wb-panel">
+      <h3 class="wb-panel-h"><i class="bi bi-play-circle"></i>Продолжить чтение</h3>
+      <div class="hrow p-3">
+        {% for it in continue_reading %}
+        <a href="{{ it.url }}" class="tile">
+          {% if it.cover_url %}<img src="{{ it.cover_url }}" class="tile-cover" alt="{{ it.title }}" loading="lazy">
+          {% else %}<div class="cover-placeholder"><i class="bi {{ 'bi-journal-text' if it.kind == 'link' else 'bi-book' }}"></i></div>{% endif %}
+          <div class="progress mt-2" style="height:4px">
+            <div class="progress-bar {{ 'bg-info' if it.kind == 'link' else 'bg-success' }}" style="width:{{ it.pct }}%"></div>
           </div>
-        </div>
-        <div class="small text-muted">
-          {% if stats.books_year >= stats.goal %}
-          <i class="bi bi-trophy-fill text-warning me-1"></i>Цель достигнута! Поздравляем 🎉
-          {% else %}
-          Осталось ещё <strong>{{ stats.goal_left }}</strong> {{ 'книгу' if stats.goal_left == 1 else 'книг' }} до цели.
-          {% endif %}
+          <div class="tile-title mt-1">{{ it.title }}</div>
+          <div class="tile-sub">{{ it.pct }}% · {{ 'статья' if it.kind == 'link' else 'книга' }}</div>
+        </a>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    {% if recommendations %}
+    <section class="wb-panel">
+      <h3 class="wb-panel-h"><i class="bi bi-lightbulb"></i>Что почитать дальше <span class="ms-auto text-muted">из вашей библиотеки</span></h3>
+      <div class="hrow p-3">
+        {% for rec in recommendations %}{% set book = rec.book %}
+        <a href="/books/{{ book.id }}" class="tile">
+          {% if book.cover_path %}<img src="/books/{{ book.id }}/cover" class="tile-cover" alt="{{ book.title }}" loading="lazy">
+          {% else %}<div class="cover-placeholder"><i class="bi bi-book"></i></div>{% endif %}
+          <div class="tile-title">{{ book.title }}</div>
+          <div class="tile-sub text-success">{{ rec.reason }}</div>
+        </a>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    {% if paused_reading %}
+    <section class="wb-panel">
+      <h3 class="wb-panel-h"><i class="bi bi-pause-circle"></i>Полка на паузе <span class="ms-auto text-muted">не открывали больше месяца</span></h3>
+      <div class="hrow p-3">
+        {% for it in paused_reading %}
+        <a href="{{ it.url }}" class="tile">
+          {% if it.cover_url %}<img src="{{ it.cover_url }}" class="tile-cover" alt="{{ it.title }}" loading="lazy">
+          {% else %}<div class="cover-placeholder"><i class="bi {{ 'bi-journal-text' if it.kind == 'link' else 'bi-book' }}"></i></div>{% endif %}
+          <div class="progress mt-2" style="height:4px"><div class="progress-bar bg-warning" style="width:{{ it.pct }}%"></div></div>
+          <div class="tile-title mt-1">{{ it.title }}</div>
+          <div class="tile-sub">Брошено на {{ it.pct }}%</div>
+        </a>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    {% if not continue_reading and not recommendations and not paused_reading %}
+    <section class="wb-panel wb-pad text-center text-muted py-5">
+      <i class="bi bi-book display-5"></i>
+      <p class="mt-3 mb-3">Начните читать — здесь появятся книги в процессе и подсказки, что открыть дальше.</p>
+      <a href="/books" class="btn btn-outline-secondary btn-sm me-1"><i class="bi bi-bookshelf me-1"></i>К полкам</a>
+      <a href="/books/upload" class="btn btn-success btn-sm"><i class="bi bi-cloud-upload me-1"></i>Загрузить книги</a>
+    </section>
+    {% endif %}
+
+    <section class="wb-panel">
+      <h3 class="wb-panel-h"><i class="bi bi-bar-chart"></i>История чтения <span class="ms-auto"><a href="/stats">Вся статистика →</a></span></h3>
+      <div class="p-3">
+        {% set total_activity = history.books | sum + history.links | sum %}
+        {% if total_activity == 0 %}
+        <div class="text-center py-4 text-muted small">Пока нет данных. Отмечайте книги и статьи прочитанными — за 12 месяцев здесь появится график.</div>
+        {% else %}
+        <canvas id="historyChart" height="90"></canvas>
+        {% endif %}
+      </div>
+    </section>
+  </div>
+
+  <!-- ═════════ правая колонка ═════════ -->
+  <aside class="col-lg-3 vstack gap-3">
+    <section class="wb-panel">
+      <div class="bp-author-card">
+        <div class="bg plain"></div>
+        <span class="bp-avatar fw-bold">{{ user.username[:1] | upper }}</span>
+        <span class="name">{{ user.username }}</span>
+      </div>
+      <div class="bp-author-stats">
+        <span title="Книг в библиотеке"><i class="bi bi-book me-1"></i>{{ books_total }}</span>
+        <span title="Книг прочитано"><i class="bi bi-check2-circle me-1"></i>{{ books_read }}</span>
+        <span title="Статей"><i class="bi bi-bookmarks me-1"></i>{{ links_total }}</span>
+      </div>
+      <div class="px-3 pb-3 small">
+        <div class="d-flex justify-content-between"><span>Книги прочитаны</span><span class="text-muted">{{ books_read }} / {{ books_total }}</span></div>
+        <div class="progress mb-2" style="height:5px"><div class="progress-bar bg-success" style="width:{{ books_pct }}%"></div></div>
+        <div class="d-flex justify-content-between"><span>Статьи прочитаны</span><span class="text-muted">{{ links_read }} / {{ links_total }}</span></div>
+        <div class="progress" style="height:5px"><div class="progress-bar bg-info" style="width:{{ links_pct }}%"></div></div>
+      </div>
+    </section>
+
+    <section class="wb-panel">
+      <h3 class="wb-panel-h"><i class="bi bi-bullseye"></i>Цель на {{ stats.year }}
+        <button class="btn btn-sm btn-link ms-auto p-0 text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#goalForm" title="Изменить цель"><i class="bi bi-pencil"></i></button>
+      </h3>
+      <div class="p-3 small">
+        {% if stats.goal %}
+        <div class="d-flex justify-content-between mb-1"><span><b>{{ stats.books_year }}</b> из <b>{{ stats.goal }}</b> книг</span><span class="text-muted">{{ stats.goal_pct }}%</span></div>
+        <div class="progress mb-2" style="height:8px"><div class="progress-bar" style="width:{{ stats.goal_pct }}%"></div></div>
+        <div class="text-muted">
+          {% if stats.books_year >= stats.goal %}<i class="bi bi-trophy-fill text-warning me-1"></i>Цель достигнута!
+          {% else %}Осталось {{ stats.goal_left }} {{ 'книга' if stats.goal_left == 1 else 'книг' }}.{% endif %}
         </div>
         {% else %}
-        <p class="text-muted small mb-2">Цель на год не задана. Поставьте себе ориентир — сколько книг прочитать.</p>
+        <div class="text-muted">Цель не задана — сколько книг прочитать за год?</div>
         {% endif %}
-        <div class="collapse {% if not stats.goal %}show{% endif %} mt-3" id="goalForm">
-          <form method="post" action="/dashboard/goal" class="row g-2 align-items-end">
-            <div class="col-auto">
-              <label class="form-label small text-muted mb-1">Книг за год</label>
-              <input type="number" name="goal" min="0" max="10000" value="{{ stats.goal }}"
-                     class="form-control form-control-sm" style="width:120px">
-            </div>
-            <div class="col-auto">
-              <button type="submit" class="btn btn-sm btn-primary">Сохранить</button>
-            </div>
-            <div class="col-auto align-self-center">
-              <span class="text-muted small">0 — убрать цель</span>
-            </div>
+        <div class="collapse {% if not stats.goal %}show{% endif %} mt-2" id="goalForm">
+          <form method="post" action="/dashboard/goal" class="d-flex gap-2 align-items-center">
+            <input type="number" name="goal" min="0" max="10000" value="{{ stats.goal }}" class="form-control form-control-sm" style="width:90px" title="0 — убрать цель">
+            <button type="submit" class="btn btn-sm btn-primary">Сохранить</button>
           </form>
         </div>
       </div>
-    </div>
-  </div>
-  <div class="col-md-5">
-    <div class="card h-100">
-      <div class="card-body d-flex flex-column justify-content-center">
-        <h6 class="text-muted mb-3"><i class="bi bi-fire text-danger me-1"></i>Серия чтения</h6>
+    </section>
+
+    <section class="wb-panel">
+      <h3 class="wb-panel-h"><i class="bi bi-fire text-danger"></i>Серия чтения</h3>
+      <div class="p-3 small">
         <div class="d-flex align-items-baseline gap-2">
-          <span class="display-5 fw-bold {{ 'text-danger' if stats.streak else 'text-secondary' }}">{{ stats.streak }}</span>
+          <span class="fs-2 fw-bold {{ 'text-danger' if stats.streak else 'text-secondary' }}">{{ stats.streak }}</span>
           <span class="text-muted">{{ 'день' if stats.streak == 1 else 'дн.' }} подряд</span>
         </div>
-        <div class="small text-muted mt-2">
-          {% if stats.streak %}
-          Так держать — читайте каждый день, чтобы не прервать серию.
-          {% else %}
-          Отметьте сегодня книгу или статью прочитанной, чтобы начать серию.
-          {% endif %}
+        <div class="text-muted">
+          {% if stats.streak %}Читайте каждый день, чтобы не прервать серию.{% else %}Отметьте книгу или статью прочитанной, чтобы начать серию.{% endif %}
         </div>
-        <hr class="my-2">
-        <div class="small text-muted">
-          В {{ stats.year }} году прочитано: <strong>{{ stats.books_year }}</strong> книг ·
-          <strong>{{ stats.links_year }}</strong> статей
-        </div>
+        <div class="mt-2">В {{ stats.year }}: <b>{{ stats.books_year }}</b> книг · <b>{{ stats.links_year }}</b> статей</div>
       </div>
-    </div>
-  </div>
-</div>
+    </section>
 
-<!-- Прогресс прочтения -->
-<div class="row g-3 mb-4">
-  <div class="col-md-6">
-    <div class="card h-100">
-      <div class="card-body">
-        <h6 class="text-muted mb-3"><i class="bi bi-book me-1"></i>Книги</h6>
-        <div class="d-flex justify-content-between small mb-1">
-          <span>Прочитано {{ books_read }} из {{ books_total }}</span>
-          <span class="text-muted">{{ ((books_read / books_total * 100) | round(0) | int) if books_total else 0 }}%</span>
-        </div>
-        <div class="progress mb-3" style="height:10px">
-          <div class="progress-bar bg-success" style="width:{{ ((books_read / books_total * 100) | round(0) | int) if books_total else 0 }}%"></div>
-        </div>
-        <div class="d-flex gap-3 small text-muted">
-          <span><i class="bi bi-check-circle-fill text-success me-1"></i>Прочитано: <strong>{{ books_read }}</strong></span>
-          <span><i class="bi bi-circle text-secondary me-1"></i>Не прочитано: <strong>{{ books_unread }}</strong></span>
-        </div>
+    {% if expiring_shares %}
+    <section class="wb-panel">
+      <h3 class="wb-panel-h"><i class="bi bi-clock-history text-warning"></i>Скоро истекают <span class="ms-auto text-muted">{{ expiring_days }} дн.</span></h3>
+      {% for s in expiring_shares %}
+      <div class="px-3 py-2 small {% if not loop.first %}border-top{% endif %}">
+        <div class="fw-semibold text-truncate">{{ s.title }}</div>
+        <div class="text-muted">{% if s.outgoing %}для {{ s.counterpart }}{% else %}от {{ s.counterpart }}{% endif %} · до {{ s.expires_at.strftime('%d.%m %H:%M') }}</div>
       </div>
-    </div>
-  </div>
-  <div class="col-md-6">
-    <div class="card h-100">
-      <div class="card-body">
-        <h6 class="text-muted mb-3"><i class="bi bi-bookmarks me-1"></i>Статьи</h6>
-        <div class="d-flex justify-content-between small mb-1">
-          <span>Прочитано {{ links_read }} из {{ links_total }}</span>
-          <span class="text-muted">{{ ((links_read / links_total * 100) | round(0) | int) if links_total else 0 }}%</span>
-        </div>
-        <div class="progress mb-3" style="height:10px">
-          <div class="progress-bar bg-info" style="width:{{ ((links_read / links_total * 100) | round(0) | int) if links_total else 0 }}%"></div>
-        </div>
-        <div class="d-flex gap-3 small text-muted">
-          <span><i class="bi bi-check-circle-fill text-info me-1"></i>Прочитано: <strong>{{ links_read }}</strong></span>
-          <span><i class="bi bi-circle text-secondary me-1"></i>Не прочитано: <strong>{{ links_unread }}</strong></span>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-{% if recommendations %}
-<!-- Что почитать дальше -->
-<div class="hrow-section">
-  <h3><i class="bi bi-lightbulb me-2"></i>Что почитать дальше</h3>
-  <span class="text-muted small">из вашей библиотеки</span>
-</div>
-<div class="hrow mb-5">
-  {% for rec in recommendations %}
-  {% set book = rec.book %}
-  <a href="/books/{{ book.id }}" class="tile">
-    {% if book.cover_path %}
-    <img src="/books/{{ book.id }}/cover" class="tile-cover" alt="{{ book.title }}">
-    {% else %}
-    <div class="cover-placeholder"><i class="bi bi-book"></i></div>
+      {% endfor %}
+      <div class="px-3 pb-2 small"><a href="/shared">Общий доступ →</a></div>
+    </section>
     {% endif %}
-    <div class="tile-title">{{ book.title }}</div>
-    <div class="tile-sub"><i class="bi bi-lightbulb-fill text-warning me-1"></i>{{ rec.reason }}</div>
-  </a>
-  {% endfor %}
-</div>
-{% endif %}
-
-<!-- История чтения за 12 месяцев -->
-<div class="card">
-  <div class="card-header fw-semibold">
-    <i class="bi bi-bar-chart me-1"></i>История чтения — последние 12 месяцев
-  </div>
-  <div class="card-body">
-    {% set total_activity = history.books | sum + history.links | sum %}
-    {% if total_activity == 0 %}
-    <div class="text-center py-4 text-muted">
-      <i class="bi bi-bar-chart display-4"></i>
-      <p class="mt-3">Пока нет данных. Отмечайте книги и статьи как прочитанные — история появится здесь.</p>
-      <div class="d-flex gap-2 justify-content-center mt-2">
-        <a href="/shelves" class="btn btn-outline-primary btn-sm"><i class="bi bi-book me-1"></i>К книгам</a>
-        <a href="/links" class="btn btn-outline-secondary btn-sm"><i class="bi bi-bookmarks me-1"></i>К статьям</a>
-      </div>
-    </div>
-    {% else %}
-    <canvas id="historyChart" height="80"></canvas>
-    {% endif %}
-  </div>
+  </aside>
 </div>
 {% endblock %}
 
@@ -300,13 +186,13 @@ if (document.getElementById('historyChart')) {
         {
           label: 'Книги',
           data: booksData,
-          backgroundColor: 'rgba(13, 110, 253, 0.7)',
+          backgroundColor: 'rgba(63, 155, 68, 0.75)',
           borderRadius: 4,
         },
         {
           label: 'Статьи',
           data: linksData,
-          backgroundColor: 'rgba(13, 202, 240, 0.7)',
+          backgroundColor: 'rgba(75, 149, 218, 0.75)',
           borderRadius: 4,
         }
       ]

@@ -376,6 +376,16 @@ def genre_names(codes: list) -> list:
 
 # ─────────────────────────── сборка ───────────────────────────
 
+def _dedup_ci(items: list) -> list:
+    seen, out = set(), []
+    for x in items:
+        k = x.casefold()
+        if k not in seen:
+            seen.add(k)
+            out.append(x)
+    return out
+
+
 def normalize(meta: dict, filename: str = "", translate: bool = True) -> dict:
     """Подготовить карточку книги для формы загрузки.
 
@@ -407,8 +417,8 @@ def normalize(meta: dict, filename: str = "", translate: bool = True) -> dict:
         "description": (meta.get("description") or "").strip(),
         "language": (meta.get("language") or "").strip(),
         "year": meta.get("year"),
-        "tags": genre_names(meta.get("genres") or []) + [
-            k for k in (meta.get("keywords") or []) if len(k) <= 40][:10],
+        "tags": _dedup_ci(genre_names(meta.get("genres") or []) + [
+            k for k in (meta.get("keywords") or []) if len(k) <= 40])[:12],
         "original": {},
         "how": {},
     }

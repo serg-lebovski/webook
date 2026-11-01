@@ -10,6 +10,8 @@ from app.models.user import User
 
 router = APIRouter(prefix="/series")
 templates = Jinja2Templates(directory="app/templates")
+from app.routers.books import _humanbytes  # noqa: E402
+templates.env.filters["humanbytes"] = _humanbytes
 
 
 @router.get("/search")
@@ -48,20 +50,93 @@ def create_series(
 
 
 @router.get("/{series_id}", response_class=HTMLResponse)
-def series_detail(series_id: int, request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def series_detail(series_id: int, request: Request, shelf_id: int = 0,
+                  user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     series = db.query(Series).filter(Series.id == series_id).first()
     if not series:
         return RedirectResponse("/authors", status_code=302)
     from app.models.book import Book
+    from app.models.shelf import Shelf
+    from app.models.read_progress import ReadProgress
+    # Только свои книги не из корзины: Series/Author общие для всех пользователей,
+    # а series.books вернул бы и чужие тома.
     books = (
         db.query(Book)
-        .filter(Book.series_id == series_id, Book.user_id == user.id)
-        .order_by(Book.series_order)
+        .filter(Book.series_id == series_id, Book.user_id == user.id, Book.deleted_at.is_(None))
+        .order_by(Book.series_order.is_(None), Book.series_order, Book.title)
         .all()
     )
-    return templates.TemplateResponse(
-        "series/detail.html", {"request": request, "user": user, "series": series, "user_books": books}
+    progress = {
+        r.book_id: r.percentage or 0
+        for r in db.query(ReadProgress).filter(ReadProgress.user_id == user.id,
+                                               ReadProgress.book_id.in_([b.id for b in books] or [0]))
+    }
+    next_book = next((b for b in books if not b.is_read and b.file_format), None)
+    tags = []
+    for b in books:
+        for t in b.tags:
+            if t.name not in tags:
+                tags.append(t.name)
+    description = series.description or next((b.description for b in books if b.description), "")
+    shelf = db.query(Shelf).filter(Shelf.id == shelf_id, Shelf.user_id == user.id).first() if shelf_id else None
+    other_series = (
+        db.query(Series).join(Book, Book.series_id == Series.id)
+        .filter(Series.author_id == series.author_id, Series.id != series.id,
+                Book.user_id == user.id, Book.deleted_at.is_(None))
+        .distinct().order_by(Series.name).limit(10).all()
     )
+    return templates.TemplateResponse("series/detail.html", {
+        "request": request, "user": user, "series": series, "user_books": books,
+        "progress": progress, "next_book": next_book, "tags": tags[:12], "description": description,
+        "read_count": sum(1 for b in books if b.is_read),
+        "total_size": sum(b.file_size or 0 for b in books),
+        "has_files": any(b.file_path for b in books),
+        "shelf": shelf, "other_series": other_series,
+    })
+
+
+@router.get("/{series_id}/download")
+def series_download(series_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Все тома цикла одним ZIP с человекочитаемыми именами (как при скачивании книги)."""
+    import os
+    import tempfile
+    import zipfile
+    from fastapi import HTTPException
+    from fastapi.responses import FileResponse
+    from starlette.background import BackgroundTask
+    from app.config import BOOKS_DIR
+    from app.models.book import Book
+    from app.routers.books import _download_filename
+
+    series = db.query(Series).filter(Series.id == series_id).first()
+    books = (
+        db.query(Book)
+        .filter(Book.series_id == series_id, Book.user_id == user.id, Book.deleted_at.is_(None),
+                Book.file_path != "")
+        .order_by(Book.series_order.is_(None), Book.series_order, Book.title).all()
+    ) if series else []
+    files = [(b, BOOKS_DIR / b.file_path) for b in books if b.file_path and (BOOKS_DIR / b.file_path).is_file()]
+    if not files:
+        raise HTTPException(status_code=404, detail="В цикле нет файлов для скачивания")
+
+    fd, tmp = tempfile.mkstemp(suffix=".zip")
+    os.close(fd)
+    used = set()
+    with zipfile.ZipFile(tmp, "w") as zf:
+        for b, path in files:
+            name = _download_filename(b)
+            base, dot, ext = name.rpartition(".")
+            n, candidate = 2, name
+            while candidate.lower() in used:
+                candidate = f"{base} ({n}).{ext}"
+                n += 1
+            used.add(candidate.lower())
+            method = zipfile.ZIP_DEFLATED if b.file_format == "fb2" else zipfile.ZIP_STORED
+            zf.write(path, candidate, compress_type=method)
+    import re as _re
+    zip_name = _download_safe(f"{series.author.name} - {series.name}") + ".zip"
+    return FileResponse(tmp, media_type="application/zip", filename=zip_name,
+                        background=BackgroundTask(os.unlink, tmp))
 
 
 @router.get("/{series_id}/edit", response_class=HTMLResponse)
@@ -102,3 +177,9 @@ def delete_series(series_id: int, user: User = Depends(get_current_user), db: Se
         db.commit()
         return RedirectResponse(f"/authors/{author_id}", status_code=302)
     return RedirectResponse("/authors", status_code=302)
+
+
+def _download_safe(name: str) -> str:
+    bad = '<>:"/' + chr(92) + '|?*'
+    out = "".join("_" if (c in bad or ord(c) < 32) else c for c in name)
+    return out.strip(" .") or "series"

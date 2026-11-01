@@ -107,7 +107,7 @@ def stage_upload(user_id: int, filename: str, fileobj, size: int, translate: boo
             return [], [f"{filename}: файл больше {MAX_BOOK_SIZE // (1024 * 1024)} МБ"]
         entries = [(filename, fileobj.read())]
     else:
-        return [], [f"{filename}: формат не поддерживается (нужны epub, fb2, pdf или zip)"]
+        return [], [f"{filename}: формат не поддерживается (нужны epub, fb2, pdf или архив zip/7z/rar)"]
 
     entries = [(n, d) for n, d in entries if d]
     # Перевод — сетевые запросы: обрабатываем книги архива параллельно.

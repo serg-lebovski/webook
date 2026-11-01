@@ -1,128 +1,168 @@
 {% extends "base.html" %}
 {% block title %}{{ author.name }} — WeBook{% endblock %}
 {% block content %}
-<nav aria-label="breadcrumb" class="mb-3">
+{% macro plural_books(n) %}{{ n }} {{ 'книга' if n % 10 == 1 and n % 100 != 11 else ('книги' if n % 10 in (2, 3, 4) and n % 100 not in (12, 13, 14) else 'книг') }}{% endmacro %}
+
+<nav aria-label="breadcrumb">
   <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/books">Книги</a></li>
     <li class="breadcrumb-item"><a href="/authors">Авторы</a></li>
     <li class="breadcrumb-item active">{{ author.name }}</li>
   </ol>
 </nav>
 
-<div class="row mb-5">
-  <div class="col-md-3 col-lg-2 text-center mb-4 mb-md-0">
-    {% if author.photo_path %}
-    <img src="/storage/covers/{{ author.photo_path }}" class="rounded-circle img-fluid shadow"
-         style="width:140px;height:140px;object-fit:cover">
-    {% else %}
-    <div class="rounded-circle bg-primary d-inline-flex align-items-center justify-content-center text-white shadow"
-         style="width:140px;height:140px;font-size:3.5rem">
-      {{ author.name[0] | upper }}
-    </div>
-    {% endif %}
-  </div>
-  <div class="col-md-9 col-lg-10">
-    <div class="d-flex align-items-start justify-content-between">
-      <h2 class="mb-1">{{ author.name }}</h2>
-      <div class="d-flex gap-2">
-        <a href="/series/new?author_id={{ author.id }}" class="btn btn-sm btn-outline-primary">
-          <i class="bi bi-collection me-1"></i>Новый цикл
-        </a>
-        <a href="/books/upload?author_id={{ author.id }}" class="btn btn-sm btn-primary">
-          <i class="bi bi-plus-lg me-1"></i>Книга
-        </a>
-        <a href="/authors/{{ author.id }}/edit" class="btn btn-sm btn-outline-secondary">
-          <i class="bi bi-pencil"></i>
-        </a>
-        {% if not author.bio or not author.photo_path %}
-        <form method="post" action="/authors/{{ author.id }}/enrich">
-          <button class="btn btn-sm btn-outline-primary" title="Подтянуть биографию и фото из Open Library">
-            <i class="bi bi-magic me-1"></i>Open Library
-          </button>
-        </form>
-        {% endif %}
+<div class="row g-3">
+  <div class="col-xl-9 vstack gap-3">
+    <!-- профиль автора -->
+    <section class="bp-panel bp-pad">
+      <div class="d-flex gap-4 bp-hero">
+        <aside class="bp-left vstack gap-2">
+          {% if author.photo_path %}
+          <img src="/authors/{{ author.id }}/photo" class="bp-cover mb-1" alt="{{ author.name }}">
+          {% else %}
+          <div class="cover-placeholder mb-1" style="font-size:4rem;font-weight:700">{{ author.name[:1] | upper }}</div>
+          {% endif %}
+          <a href="/books?author_id={{ author.id }}&amp;type=book" class="btn btn-success"><i class="bi bi-grid me-1"></i>Все книги автора</a>
+          {% if not author.bio or not author.photo_path %}
+          <form method="post" action="/authors/{{ author.id }}/enrich">
+            <button class="btn btn-outline-secondary w-100" title="Подтянуть биографию и фото из Open Library"><i class="bi bi-magic me-1"></i>Дополнить данные</button>
+          </form>
+          {% endif %}
+          <div class="bp-icons mt-1">
+            <a href="/authors/{{ author.id }}/edit" class="btn btn-outline-secondary" title="Изменить"><i class="bi bi-pencil"></i></a>
+            <div class="dropdown">
+              <button class="btn btn-outline-secondary" type="button" data-bs-toggle="dropdown" title="Ещё"><i class="bi bi-three-dots"></i></button>
+              <ul class="dropdown-menu">
+                <li><a class="dropdown-item" href="/series/new?author_id={{ author.id }}"><i class="bi bi-collection me-2"></i>Новый цикл</a></li>
+                <li><a class="dropdown-item" href="/books/upload"><i class="bi bi-cloud-upload me-2"></i>Загрузить книгу</a></li>
+              </ul>
+            </div>
+          </div>
+        </aside>
+
+        <div class="flex-grow-1" style="min-width:0">
+          <div class="text-uppercase small fw-semibold" style="color:var(--accent);letter-spacing:.04em">Автор</div>
+          <h1 class="bp-title">{{ author.name }}</h1>
+          {% if tags %}<div class="bp-genres mb-2">{% for t in tags[:5] %}<a href="/books?tag={{ t | urlencode }}" class="text-decoration-none">{{ t }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</div>{% endif %}
+          <div class="bp-meta mb-3">
+            <span class="border-0 ps-0">{{ plural_books(stats.books) }} в библиотеке</span>
+            <span>прочитано {{ stats.read }}</span>
+            <span>циклов: {{ stats.series }}</span>
+            {% if stats.avg %}<span><i class="bi bi-star-fill text-warning me-1"></i>{{ stats.avg }} средняя оценка</span>{% endif %}
+          </div>
+          {% if stats.books %}
+          {% set apct = (stats.read / stats.books * 100) | round | int %}
+          <div class="mb-3" style="max-width:420px">
+            <div class="d-flex justify-content-between small mb-1"><span>Прочитано у автора</span><span class="text-muted">{{ stats.read }} из {{ stats.books }} · {{ apct }}%</span></div>
+            <div class="progress" style="height:6px"><div class="progress-bar bg-success" style="width:{{ apct }}%"></div></div>
+          </div>
+          {% endif %}
+          <ul class="nav bp-tabs" role="tablist">
+            <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#aBio" type="button">Об авторе</button></li>
+            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#aBiblio" type="button">Библиография · {{ stats.books }}</button></li>
+          </ul>
+          <div class="tab-content bp-box">
+            <div class="tab-pane fade show active" id="aBio">
+              {% if author.bio %}<div class="bp-desc">{{ author.bio }}</div>
+              {% else %}<div class="text-muted">Биографии нет. Нажмите «Дополнить данные» — подтянем из Open Library, или <a href="/authors/{{ author.id }}/edit">заполните вручную</a>.</div>{% endif %}
+            </div>
+            <div class="tab-pane fade" id="aBiblio">
+              {% for sg in series_list %}
+              <div class="small fw-semibold mt-1"><a href="/series/{{ sg.series.id }}">{{ sg.series.name }}</a></div>
+              {% for b in sg.books %}<div class="small ps-3">{% if b.series_order is not none %}<span class="text-muted">{{ (b.series_order | int) if (b.series_order | int) == b.series_order else b.series_order }}.</span> {% endif %}<a href="/books/{{ b.id }}" class="text-body">{{ b.title }}</a>{% if b.published_year %} <span class="text-muted">({{ b.published_year }})</span>{% endif %}</div>{% endfor %}
+              {% endfor %}
+              {% if standalone %}<div class="small fw-semibold mt-2">Вне циклов</div>
+              {% for b in standalone %}<div class="small ps-3"><a href="/books/{{ b.id }}" class="text-body">{{ b.title }}</a>{% if b.published_year %} <span class="text-muted">({{ b.published_year }})</span>{% endif %}</div>{% endfor %}{% endif %}
+              {% if not books %}<div class="text-muted">В вашей библиотеке нет книг этого автора.</div>{% endif %}
+            </div>
+          </div>
+        </div>
       </div>
-    </div>
-    {% if author.bio %}
-    <p class="text-muted mt-2">{{ author.bio }}</p>
+    </section>
+
+    {% if series_list %}
+    <section class="wb-panel">
+      <h3 class="wb-panel-h"><i class="bi bi-collection"></i>Циклы <span class="ms-auto text-muted">{{ series_list | length }}</span></h3>
+      <div class="wb-grid p-3">
+        {% for sg in series_list %}
+        <a href="/series/{{ sg.series.id }}" class="tile">
+          <div class="tile-cover-wrap">
+            {% if sg.cover %}<img src="/books/{{ sg.cover.id }}/cover" class="tile-cover wb-stack" alt="" loading="lazy">
+            {% else %}<div class="cover-placeholder wb-stack"><i class="bi bi-collection"></i></div>{% endif %}
+            <span class="tile-badge"><i class="bi bi-stack me-1"></i>{{ sg.books | length }}</span>
+          </div>
+          <div class="tile-kicker">Цикл</div>
+          <div class="tile-title">{{ sg.series.name }}</div>
+          <div class="tile-prog" title="Прочитано {{ sg.read }} из {{ sg.books | length }}"><span style="width:{{ (sg.read / (sg.books | length) * 100) | round | int }}%"></span></div>
+          <div class="tile-sub">прочитано {{ sg.read }} из {{ sg.books | length }}</div>
+        </a>
+        {% endfor %}
+      </div>
+    </section>
     {% endif %}
-    <div class="mt-2">
-      <span class="badge bg-secondary me-1">{{ author.series | length }} цикл(ов)</span>
-      <span class="badge bg-secondary">{{ author.books | length }} книг всего</span>
-    </div>
-  </div>
-</div>
 
-{# Series #}
-{% for series in author.series %}
-<div class="mb-5">
-  <div class="d-flex align-items-center justify-content-between mb-3">
-    <h5>
-      <i class="bi bi-collection text-primary me-2"></i>
-      <a href="/series/{{ series.id }}" class="text-decoration-none">{{ series.name }}</a>
-      <small class="text-muted ms-2">{{ series.books | length }} книг</small>
-    </h5>
-    <div class="d-flex gap-2">
-      <a href="/books/upload?series_id={{ series.id }}&author_id={{ author.id }}" class="btn btn-sm btn-outline-primary">
-        <i class="bi bi-plus-lg me-1"></i>Книга в цикл
-      </a>
-      <a href="/series/{{ series.id }}/edit" class="btn btn-sm btn-outline-secondary btn-sm"><i class="bi bi-pencil"></i></a>
-    </div>
-  </div>
-  {% if series.description %}
-  <p class="text-muted small mb-3">{{ series.description }}</p>
-  {% endif %}
-  <div class="row g-3">
-    {% for book in series.books %}
-    <div class="col-6 col-sm-4 col-md-3 col-lg-2">
-      <a href="/books/{{ book.id }}" class="text-decoration-none">
-        <div class="card h-100">
-          {% if book.cover_path %}
-          <img src="/books/{{ book.id }}/cover" class="book-cover" alt="{{ book.title }}">
-          {% else %}
-          <div class="cover-placeholder"><i class="bi bi-book"></i></div>
-          {% endif %}
-          <div class="card-body p-2">
-            <p class="card-text small fw-semibold mb-0 text-body">{{ book.title }}</p>
-            {% if book.series_order %}<p class="card-text small text-muted">№{{ book.series_order | int }}</p>{% endif %}
-          </div>
-        </div>
-      </a>
-    </div>
-    {% endfor %}
-  </div>
-</div>
-{% endfor %}
+    {% if standalone %}
+    <section class="wb-panel">
+      <h3 class="wb-panel-h"><i class="bi bi-book"></i>Отдельные книги <span class="ms-auto text-muted">{{ standalone | length }}</span></h3>
+      <div class="wb-grid p-3">
+        {% for b in standalone %}
+        <a href="/books/{{ b.id }}" class="tile">
+          {% if b.cover_path %}<img src="/books/{{ b.id }}/cover" class="tile-cover" alt="" loading="lazy">
+          {% else %}<div class="cover-placeholder"><i class="bi bi-book"></i></div>{% endif %}
+          <div class="tile-title">{{ b.title }}</div>
+          <div class="tile-sub">{% if b.is_read %}<i class="bi bi-check2 text-success"></i> прочитано{% elif b.published_year %}{{ b.published_year }}{% else %}{{ (b.file_format or 'без файла') | upper }}{% endif %}</div>
+        </a>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
 
-{# Standalone books #}
-{% if standalone %}
-<div class="mb-5">
-  <h5 class="mb-3"><i class="bi bi-book text-secondary me-2"></i>Отдельные книги</h5>
-  <div class="row g-3">
-    {% for book in standalone %}
-    <div class="col-6 col-sm-4 col-md-3 col-lg-2">
-      <a href="/books/{{ book.id }}" class="text-decoration-none">
-        <div class="card h-100">
-          {% if book.cover_path %}
-          <img src="/books/{{ book.id }}/cover" class="book-cover" alt="{{ book.title }}">
-          {% else %}
-          <div class="cover-placeholder"><i class="bi bi-book"></i></div>
-          {% endif %}
-          <div class="card-body p-2">
-            <p class="card-text small fw-semibold text-body">{{ book.title }}</p>
-          </div>
-        </div>
-      </a>
-    </div>
-    {% endfor %}
+    {% if not books %}
+    <section class="wb-panel wb-pad text-center text-muted py-5">
+      <i class="bi bi-book display-5"></i>
+      <p class="mt-3">В вашей библиотеке пока нет книг этого автора.</p>
+      <a href="/books/upload" class="btn btn-success btn-sm">Загрузить</a>
+    </section>
+    {% endif %}
   </div>
-</div>
-{% endif %}
 
-{% if not author.series and not standalone %}
-<div class="text-center py-5">
-  <i class="bi bi-book display-1 text-muted"></i>
-  <h5 class="mt-3 text-muted">У автора пока нет книг</h5>
-  <a href="/books/upload?author_id={{ author.id }}" class="btn btn-primary mt-2">Добавить книгу</a>
+  <aside class="col-xl-3 vstack gap-3">
+    <section class="bp-panel">
+      <div class="bp-author-card">
+        <div class="bg plain"></div>
+        {% if author.photo_path %}<img src="/authors/{{ author.id }}/photo" class="bp-avatar" alt="">
+        {% else %}<span class="bp-avatar fw-bold">{{ author.name[:1] | upper }}</span>{% endif %}
+        <span class="name">{{ author.name }}</span>
+      </div>
+      <div class="bp-author-stats">
+        <span title="Книг"><i class="bi bi-book me-1"></i>{{ stats.books }}</span>
+        <span title="Прочитано"><i class="bi bi-check2-circle me-1"></i>{{ stats.read }}</span>
+        <span title="Циклов"><i class="bi bi-collection me-1"></i>{{ stats.series }}</span>
+      </div>
+    </section>
+    {% if reading_now %}
+    <section class="bp-panel">
+      <h3 class="bp-side-h">Хочу прочитать</h3>
+      {% for b in reading_now %}
+      <a href="/books/{{ b.id }}" class="bp-mini">
+        {% if b.cover_path %}<img src="/books/{{ b.id }}/cover" alt="" loading="lazy">{% else %}<div class="cover-placeholder"><i class="bi bi-book"></i></div>{% endif %}
+        <div style="min-width:0">{% if b.series %}<div class="g">{{ b.series.name }}</div>{% endif %}<div class="t">{{ b.title }}</div></div>
+      </a>
+      {% endfor %}
+    </section>
+    {% endif %}
+    {% if recent %}
+    <section class="bp-panel">
+      <h3 class="bp-side-h">Недавно добавлены</h3>
+      {% for b in recent %}
+      <a href="/books/{{ b.id }}" class="bp-mini">
+        {% if b.cover_path %}<img src="/books/{{ b.id }}/cover" alt="" loading="lazy">{% else %}<div class="cover-placeholder"><i class="bi bi-book"></i></div>{% endif %}
+        <div style="min-width:0">{% if b.series %}<div class="g">{{ b.series.name }}</div>{% endif %}<div class="t">{{ b.title }}</div>
+          <div class="a">{{ b.added_at.strftime('%d.%m.%Y') if b.added_at }}</div></div>
+      </a>
+      {% endfor %}
+    </section>
+    {% endif %}
+  </aside>
 </div>
-{% endif %}
 {% endblock %}

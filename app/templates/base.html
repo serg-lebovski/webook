@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}WeBook{% endblock %}</title>
   <link rel="manifest" href="/manifest.webmanifest">
-  <meta name="theme-color" content="#0b0b12">
+  <meta name="theme-color" content="#1b1b1d">
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
   <link rel="icon" type="image/svg+xml" href="/icons/icon.svg">
   <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
@@ -23,8 +23,6 @@
     })();
   </script>
   <style>
-    body { background: #f8f9fa; }
-    [data-bs-theme="dark"] body { background: var(--bs-body-bg); }
     .navbar-brand { font-weight: 700; letter-spacing: -.5px; }
     .book-cover { width: 100%; aspect-ratio: 2/3; object-fit: cover; border-radius: var(--radius-sm); box-shadow: 0 2px 8px rgba(0,0,0,.15); }
     .breadcrumb { background: transparent; padding: 0; }
@@ -49,115 +47,108 @@
 {% set is_games = path.startswith('/games') %}
 {% set is_feeds = path.startswith('/feeds') %}
 
-<div class="app-shell d-flex">
-  {% if user %}
-  <!-- Боковая панель (на больших экранах — статичная, на мобильных — выезжающая) -->
-  <nav class="offcanvas-lg offcanvas-start app-sidebar border-end d-flex flex-column" tabindex="-1" id="sidebar">
-    <div class="offcanvas-header d-lg-none border-bottom">
-      <a class="app-brand" href="/dashboard">WeBook</a>
-      <button type="button" class="btn-close" data-bs-dismiss="offcanvas" data-bs-target="#sidebar"></button>
-    </div>
-    <div class="offcanvas-body d-flex flex-column p-3">
-      <a class="app-brand d-none d-lg-flex mb-4 px-2" href="/dashboard">
-        <span class="app-brand-badge"><i class="bi bi-book-half"></i></span>WeBook</a>
+{% set is_authors = path.startswith('/authors') or path.startswith('/series') %}
+{% set is_stats = path.startswith('/stats') or path.startswith('/highlights') or path.startswith('/library-graph') %}
 
-      <ul class="nav nav-pills flex-column app-nav">
-        <li class="nav-item">
-          <a class="nav-link {% if is_dash %}active{% endif %}" href="/dashboard">
-            <i class="bi bi-speedometer2"></i>Дашборд</a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link {% if is_books %}active{% endif %}" href="/books">
-            <i class="bi bi-book"></i>Книги</a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link {% if is_manga %}active{% endif %}" href="/manga">
-            <i class="bi bi-images"></i>Манга</a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link {% if is_collections %}active{% endif %}" href="/collections">
-            <i class="bi bi-collection-play"></i>Подборки</a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link {% if is_tierlist %}active{% endif %}" href="/tier-list">
-            <i class="bi bi-bar-chart-steps"></i>Тир-лист циклов</a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link {% if is_games %}active{% endif %}" href="/games">
-            <i class="bi bi-controller"></i>Игры</a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link {% if is_articles %}active{% endif %}" href="/links">
-            <i class="bi bi-bookmarks"></i>Статьи</a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link {% if is_feeds %}active{% endif %}" href="/feeds">
-            <i class="bi bi-rss"></i>Новости</a>
-        </li>
-      </ul>
+<div class="app-shell d-flex flex-column">
+  {% if user %}
+  <!-- Верхняя панель в стиле «каталога»: логотип, разделы, поиск, загрузка, профиль -->
+  <nav class="navbar navbar-expand-lg wb-nav sticky-top" data-bs-theme="dark">
+    <div class="wb-container d-flex align-items-center w-100 flex-wrap flex-lg-nowrap">
+      <a class="wb-logo me-3" href="/dashboard" title="WeBook — моя библиотека">
+        <span class="app-brand-badge"><i class="bi bi-book-half"></i></span><span class="d-none d-sm-inline">WeBook</span>
+      </a>
+      <button class="navbar-toggler border-0 px-2 ms-auto order-lg-last" type="button" data-bs-toggle="collapse"
+              data-bs-target="#wbNav" aria-controls="wbNav" aria-expanded="false" aria-label="Меню">
+        <i class="bi bi-list fs-4"></i>
+      </button>
+
+      <div class="collapse navbar-collapse" id="wbNav">
+        <ul class="navbar-nav me-auto">
+          <li class="nav-item"><a class="nav-link {% if is_dash %}active{% endif %}" href="/dashboard">Моя библиотека</a></li>
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle {% if is_books or is_tierlist %}active{% endif %}" href="#" role="button" data-bs-toggle="dropdown">Книги</a>
+            <ul class="dropdown-menu">
+              <li><a class="dropdown-item" href="/books"><i class="bi bi-collection me-2"></i>Циклы</a></li>
+              <li><a class="dropdown-item" href="/books?type=book"><i class="bi bi-book me-2"></i>Все книги</a></li>
+              <li><a class="dropdown-item" href="/books?type=book&amp;sort=added"><i class="bi bi-clock-history me-2"></i>Недавно добавленные</a></li>
+              <li><a class="dropdown-item" href="/books?no_series=1"><i class="bi bi-journal me-2"></i>Вне циклов</a></li>
+              <li><a class="dropdown-item" href="/books?reading=1"><i class="bi bi-bookmark-star me-2"></i>Хочу прочитать</a></li>
+              <li><a class="dropdown-item" href="/books?favorite=1"><i class="bi bi-heart me-2"></i>Избранное</a></li>
+              <li><a class="dropdown-item" href="/books?type=audio"><i class="bi bi-headphones me-2"></i>Аудиокниги</a></li>
+              <li><hr class="dropdown-divider"></li>
+              <li><a class="dropdown-item" href="/authors"><i class="bi bi-person-lines-fill me-2"></i>Авторы</a></li>
+              <li><a class="dropdown-item" href="/tier-list"><i class="bi bi-bar-chart-steps me-2"></i>Тир-лист циклов</a></li>
+              <li><a class="dropdown-item" href="/library-graph"><i class="bi bi-diagram-3 me-2"></i>Граф библиотеки</a></li>
+              <li><a class="dropdown-item" href="#" onclick="bookRoulette(); return false;"><i class="bi bi-dice-5 me-2"></i>Рулетка: что почитать</a></li>
+            </ul>
+          </li>
+          <li class="nav-item"><a class="nav-link {% if is_manga %}active{% endif %}" href="/manga">Манга</a></li>
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle {% if is_articles or is_feeds %}active{% endif %}" href="#" role="button" data-bs-toggle="dropdown">Статьи</a>
+            <ul class="dropdown-menu">
+              <li><a class="dropdown-item" href="/links"><i class="bi bi-bookmarks me-2"></i>Сохранённые статьи</a></li>
+              <li><a class="dropdown-item" href="/feeds"><i class="bi bi-rss me-2"></i>Новости (RSS)</a></li>
+              <li><a class="dropdown-item" href="/highlights"><i class="bi bi-quote me-2"></i>Мои цитаты</a></li>
+            </ul>
+          </li>
+          <li class="nav-item"><a class="nav-link {% if is_collections %}active{% endif %}" href="/collections">Подборки</a></li>
+          <li class="nav-item"><a class="nav-link {% if is_games %}active{% endif %}" href="/games">Игры</a></li>
+        </ul>
+
+        <form class="wb-search my-2 my-lg-0 me-lg-2" role="search" action="/search" method="get">
+          <i class="bi bi-search"></i>
+          <input type="search" name="q" placeholder="Поиск" aria-label="Поиск" value="{{ request.query_params.get('q', '') if path.startswith('/search') else '' }}">
+        </form>
+      </div>
+
+      <div class="d-flex align-items-center gap-2 ms-2 order-lg-last">
+        <a href="/books/upload" class="btn btn-success btn-sm d-flex align-items-center gap-1" title="Загрузить">
+          <i class="bi bi-cloud-upload"></i><span class="d-none d-md-inline">Загрузить</span>
+        </a>
+        <div class="dropdown">
+          <a class="wb-user dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false" title="{{ user.username }}">
+            <span class="wb-ava">{{ user.username[:1] | upper }}</span>
+          </a>
+          <ul class="dropdown-menu dropdown-menu-end">
+            <li><h6 class="dropdown-header">{{ user.username }}</h6></li>
+            <li><a class="dropdown-item" href="/stats"><i class="bi bi-graph-up-arrow me-2"></i>Статистика чтения</a></li>
+            <li><a class="dropdown-item" href="/shared"><i class="bi bi-people me-2"></i>Общий доступ</a></li>
+            <li><a class="dropdown-item" href="/highlights"><i class="bi bi-quote me-2"></i>Мои цитаты</a></li>
+            <li><a class="dropdown-item" href="/trash"><i class="bi bi-trash3 me-2"></i>Корзина</a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item" href="/settings"><i class="bi bi-gear me-2"></i>Настройки</a></li>
+            <li>
+              <button type="button" class="dropdown-item" id="themeToggle">
+                <i class="bi bi-moon-stars me-2" id="themeIcon"></i><span id="themeLabel">Тёмная тема</span>
+              </button>
+            </li>
+            <li class="d-none" id="pwaInstallLi">
+              <button type="button" class="dropdown-item" id="pwaInstall">
+                <i class="bi bi-download me-2"></i>Установить приложение
+              </button>
+            </li>
+            {% if user.is_admin %}
+            <li><a class="dropdown-item" href="/admin"><i class="bi bi-shield-lock me-2"></i>Администрирование</a></li>
+            {% endif %}
+            <li><hr class="dropdown-divider"></li>
+            <li>
+              <form action="/logout" method="post" class="px-2">
+                <button class="btn btn-sm btn-outline-danger w-100" type="submit"><i class="bi bi-box-arrow-right me-1"></i>Выйти</button>
+              </form>
+            </li>
+          </ul>
+        </div>
+      </div>
     </div>
   </nav>
   {% endif %}
 
-  <!-- Правая часть: верхняя строка + контент -->
-  <div class="flex-grow-1 d-flex flex-column" style="min-width: 0;">
-    {% if user %}
-    <header class="app-topbar d-flex align-items-center gap-2 px-3 py-2">
-      <button class="btn btn-outline-secondary d-lg-none" type="button"
-              data-bs-toggle="offcanvas" data-bs-target="#sidebar" aria-label="Меню">
-        <i class="bi bi-list"></i>
-      </button>
-
-      <form class="flex-grow-1" role="search" action="/search" method="get" style="max-width: 560px;">
-        <div class="input-group">
-          <span class="input-group-text bg-body"><i class="bi bi-search"></i></span>
-          <input class="form-control" type="search" name="q" placeholder="Поиск по книгам, статьям…" aria-label="Поиск">
-        </div>
-      </form>
-
-      <a href="/books/upload" class="btn btn-primary d-flex align-items-center gap-1 ms-auto" title="Загрузить">
-        <i class="bi bi-cloud-upload"></i><span class="d-none d-sm-inline">Загрузить</span>
-      </a>
-
-      <div class="dropdown">
-        <a class="btn btn-light dropdown-toggle d-flex align-items-center gap-2" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-          <i class="bi bi-person-circle"></i><span class="d-none d-sm-inline">{{ user.username }}</span>
-        </a>
-        <ul class="dropdown-menu dropdown-menu-end">
-          <li><a class="dropdown-item" href="/stats"><i class="bi bi-graph-up-arrow me-2"></i>Статистика чтения</a></li>
-          <li><a class="dropdown-item" href="/shared"><i class="bi bi-people me-2"></i>Общий доступ</a></li>
-          <li><a class="dropdown-item" href="/highlights"><i class="bi bi-quote me-2"></i>Мои цитаты</a></li>
-          <li><a class="dropdown-item" href="/trash"><i class="bi bi-trash3 me-2"></i>Корзина</a></li>
-          <li><hr class="dropdown-divider"></li>
-          <li><a class="dropdown-item" href="/settings"><i class="bi bi-gear me-2"></i>Настройки</a></li>
-          <li>
-            <button type="button" class="dropdown-item" id="themeToggle">
-              <i class="bi bi-moon-stars me-2" id="themeIcon"></i><span id="themeLabel">Тёмная тема</span>
-            </button>
-          </li>
-          <li class="d-none" id="pwaInstallLi">
-            <button type="button" class="dropdown-item" id="pwaInstall">
-              <i class="bi bi-download me-2"></i>Установить приложение
-            </button>
-          </li>
-          {% if user.is_admin %}
-          <li><a class="dropdown-item" href="/admin"><i class="bi bi-shield-lock me-2"></i>Администрирование</a></li>
-          {% endif %}
-          <li><hr class="dropdown-divider"></li>
-          <li>
-            <form action="/logout" method="post" class="px-2">
-              <button class="btn btn-sm btn-outline-danger w-100" type="submit"><i class="bi bi-box-arrow-right me-1"></i>Выйти</button>
-            </form>
-          </li>
-        </ul>
-      </div>
-    </header>
-    {% endif %}
-
-    <main class="flex-grow-1 p-3 p-lg-4">
+  <main class="flex-grow-1 wb-main">
+    <div class="wb-container">
       {% block content %}{% endblock %}
-    </main>
-  </div>
+    </div>
+  </main>
 </div>
 
 {% if user %}
