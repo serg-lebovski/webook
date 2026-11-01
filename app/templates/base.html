@@ -166,7 +166,7 @@
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header border-0">
-        <h5 class="modal-title"><i class="bi bi-dice-5 me-2"></i>Рулетка книги</h5>
+        <h5 class="modal-title"><i class="bi bi-dice-5 me-2"></i>Что почитать?</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body text-center py-4" id="rouletteBody">
@@ -205,7 +205,13 @@
 {% block scripts %}{% endblock %}
 {% if user %}
 <script>
-  // Рулетка книги: жмём — спрашиваем сервер, показываем результат в модалке
+  // Рулетка: случайный непрочитанный цикл или книга вне циклов (сервер: /books/roulette/pick)
+  var _rouletteLast = '';
+  function _rEsc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c];
+    });
+  }
   function bookRoulette() {
     var modalEl = document.getElementById('rouletteModal');
     var body = document.getElementById('rouletteBody');
@@ -214,22 +220,33 @@
     body.innerHTML = '<div class="spinner-border text-primary" role="status"></div><div class="mt-3 text-muted">Крутим барабан…</div>';
     footer.innerHTML = '';
     modal.show();
-    fetch('/books/roulette/pick')
+    fetch('/books/roulette/pick' + (_rouletteLast ? '?exclude=' + encodeURIComponent(_rouletteLast) : ''))
       .then(function (r) { return r.json(); })
-      .then(function (data) {
-        if (!data.ok) {
-          body.innerHTML = '<p class="text-muted mb-0">' + (data.message || 'Не удалось выбрать книгу') + '</p>';
+      .then(function (d) {
+        if (!d.ok) {
+          body.innerHTML = '<p class="text-muted mb-0">' + _rEsc(d.message || 'Не удалось выбрать') + '</p>';
           return;
         }
-        var cover = data.cover_url
-          ? '<img src="' + data.cover_url + '" class="tile-cover mx-auto d-block" style="max-width:160px" alt="">'
-          : '<div class="cover-placeholder mx-auto" style="max-width:160px"><i class="bi bi-book"></i></div>';
+        _rouletteLast = d.key || '';
+        var isSeries = d.kind === 'series';
+        var cover = d.cover_url
+          ? '<img src="' + d.cover_url + '" class="tile-cover mx-auto d-block' + (isSeries ? ' wb-stack' : '') + '" style="max-width:160px" alt="">'
+          : '<div class="cover-placeholder mx-auto' + (isSeries ? ' wb-stack' : '') + '" style="max-width:160px"><i class="bi bi-' + (isSeries ? 'collection' : 'book') + '"></i></div>';
+        var next = (isSeries && d.next_title)
+          ? '<div class="small mt-2">Следующий: ' + (d.next_order ? '<b>том ' + _rEsc(d.next_order) + '</b> — ' : '') + _rEsc(d.next_title) + '</div>'
+          : '';
         body.innerHTML = cover +
-          '<div class="tile-title mt-3 fs-5">' + data.title + '</div>' +
-          (data.author ? '<div class="tile-sub">' + data.author + '</div>' : '');
-        footer.innerHTML =
-          '<button type="button" class="btn btn-outline-secondary" onclick="bookRoulette()"><i class="bi bi-arrow-repeat me-1"></i>Ещё раз</button>' +
-          '<a href="' + data.url + '" class="btn btn-primary"><i class="bi bi-book me-1"></i>Открыть</a>';
+          '<div class="text-uppercase small fw-semibold mt-3" style="color:var(--accent);letter-spacing:.04em">' + (isSeries ? 'Цикл' : 'Книга') + '</div>' +
+          '<div class="fs-5 fw-semibold">' + _rEsc(d.title) + '</div>' +
+          (d.author ? '<div class="text-muted">' + _rEsc(d.author) + '</div>' : '') +
+          '<div class="small text-muted mt-1">' + _rEsc(d.subtitle || '') + '</div>' + next;
+        var btns = '<button type="button" class="btn btn-outline-secondary" onclick="bookRoulette()"><i class="bi bi-arrow-repeat me-1"></i>Ещё раз</button>' +
+          '<a href="' + d.url + '" class="btn btn-outline-primary"><i class="bi bi-' + (isSeries ? 'collection' : 'info-circle') + ' me-1"></i>' + (isSeries ? 'Открыть цикл' : 'Открыть') + '</a>';
+        if (d.read_url) {
+          btns += '<a href="' + d.read_url + '" class="btn btn-success"><i class="bi bi-book me-1"></i>' +
+            (isSeries && d.next_order ? 'Читать том ' + _rEsc(d.next_order) : 'Читать') + '</a>';
+        }
+        footer.innerHTML = btns;
       })
       .catch(function () {
         body.innerHTML = '<p class="text-danger mb-0">Ошибка запроса</p>';

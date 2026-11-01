@@ -7,7 +7,7 @@
   <span class="wb-sub">{{ total_books }} книг · {{ series | length }} циклов</span>
   <div class="ms-auto d-flex gap-2 flex-wrap">
     <a href="/books?type=book" class="btn btn-outline-secondary btn-sm"><i class="bi bi-grid me-1"></i>Все книги</a>
-    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="bookRoulette()"><i class="bi bi-dice-5 me-1"></i>Рулетка</button>
+    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="bookRoulette()"><i class="bi bi-dice-5 me-1"></i>Что почитать?</button>
     <a href="/books/upload" class="btn btn-success btn-sm"><i class="bi bi-cloud-upload me-1"></i>Загрузить</a>
   </div>
 </div>
@@ -40,30 +40,42 @@
 <section class="wb-panel">
   <h3 class="wb-panel-h flex-wrap"><i class="bi bi-collection"></i>Циклы <span class="text-muted fw-normal small">{{ series | length }}</span>
     {% if series | length > 6 %}
-    <span class="ms-auto d-flex gap-2 align-items-center">
+    <span class="ms-auto d-flex gap-2 align-items-center flex-wrap">
       <input type="search" id="serFilter" class="form-control form-control-sm" placeholder="Найти цикл или автора" style="width:220px">
       <select id="serSort" class="form-select form-select-sm" style="width:auto">
         <option value="name">По названию</option>
+        <option value="activity">Недавно читал</option>
         <option value="added">Недавно пополненные</option>
-        <option value="progress">Начатые</option>
         <option value="count">Больше томов</option>
       </select>
     </span>
     {% endif %}
   </h3>
   {% if series %}
+  <div class="pill-row px-3 pt-3" id="serStatus">
+    <a href="#" class="pill active" data-st="">Все <span class="opacity-75">{{ series | length }}</span></a>
+    <a href="#" class="pill" data-st="reading"><i class="bi bi-book-half me-1"></i>Читаю <span class="opacity-75">{{ status_counts.reading }}</span></a>
+    <a href="#" class="pill" data-st="abandoned"><i class="bi bi-hourglass-bottom me-1"></i>Заброшены <span class="opacity-75">{{ status_counts.abandoned }}</span></a>
+    <a href="#" class="pill" data-st="new"><i class="bi bi-circle me-1"></i>Не начаты <span class="opacity-75">{{ status_counts.new }}</span></a>
+    <a href="#" class="pill" data-st="done"><i class="bi bi-check2-all me-1"></i>Прочитаны <span class="opacity-75">{{ status_counts.done }}</span></a>
+  </div>
   <div class="wb-grid p-3" id="serGrid">
     {% for g in series %}
-    <a href="/series/{{ g.id }}" class="tile ser-tile" data-name="{{ (g.name ~ ' ' ~ g.author) | lower }}"
-       data-added="{{ g.added_ts }}" data-count="{{ g.count }}" data-pct="{{ g.pct }}" data-sort="{{ g.name | lower }}">
+    <a href="/series/{{ g.id }}" class="tile ser-tile" data-name="{{ (g.name ~ ' ' ~ g.author) | lower }}" data-status="{{ g.status }}"
+       data-added="{{ g.added_ts }}" data-last="{{ g.last_ts }}" data-count="{{ g.count }}" data-sort="{{ g.name | lower }}">
       <div class="tile-cover-wrap">
         {% if g.cover %}<img src="{{ g.cover }}" class="tile-cover wb-stack" alt="" loading="lazy">
         {% else %}<div class="cover-placeholder wb-stack"><i class="bi bi-collection"></i></div>{% endif %}
         <span class="tile-badge"><i class="bi bi-stack me-1"></i>{{ g.count }}</span>
+        {% if g.status != 'new' %}<span class="st-badge st-{{ g.status }}">{{ g.status_label }}</span>{% endif %}
       </div>
       <div class="tile-title" title="{{ g.name }}">{{ g.name }}</div>
       <div class="tile-sub">{{ g.author }}</div>
       <div class="tile-prog" title="Прочитано {{ g.read }} из {{ g.count }}"><span style="width:{{ g.pct }}%"></span></div>
+      <div class="tile-sub">
+        {% if g.status == 'abandoned' %}<span class="st-text-abandoned">не читал {{ g.days if g.days is not none else '?' }} дн.</span>
+        {% else %}{{ g.read }} из {{ g.count }}{% endif %}
+      </div>
     </a>
     {% endfor %}
   </div>
@@ -82,31 +94,41 @@
 {% block scripts %}
 <script>
 (function () {
-  var grid = document.getElementById('serGrid'), f = document.getElementById('serFilter'), so = document.getElementById('serSort');
-  if (!grid || !f) return;
+  var grid = document.getElementById('serGrid');
+  if (!grid) return;
+  var f = document.getElementById('serFilter'), so = document.getElementById('serSort');
+  var chips = document.querySelectorAll('#serStatus .pill');
   var tiles = Array.prototype.slice.call(grid.querySelectorAll('.ser-tile'));
-  try { var saved = localStorage.getItem('series_sort'); if (saved) so.value = saved; } catch (e) {}
+  var st = '';
+  try {
+    st = localStorage.getItem('series_status') || '';
+    if (so) { var saved = localStorage.getItem('series_sort'); if (saved) so.value = saved; }
+  } catch (e) {}
   function apply() {
-    var q = f.value.trim().toLowerCase(), key = so.value, shown = 0;
+    var q = f ? f.value.trim().toLowerCase() : '', key = so ? so.value : 'name', shown = 0;
+    chips.forEach(function (c) { c.classList.toggle('active', c.dataset.st === st); });
     tiles.sort(function (a, b) {
       if (key === 'added') return b.dataset.added - a.dataset.added;
+      if (key === 'activity') return b.dataset.last - a.dataset.last;
       if (key === 'count') return b.dataset.count - a.dataset.count;
-      if (key === 'progress') {
-        var pa = +a.dataset.pct, pb = +b.dataset.pct;
-        var sa = pa > 0 && pa < 100 ? 0 : 1, sb = pb > 0 && pb < 100 ? 0 : 1;
-        return sa - sb || pb - pa;
-      }
       return a.dataset.sort.localeCompare(b.dataset.sort, 'ru');
     });
     tiles.forEach(function (t) {
-      var ok = !q || t.dataset.name.indexOf(q) !== -1;
+      var ok = (!q || t.dataset.name.indexOf(q) !== -1) && (!st || t.dataset.status === st);
       t.classList.toggle('d-none', !ok); if (ok) shown++;
       grid.appendChild(t);
     });
     document.getElementById('serEmpty').classList.toggle('d-none', shown > 0);
   }
-  f.addEventListener('input', apply);
-  so.addEventListener('change', function () { try { localStorage.setItem('series_sort', so.value); } catch (e) {} apply(); });
+  chips.forEach(function (c) {
+    c.addEventListener('click', function (e) {
+      e.preventDefault(); st = c.dataset.st;
+      try { localStorage.setItem('series_status', st); } catch (er) {}
+      apply();
+    });
+  });
+  if (f) f.addEventListener('input', apply);
+  if (so) so.addEventListener('change', function () { try { localStorage.setItem('series_sort', so.value); } catch (e) {} apply(); });
   apply();
 })();
 </script>

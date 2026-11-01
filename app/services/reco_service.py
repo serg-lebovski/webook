@@ -106,3 +106,67 @@ def pick_random(db: Session, user_id: int) -> Book | None:
     population = [b for _, b, _ in scored]
     weights = [max(score, 1) for score, _, _ in scored]
     return random.choices(population, weights=weights, k=1)[0]
+
+
+def pick_roulette(db: Session, user_id: int, exclude: str = "") -> dict | None:
+    """Рулетка «что почитать»: случайный НЕпрочитанный цикл (есть хоть один
+    непрочитанный том) или непрочитанная книга вне циклов. Каждый цикл — один
+    «билет», независимо от числа томов. exclude — ключ прошлого выпадения
+    («series:12» / «book:34»), чтобы «Ещё раз» не повторял то же самое.
+    Возвращает dict для модального окна или None, если выбирать не из чего."""
+    books = (
+        db.query(Book)
+        .filter(Book.user_id == user_id, Book.deleted_at.is_(None))
+        .all()
+    )
+    series: dict[int, list] = defaultdict(list)
+    standalone = []
+    for b in books:
+        if b.series_id:
+            series[b.series_id].append(b)
+        elif not b.is_read:
+            standalone.append(b)
+
+    pool = []
+    for sid, vols in series.items():
+        if any(not v.is_read for v in vols):
+            pool.append(("series", sid, vols))
+    for b in standalone:
+        pool.append(("book", b.id, b))
+    if not pool:
+        return None
+    if len(pool) > 1 and exclude:
+        pool = [p for p in pool if f"{p[0]}:{p[1]}" != exclude] or pool
+
+    kind, key, payload = random.choice(pool)
+    if kind == "book":
+        b = payload
+        return {
+            "kind": "book", "key": f"book:{b.id}", "title": b.title,
+            "author": b.author.name if b.author else "",
+            "cover_url": f"/books/{b.id}/cover" if b.cover_path else None,
+            "url": f"/books/{b.id}",
+            "read_url": f"/books/{b.id}/read" if b.file_format in ("epub", "fb2", "pdf") else None,
+            "subtitle": "Книга вне циклов",
+        }
+
+    vols = sorted(payload, key=lambda v: (v.series_order is None, v.series_order or 0, v.title or ""))
+    nxt = next((v for v in vols if not v.is_read), vols[0])
+    cover_book = next((v for v in [nxt] + vols if v.cover_path), None)
+    read_cnt = sum(1 for v in vols if v.is_read)
+    authors = sorted({v.author.name for v in vols if v.author})
+    order = nxt.series_order
+    order_txt = (str(int(order)) if order is not None and float(order).is_integer() else str(order)) if order is not None else ""
+    n = len(vols)
+    word = "том" if n % 10 == 1 and n % 100 != 11 else ("тома" if n % 10 in (2, 3, 4) and n % 100 not in (12, 13, 14) else "томов")
+    return {
+        "kind": "series", "key": f"series:{key}",
+        "title": vols[0].series.name if vols[0].series else nxt.title,
+        "author": ", ".join(authors) if len(authors) <= 2 else "разные авторы",
+        "cover_url": f"/books/{cover_book.id}/cover" if cover_book else None,
+        "url": f"/series/{key}",
+        "subtitle": f"Цикл · {n} {word} · прочитано {read_cnt}",
+        "next_title": nxt.title, "next_order": order_txt,
+        "read_url": f"/books/{nxt.id}/read" if nxt.file_format in ("epub", "fb2", "pdf") else None,
+        "next_url": f"/books/{nxt.id}",
+    }

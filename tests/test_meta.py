@@ -82,3 +82,16 @@ def test_normalize_keeps_nickname_and_derives_series():
 def test_normalize_without_translation():
     card = m.normalize({"title": "The Way of Kings"}, "a.fb2", translate=False)
     assert card["title"] == "The Way of Kings" and not card["original"]
+
+
+@pytest.mark.parametrize("stem", ["r3", "book1", "Book 2", "Книга 3", "x 5", "Metro 2033"])
+def test_series_from_filename_rejects_noise(stem):
+    assert m.series_from_filename(stem)[1] is None or m.series_from_filename(stem)[0] == ""
+
+
+@pytest.mark.parametrize("stem,base,num", [
+    ("Дозоры #2", "Дозоры", 2),
+    ("Ведьмак (3)", "Ведьмак", 3),
+])
+def test_series_from_filename_separators(stem, base, num):
+    assert m.series_from_filename(stem) == (base, float(num))

@@ -288,14 +288,24 @@ def series_from_title(title: str) -> tuple[str, Optional[float]]:
     return "", None
 
 
+_GENERIC_NAMES = {"book", "books", "книга", "книги", "том", "volume", "vol", "part", "часть",
+                  "file", "файл", "document", "doc", "new", "untitled", "без названия"}
+
+
 def series_from_filename(stem: str) -> tuple[str, Optional[float]]:
-    """Имена вида «Автор - Цикл 2 - Название», «Цикл_03_Название», «02. Название»."""
+    """Имена вида «Автор - Цикл 2 - Название», «Цикл_03_Название», «02. Название».
+    Номер должен быть отделён от названия пробелом/#/№/скобкой, а в названии —
+    хотя бы 3 буквы: иначе «r3.fb2» или «book1.fb2» превращались в цикл «r» №3."""
     s = re.sub(r"[_]+", " ", stem or "").strip()
     parts = [p.strip() for p in re.split(r"\s+[-–—]\s+", s) if p.strip()]
     for p in parts:
-        m = re.match(r"^(?P<name>.*[^\d\s])\s*[\[(#№]?\s*(?P<n>\d{1,3})\s*[\])]?$", p)
-        if m:
-            return m.group("name").strip(" .,-"), float(m.group("n"))
+        m = re.match(r"^(?P<name>.*[^\d\s])(?:\s+|\s*[#№(\[]\s*)(?P<n>\d{1,3})\s*[\])]?$", p)
+        if not m:
+            continue
+        name = m.group("name").strip(" .,-#№([")
+        letters = re.findall(r"[^\W\d_]", name)
+        if len(letters) >= 3 and name.lower() not in _GENERIC_NAMES:
+            return name, float(m.group("n"))
     m = _RE_LEAD_NUM.match(s)
     if m:
         return "", float(m.group(1))

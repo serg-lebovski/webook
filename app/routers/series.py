@@ -72,6 +72,8 @@ def series_detail(series_id: int, request: Request, shelf_id: int = 0,
                                                ReadProgress.book_id.in_([b.id for b in books] or [0]))
     }
     next_book = next((b for b in books if not b.is_read and b.file_format), None)
+    from app.services.series_status import status as series_status_of, progress_map
+    sstatus = series_status_of(books, progress_map(db, user.id, [b.id for b in books])) if books else None
     tags = []
     for b in books:
         for t in b.tags:
@@ -91,7 +93,7 @@ def series_detail(series_id: int, request: Request, shelf_id: int = 0,
         "read_count": sum(1 for b in books if b.is_read),
         "total_size": sum(b.file_size or 0 for b in books),
         "has_files": any(b.file_path for b in books),
-        "shelf": shelf, "other_series": other_series,
+        "shelf": shelf, "other_series": other_series, "sstatus": sstatus,
     })
 
 

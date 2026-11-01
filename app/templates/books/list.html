@@ -161,6 +161,7 @@
           {% else %}
           <div class="lib-cover lib-cover-ph"><i class="bi bi-{{ 'headphones' if it.kind == 'audio' else ('collection' if it.kind == 'series' else 'book') }}"></i></div>
           {% endif %}
+          {% if it.kind == 'series' and it.status.code != 'new' %}<span class="st-badge st-{{ it.status.code }}">{{ it.status.label }}</span>{% endif %}
           {% if it.kind == 'series' %}<span class="lib-vols"><i class="bi bi-stack me-1"></i>{{ it.count }} {{ 'том' if it.count % 10 == 1 and it.count % 100 != 11 else ('тома' if it.count % 10 in (2, 3, 4) and it.count % 100 not in (12, 13, 14) else 'томов') }}</span>{% endif %}
         </div>
         <div class="lib-body">
@@ -176,7 +177,7 @@
             {% if it.rating %}<span class="badge bg-warning text-dark text-2xs"><i class="bi bi-star-fill"></i> {{ it.rating }}</span>{% endif %}
             {% elif it.kind == 'series' %}
             <span class="lib-series-prog" title="Прочитано {{ it.read }} из {{ it.count }}"><span style="width:{{ (it.read / it.count * 100) | round | int }}%"></span></span>
-            <span class="text-2xs text-muted">{{ it.read }}/{{ it.count }}</span>
+            <span class="text-2xs {% if it.status.code == 'abandoned' %}st-text-abandoned{% else %}text-muted{% endif %}">{{ it.read }}/{{ it.count }}{% if it.status.code == 'abandoned' and it.status.days is not none %} · {{ it.status.days }} дн.{% endif %}</span>
             {% else %}
             <span class="badge bg-dark text-2xs"><i class="bi bi-headphones me-1"></i>аудио</span>
             <span class="badge bg-secondary text-2xs">{{ it.chapters }} гл.</span>

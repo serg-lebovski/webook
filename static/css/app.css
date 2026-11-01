@@ -419,3 +419,13 @@ a > .card:hover, a.card:hover, .card.card-link:hover { border-color: rgba(var(--
   --bs-table-border-color: var(--wb-border); --bs-table-striped-bg: var(--bs-secondary-bg);
 }
 .table > :not(caption) > * > * { border-bottom-color: var(--wb-border); }
+
+/* Статус цикла: прочитан / читаю / заброшен (правило — app/services/series_status.py) */
+.st-badge { position: absolute; top: 6px; right: 6px; font-size: .68rem; font-weight: 700; color: #fff;
+            padding: .12rem .42rem; border-radius: 3px; text-transform: lowercase; box-shadow: 0 1px 3px rgba(0,0,0,.35); }
+.st-done { background: var(--wb-cta); }
+.st-reading { background: var(--accent); }
+.st-abandoned { background: #c9702a; }
+.st-new { background: #6c757d; }
+.st-text-abandoned { color: #d9822b; }
+.bp-status.st-abandoned, .bp-status.st-reading, .bp-status.st-done, .bp-status.st-new { position: static; box-shadow: none; }

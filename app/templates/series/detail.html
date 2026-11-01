@@ -55,10 +55,9 @@
 
           <div class="bp-meta mb-3">
             <span class="border-0 ps-0">
-              {% if total and read_count == total %}<span class="bp-status bg-success"><i class="bi bi-check2 me-1"></i>цикл прочитан</span>
-              {% elif read_count %}<span class="bp-status" style="background:var(--accent)">читаю · {{ read_count }}/{{ total }}</span>
-              {% else %}<span class="bp-status bg-secondary">не начат</span>{% endif %}
+              {% if sstatus %}<span class="bp-status st-{{ sstatus.code }}">{% if sstatus.code == 'done' %}<i class="bi bi-check2 me-1"></i>{% elif sstatus.code == 'abandoned' %}<i class="bi bi-hourglass-bottom me-1"></i>{% endif %}{{ sstatus.label }}{% if sstatus.code == 'reading' %} · {{ read_count }}/{{ total }}{% endif %}</span>{% endif %}
             </span>
+            {% if sstatus and sstatus.last %}<span title="Последняя активность: отметка «прочитано» или позиция в читалке">последнее чтение: {% if sstatus.days == 0 %}сегодня{% elif sstatus.days == 1 %}вчера{% else %}{{ sstatus.days }} дн. назад{% endif %}</span>{% endif %}
             <span>{{ total }} {{ 'том' if total % 10 == 1 and total % 100 != 11 else ('тома' if total % 10 in (2, 3, 4) and total % 100 not in (12, 13, 14) else 'томов') }} в библиотеке</span>
             {% if total_size %}<span>{{ total_size | humanbytes }}</span>{% endif %}
           </div>

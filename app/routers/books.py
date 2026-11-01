@@ -143,12 +143,15 @@ def _books_shelves_landing(request: Request, user: User, db: Session) -> HTMLRes
         _user_books(db, user).options(joinedload(Book.series), joinedload(Book.author))
         .order_by(Book.series_order.is_(None), Book.series_order, Book.title).all()
     )
+    from app.services import series_status
     groups: dict = {}
+    vols_by_series: dict = {}
     standalone = 0
     for b in books:
         if not b.series_id:
             standalone += 1
             continue
+        vols_by_series.setdefault(b.series_id, []).append(b)
         g = groups.get(b.series_id)
         if not g:
             g = groups[b.series_id] = {
@@ -163,8 +166,14 @@ def _books_shelves_landing(request: Request, user: User, db: Session) -> HTMLRes
             g["cover"] = f"/books/{b.id}/cover"
         if b.added_at and (not g["added"] or b.added_at > g["added"]):
             g["added"] = b.added_at
+    prog = series_status.progress_map(db, user.id, [b.id for v in vols_by_series.values() for b in v])
     series = []
     for g in groups.values():
+        st = series_status.status(vols_by_series[g["id"]], prog)
+        g["status"] = st["code"]
+        g["status_label"] = st["label"]
+        g["last_ts"] = st["last"].timestamp() if st["last"] else 0
+        g["days"] = st["days"]
         authors = sorted(g.pop("authors"))
         g["author"] = ", ".join(authors) if len(authors) <= 2 else "разные авторы"
         g["pct"] = round(g["read"] / g["count"] * 100) if g["count"] else 0
@@ -179,6 +188,8 @@ def _books_shelves_landing(request: Request, user: User, db: Session) -> HTMLRes
 
     return templates.TemplateResponse("books/shelves_landing.html", {
         "request": request, "user": user, "series": series, "standalone_count": standalone,
+        "status_counts": {code: sum(1 for g in series if g["status"] == code)
+                          for code in ("reading", "abandoned", "new", "done")},
         "total_books": len(books),
         "favorite_count": favorite_count, "reading_count": reading_count, "audio_count": audio_count,
     })
@@ -247,7 +258,7 @@ def books_list(
                 "url": f"/books/{b.id}", "fmt": b.file_format,
                 "is_read": b.is_read, "is_favorite": b.is_favorite, "rating": b.rating,
                 "in_reading_list": b.in_reading_list, "sort_key": (b.title or "").lower(),
-                "series_id": b.series_id, "series_order": b.series_order,
+                "series_id": b.series_id, "series_order": b.series_order, "read_at": b.read_at,
                 "series_name": b.series.name if b.series else "",
             })
 
@@ -270,7 +281,9 @@ def books_list(
     # Тома одного цикла сворачиваются в одну плитку «цикл» (flat=1 — показать все тома)
     group_series = not q and not flat and not no_series and type_ != "audio"
     if group_series:
-        book_items = _group_series(book_items, shelf_id)
+        from app.services.series_status import progress_map
+        book_items = _group_series(book_items, shelf_id,
+                                   progress_map(db, user.id, [it["id"] for it in book_items if it.get("series_id")]))
 
     if sort in ("rating", "added"):
         items = book_items  # уже отсортированы запросом, аудио исключены
@@ -329,7 +342,12 @@ def books_list(
     )
 
 
-def _group_series(book_items: list, shelf_id: int) -> list:
+def _series_status(vols: list, progress: dict) -> dict:
+    from app.services.series_status import status
+    return status(vols, progress)
+
+
+def _group_series(book_items: list, shelf_id: int, progress: dict | None = None) -> list:
     """Свернуть тома одного цикла (≥2 на полке) в одну плитку-цикл.
     Порядок сохраняется: плитка встаёт на место первого тома цикла в исходном списке."""
     by_series: dict = {}
@@ -355,6 +373,7 @@ def _group_series(book_items: list, shelf_id: int) -> list:
             "cover": cover, "url": f"/series/{sid}" + (f"?shelf_id={shelf_id}" if shelf_id else ""),
             "count": len(vols), "read": sum(1 for v in vols if v["is_read"]),
             "sort_key": (vols_sorted[0]["series_name"] or "").lower(),
+            "status": _series_status(vols, progress or {}),
         })
     return out
 
@@ -676,20 +695,13 @@ def isbn_import(isbn: str = Form(...), shelf: str = Form(""),
 
 
 @router.get("/roulette/pick")
-def roulette_pick(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Взвешенный случайный выбор книги «что почитать» — см. reco_service.pick_random."""
+def roulette_pick(exclude: str = "", user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Рулетка: случайный непрочитанный цикл или книга вне циклов — см. reco_service.pick_roulette."""
     from app.services import reco_service
-    book = reco_service.pick_random(db, user.id)
-    if not book:
-        return JSONResponse({"ok": False, "message": "Нет непрочитанных книг для выбора"}, status_code=404)
-    return JSONResponse({
-        "ok": True,
-        "id": book.id,
-        "title": book.title,
-        "author": book.author.name if book.author else "",
-        "cover_url": f"/books/{book.id}/cover" if book.cover_path else None,
-        "url": f"/books/{book.id}",
-    })
+    pick = reco_service.pick_roulette(db, user.id, exclude=exclude)
+    if not pick:
+        return JSONResponse({"ok": False, "message": "Всё прочитано — непрочитанных циклов и книг нет"}, status_code=404)
+    return JSONResponse({"ok": True, **pick})
 
 
 def _dup_key(title: str) -> str:
